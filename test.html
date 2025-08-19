@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>OneSignal Push 測試</title>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<script>
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98"
+});
+});
+</script>
+</head>
+<body>
+<h2>OneSignal 測試頁</h2>
+<p>載入後應該會彈出授權提示。</p>
+</body>
+</html>
