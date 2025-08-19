@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>🌧️ 香港降雨預報</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+<style>
+body {
+font-family: "Helvetica Neue", sans-serif;
+margin: 0;
+padding: 0;
+background: #f0f8ff;
+color: #333;
+text-align: center;
+}
+h1 {
+font-size: 1.4em;
+margin: 1em 0 0.5em;
+}
+#map {
+height: 300px;
+margin: 0 10px;
+border-radius: 8px;
+border: 1px solid #ccc;
+}
+#rain-alert {
+margin: 2em 1em 1em;
+font-size: 1.2em;
+font-weight: bold;
+line-height: 1.8em;
+white-space: pre-line;
+}
+#footer-text {
+margin: 1.5em;
+font-size: 0.9em;
+color: #555;
+line-height: 1.6em;
+}
+</style>
+
+<!-- OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+    });
+  });
+</script>
+</head>
+
+<body>
+<h1>🌂 香港降雨預報</h1>
+<div id="map"></div>
+<div id="rain-alert">⏳ 正在讀取預報資料...</div>
+
+<!-- 文末三句 -->
+<div id="footer-text">
+<p style="text-align: left; margin-bottom: 1.5em;">
+本網站提供香港未來半小時內定點的降雨預測，用戶可即時得知身處地點的降雨情況。
+</p>
+<p style="text-align: left; margin-bottom: 1.5em;">
+* 用戶請先開啟網頁的位置分享或手機的定位服務
+</p>
+<p style="text-align: left; margin-bottom: 1.5em;">
+資料來源：香港天文台
+</p>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+const workerUrl = 'https://crowdtest8.ctakwah.workers.dev/';
+
+const map = L.map('map').setView([22.3, 114.2], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+let marker;
+let rainStatus = 0; // 0 = 無雨，1 = 已推送過
+
+function setMarker(lat, lon) {
+if (marker) map.removeLayer(marker);
+marker = L.marker([lat, lon]).addTo(map);
+}
+
+function fetchForecast(lat, lon) {
+fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
+.then(res => res.json())
+.then(data => {
+const alertDiv = document.getElementById('rain-alert');
+console.log("API 回傳資料：", data);
+
+if (data && typeof data.immediateRain === "number") {
+if (data.immediateRain > 2) {
+alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
+
+if (rainStatus === 0) {
+// 第一次由無雨 → 有雨，觸發語音 & 推送
+speak("⚠️ 你附近有降雨");
+sendPush();
+rainStatus = 1;
+}
+} else {
+alertDiv.innerText = `☁️ 你所在的位置暫時無雨`;
+rainStatus = 0; // reset
+}
+} else {
+alertDiv.innerText = "⚠️ 系統繁忙，請稍後再試";
+}
+})
+.catch(err => {
+console.error("讀取預報錯誤", err);
+document.getElementById('rain-alert').innerText = "⚠️ 系統繁忙，請稍後再試";
+});
+}
+
+function speak(text) {
+const msg = new SpeechSynthesisUtterance(text);
+msg.lang = 'zh-HK';
+speechSynthesis.speak(msg);
+}
+
+function sendPush() {
+OneSignal.push(function() {
+OneSignal.sendSelfNotification(
+"⚠️ 降雨提示",
+"你所在的位置將會有雨",
+'https://safecrossinghk.github.io',
+'https://cdn-icons-png.flaticon.com/512/1146/1146869.png'
+);
+});
+}
+
+function initLocation() {
+if (!navigator.geolocation) {
+alert("此瀏覽器不支援定位功能");
+const fallbackLat = 22.3;
+const fallbackLon = 114.2;
+map.setView([fallbackLat, fallbackLon], 11);
+setMarker(fallbackLat, fallbackLon);
+fetchForecast(fallbackLat, fallbackLon);
+return;
+}
+
+navigator.geolocation.getCurrentPosition(
+pos => {
+const lat = pos.coords.latitude;
+const lon = pos.coords.longitude;
+console.log("✅ 取得定位：", lat, lon);
+map.setView([lat, lon], 13);
+setMarker(lat, lon);
+fetchForecast(lat, lon);
+},
+err => {
+console.warn("⚠️ 定位失敗，使用預設位置");
+const fallbackLat = 22.3;
+const fallbackLon = 114.2;
+map.setView([fallbackLat, fallbackLon], 11);
+setMarker(fallbackLat, fallbackLon);
+fetchForecast(fallbackLat, fallbackLon);
+},
+{ enableHighAccuracy: true }
+);
+}
+
+initLocation();
+</script>
+</body>
+</html>
