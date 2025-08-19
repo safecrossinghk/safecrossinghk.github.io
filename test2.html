@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OneSignal 測試頁</title>
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="SafeCrossing">
+
+<!-- OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+</head>
+<body>
+<h1>OneSignal 測試頁</h1>
+<button id="subscribeBtn">📢 訂閱推播</button>
+
+<script>
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "🔑 這裡換成你的 Safari Web ID"
+});
+});
+
+document.getElementById("subscribeBtn").addEventListener("click", function() {
+OneSignal.showSlidedownPrompt();
+});
+</script>
+</body>
+</html>
