@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#ffffff">
 <title>🌧️ 香港降雨預報</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
@@ -102,12 +103,12 @@ const alertDiv = document.getElementById('rain-alert');
 console.log("API 回傳資料：", data);
 
 if (data && typeof data.immediateRain === "number") {
-if (data.immediateRain > 2) {
+if (data.immediateRain > 2.5) {
 alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
 
 if (rainStatus === 0) {
 // 第一次由無雨 → 有雨，觸發語音 & 推送
-speak("⚠️ 你附近有降雨");
+speak("⚠️ 你所在的位置將會有雨");
 sendPush();
 rainStatus = 1;
 }
