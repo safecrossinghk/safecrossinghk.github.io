@@ -40,13 +40,20 @@ line-height: 1.6em;
 }
 </style>
 
-<!-- OneSignal SDK -->
-<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async=""></script>
+<!-- 🔔 PWA 設定 (iOS + Android 支援) -->
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="no">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="香港降雨預報">
+
+<!-- 🔔 OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
 <script>
 window.OneSignal = window.OneSignal || [];
 OneSignal.push(function() {
 OneSignal.init({
 appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "🔑 換成你的 Safari Web ID"
 });
 });
 </script>
