@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#ffffff">
+<title>🌧️ 香港降雨預報</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+<style>
+body {
+font-family: "Helvetica Neue", Arial, sans-serif;
+margin: 0;
+padding: 0;
+background: #f2f6fc;
+color: #333;
+text-align: center;
+}
+h2 {
+margin: 15px 0;
+font-size: 20px;
+color: #333;
+}
+#map {
+height: 280px;
+width: 92%;
+margin: 0 auto;
+border-radius: 8px;
+border: 1px solid #ddd;
+}
+#rain-alert {
+margin: 15px auto;
+padding: 10px;
+width: 92%;
+background: #fff;
+border-radius: 8px;
+text-align: center;
+font-size: 16px;
+font-weight: bold;
+color: #444;
+line-height: 1.8em;
+white-space: pre-line;
+}
+.notice {
+margin: 15px auto;
+padding: 12px;
+width: 92%;
+background: #fff;
+border-radius: 8px;
+text-align: left;
+font-size: 15px;
+line-height: 1.6em;
+color: #555;
+}
+/* iOS 提示對話框 */
+#iosPrompt {
+display: none;
+position: fixed;
+bottom: 20px;
+left: 50%;
+transform: translateX(-50%);
+background: rgba(255,255,255,0.95);
+border: 1px solid #ccc;
+border-radius: 10px;
+padding: 12px 15px;
+width: 88%;
+max-width: 320px;
+box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+font-size: 14px;
+line-height: 1.5em;
+z-index: 9999;
+}
+#iosPrompt button {
+margin-top: 8px;
+padding: 6px 12px;
+border: none;
+border-radius: 6px;
+background: #007aff;
+color: #fff;
+font-size: 14px;
+}
+</style>
+
+<!-- OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async=""></script>
+<script>
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+});
+});
+</script>
+</head>
+
+<body>
+<h2>☂️ 香港降雨預報</h2>
+<div id="map"></div>
+<div id="rain-alert">⏳ 正在讀取預報資料...</div>
+
+<div class="notice">
+本網站提供香港未來半小時內定點的降雨預測，用戶可即時得知身處地點的降雨情況。<br><br>
+* 用戶請先開啟網頁的位置分享或手機的定位服務<br>
+資料來源：香港天文台
+</div>
+
+<!-- iOS Safari 提示框 -->
+<div id="iosPrompt">
+📱 如果你用 iPhone / iPad：<br>
+請先按 Safari 底部的 <b>分享</b> 按鈕 <br>
+➜ 再揀 <b>加入主畫面</b> 才可收到推播通知。<br>
+<button id="iosCloseBtn">知道了</button>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+const workerUrl = 'https://crowdtest8.ctakwah.workers.dev/';
+
+const map = L.map('map').setView([22.3, 114.2], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+let marker;
+let rainStatus = 0; // 0 = 無雨，1 = 已推送過
+
+function setMarker(lat, lon) {
+if (marker) map.removeLayer(marker);
+marker = L.marker([lat, lon]).addTo(map);
+}
+
+function fetchForecast(lat, lon) {
+fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
+.then(res => res.json())
+.then(data => {
+const alertDiv = document.getElementById('rain-alert');
+console.log("API 回傳資料：", data);
+
+if (data && typeof data.immediateRain === "number") {
+if (data.immediateRain > 2) {
+alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
+
+if (rainStatus === 0) {
+speak("⚠️ 你附近有降雨");
+sendPush();
+rainStatus = 1;
+}
+} else {
+alertDiv.innerText = `☁️ 你所在的位置暫時無雨`;
+rainStatus = 0;
+}
+} else {
+alertDiv.innerText = "⚠️ 系統繁忙，請稍後再試";
+}
+})
+.catch(err => {
+console.error("讀取預報錯誤", err);
+document.getElementById('rain-alert').innerText = "⚠️ 系統繁忙，請稍後再試";
+});
+}
+
+function speak(text) {
+const msg = new SpeechSynthesisUtterance(text);
+msg.lang = 'zh-HK';
+speechSynthesis.speak(msg);
+}
+
+function sendPush() {
+OneSignal.push(function() {
+OneSignal.showSlidedownPrompt();
+});
+}
+
+// iOS Safari 偵測 + 提示只顯示一次
+function isIos() {
+return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+function isInStandaloneMode() {
+return ('standalone' in window.navigator) && window.navigator.standalone;
+}
+if (isIos() && !isInStandaloneMode() && !localStorage.getItem("iosPromptDismissed")) {
+document.getElementById('iosPrompt').style.display = 'block';
+}
+document.getElementById("iosCloseBtn").addEventListener("click", function() {
+document.getElementById('iosPrompt').style.display = 'none';
+localStorage.setItem("iosPromptDismissed", "1");
+});
+
+// 取得定位
+if (navigator.geolocation) {
+navigator.geolocation.getCurrentPosition(
+pos => {
+const lat = pos.coords.latitude;
+const lon = pos.coords.longitude;
+setMarker(lat, lon);
+fetchForecast(lat, lon);
+setInterval(() => fetchForecast(lat, lon), 120000);
+},
+err => {
+document.getElementById('rain-alert').innerText = "⚠️ 無法取得定位，請允許位置存取";
+}
+);
+} else {
+document.getElementById('rain-alert').innerText = "⚠️ 瀏覽器不支援定位功能";
+}
+</script>
+</body>
+</html>
