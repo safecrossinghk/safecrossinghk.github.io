@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港即時雨量預報</title>
+<style>
+body {
+font-family: "Microsoft JhengHei", sans-serif;
+background: linear-gradient(to bottom, #e6f7ff, #ffffff);
+text-align: center;
+padding: 20px;
+}
+h2 { color: #0052cc; }
+.input-box { margin: 10px; }
+button {
+padding: 10px 20px;
+margin-top: 15px;
+background-color: #007bff;
+color: white;
+border: none;
+border-radius: 6px;
+cursor: pointer;
+}
+button:hover { background-color: #0056b3; }
+.rain-box {
+margin: 15px;
+padding: 15px;
+border-radius: 12px;
+display: inline-block;
+font-size: 18px;
+font-weight: bold;
+min-width: 200px;
+}
+.rain-none { background: #d9f7be; color: #135200; }
+.rain-warning { background: #ffd591; color: #874d00; }
+.rain-danger { background: #ffa39e; color: #a8071a; }
+.forecast-container {
+margin-top: 25px;
+display: flex;
+justify-content: center;
+gap: 15px;
+flex-wrap: wrap;
+}
+table {
+margin: 20px auto;
+border-collapse: collapse;
+width: 80%;
+max-width: 600px;
+}
+th, td {
+border: 1px solid #aaa;
+padding: 8px 12px;
+}
+th {
+background: #f0f0f0;
+}
+pre {
+text-align: left;
+display: inline-block;
+margin-top: 20px;
+background: #f0f0f0;
+padding: 10px;
+border-radius: 8px;
+max-width: 90%;
+overflow-x: auto;
+}
+</style>
+</head>
+<body>
+<h2>香港即時雨量預報</h2>
+
+<div class="input-box">
+<label>緯度: <input type="text" id="lat" value="22.34"></label>
+<label>經度: <input type="text" id="lon" value="114.182"></label>
+<label><input type="checkbox" id="debug"> Debug 模式</label>
+</div>
+
+<button onclick="checkRain()">查詢雨量</button>
+
+<!-- 卡片顯示 -->
+<div id="forecast" class="forecast-container"></div>
+
+<!-- 表格顯示 -->
+<table id="forecast-table" style="display:none;">
+<thead>
+<tr><th>時間</th><th>雨量 (mm)</th><th>狀態</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<pre id="result"></pre>
+
+<script>
+async function checkRain() {
+const lat = document.getElementById("lat").value;
+const lon = document.getElementById("lon").value;
+const debug = document.getElementById("debug").checked;
+
+const url = `https://rainenquiry.ctakwah.workers.dev/?lat=${lat}&lon=${lon}${debug ? "&debug=true" : ""}`;
+
+try {
+const res = await fetch(url);
+const data = await res.json();
+
+// 顯示原始 JSON（debug 模式時）
+document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+
+// 格仔卡片
+const fcBox = document.getElementById("forecast");
+fcBox.innerHTML = "";
+
+// 表格
+const table = document.getElementById("forecast-table");
+const tbody = table.querySelector("tbody");
+tbody.innerHTML = "";
+
+// 四個時間點
+const labels = ["現在 (t0)", "+30 分鐘", "+60 分鐘", "+90 分鐘"];
+const values = [
+data.immediateRain ?? (data.rain0 ?? null),
+data.rain30 ?? null,
+data.rain60 ?? null,
+data.rain90 ?? null
+];
+
+labels.forEach((label, i) => {
+const val = values[i];
+
+// 卡片
+const box = document.createElement("div");
+box.className = "rain-box " + getRainClass(val);
+box.textContent = `${label}\n${val !== null ? val + " mm" : "❓ 無數據"}`;
+fcBox.appendChild(box);
+
+// 表格
+const row = document.createElement("tr");
+row.innerHTML = `
+<td>${label}</td>
+<td>${val !== null ? val.toFixed(2) : "❓ 無數據"}</td>
+<td>${getRainMessage(val)}</td>
+`;
+tbody.appendChild(row);
+});
+
+table.style.display = "table";
+
+// 語音提示：只播報現在 (t0)
+if (values[0] !== null) {
+speak(getRainMessage(values[0]));
+}
+
+} catch (err) {
+document.getElementById("forecast").innerHTML = "<div class='rain-box rain-danger'>❌ 查詢出錯</div>";
+document.getElementById("result").textContent = "錯誤: " + err.message;
+document.getElementById("forecast-table").style.display = "none";
+}
+}
+
+function getRainClass(value) {
+if (value === null) return "rain-none";
+if (value < 1) return "rain-none";
+if (value >= 1 && value < 5) return "rain-warning";
+return "rain-danger";
+}
+
+function getRainMessage(value) {
+if (value === null) return "沒有數據";
+if (value < 1) return "暫時沒有明顯降雨";
+if (value < 5) return "附近有輕微降雨";
+return "強降雨警告";
+}
+
+function speak(message) {
+const utterance = new SpeechSynthesisUtterance(message);
+utterance.lang = "zh-HK";
+speechSynthesis.speak(utterance);
+}
+</script>
+</body>
+</html>
