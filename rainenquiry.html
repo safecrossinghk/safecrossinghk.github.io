@@ -115,7 +115,7 @@ const lat = document.getElementById("lat").value;
 const lon = document.getElementById("lon").value;
 const debug = document.getElementById("debug").checked;
 
-const url = `https://safecrossinghk.github.io/rainenquiry.html?lat=${lat}&lon=${lon}${debug ? "&debug=true" : ""}`;
+const url = `https://rainenquiry.ctakwah.workers.dev/?lat=${lat}&lon=${lon}${debug ? "&debug=true" : ""}`;
 
 try {
 const res = await fetch(url);
