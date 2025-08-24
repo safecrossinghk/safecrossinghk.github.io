@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>香港 AI 降雨預報 Demo（MetNet‑3 + HKO CSV）</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+    header, footer { padding: 8px 12px; }
+    header { background: #0f172a; color: #fff; }
+    footer { background: #f1f5f9; font-size: 12px; color: #334155; }
+    #map { height: 100%; }
+    .panel { position:absolute; top:70px; left:12px; background:#ffffffdd; padding:10px 12px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); }
+    .legend { display:flex; gap:6px; align-items:center; }
+    .swatch { width:16px; height:10px; display:inline-block; }
+    .controls { display:flex; gap:12px; align-items:center; }
+    .badge { padding:2px 6px; border-radius:6px; background:#e2e8f0; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <div><strong>香港 AI 降雨預報 Demo</strong> <span class="badge">0–6 小時</span></div>
+      <div>MetNet‑3 + HKO CSV + SWIRLS（融合示意）</div>
+    </div>
+  </header>
+  <div id="map"></div>
+  <footer>
+    提示：此為離線假資料 Demo，展示融合與 UI 行為。實作時改為 Worker 端點：
+    <code>/nowcast?lat&lon</code>、<code>/tile/{z}/{x}/{y}</code>、<code>/alerts</code>
+  </footer>
+</div>
+
+<div class="panel">
+  <div class="controls">
+    <label for="lead">預報時效（小時）</label>
+    <input type="range" id="lead" min="0" max="6" value="0">
+    <span id="leadLabel" class="badge">0 h</span>
+    <button id="play">▶︎ 播放</button>
+    <button id="speak">🔊 語音播報</button>
+  </div>
+  <div style="margin-top:8px;" class="legend">
+    <span>降雨強度：</span>
+    <span class="swatch" style="background:#d0f0ff"></span>弱
+    <span class="swatch" style="background:#66b3ff"></span>中
+    <span class="swatch" style="background:#0066ff"></span>大
+    <span class="swatch" style="background:#001a66"></span>暴雨
+  </div>
+  <div id="alert" style="margin-top:8px;"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ------ 地圖初始化（香港範圍） ------
+const map = L.map('map').setView([22.32, 114.17], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18, attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+// 一些代表性地區（近似中心點）
+const regions = [
+  {name:'港島', lat:22.278, lon:114.158},
+  {name:'九龍', lat:22.321, lon:114.169},
+  {name:'新界西', lat:22.372, lon:114.045},
+  {name:'新界東', lat:22.445, lon:114.225},
+  {name:'大嶼山', lat:22.27, lon:113.95}
+];
+
+// ------ 假資料生成（模擬 MetNet 與 HKO CSV 融合） ------
+// 強度 mm/hr 0-80；前 0–2h 偏向 HKO（更極端），2–6h 偏向 MetNet（更平滑）
+function generateData(seed=1){
+  const data = [];
+  for(let h=0; h<=6; h++){
+    const t = h/6;
+    data[h] = regions.map((r,i)=>{
+      const base = 20 + 25*Math.sin((i+1)*1.1 + h*0.7) + 10*Math.cos((i+1)*0.9 - h*0.5);
+      let hko = Math.max(0, base + 25*Math.sin(h*2+i));      // 更劇烈波動
+      let met = Math.max(0, base * 0.8 + 8);                 // 較平滑
+      const w = (h<=2) ? 0.7 : 0.3;                          // 0–2h 偏 HKO，之後偏 MetNet
+      const mmph = w*hko + (1-w)*met;
+      return { ...r, mmph: Math.min(80, Math.max(0, mmph)) };
+    });
+  }
+  return data;
+}
+const fused = generateData();
+
+// 著色函式
+function colorScale(v){
+  if (v >= 50) return '#001a66';   // 暴雨
+  if (v >= 30) return '#0066ff';   // 大
+  if (v >= 15) return '#66b3ff';   // 中
+  return '#d0f0ff';                // 弱
+}
+
+// 圖層容器
+const layerGroup = L.layerGroup().addTo(map);
+
+// 繪製當前時效
+function drawHour(h){
+  layerGroup.clearLayers();
+  fused[h].forEach(d=>{
+    const radius = Math.min(4000, 800 + d.mmph*40);
+    L.circle([d.lat,d.lon], {radius, color: colorScale(d.mmph), fillColor: colorScale(d.mmph), fillOpacity:0.35, weight:1})
+      .bindTooltip(`${d.name}：${d.mmph.toFixed(0)} mm/hr`)
+      .addTo(layerGroup);
+  });
+  document.getElementById('leadLabel').textContent = `${h} h`;
+  renderAlert(h);
+}
+
+function renderAlert(h){
+  const a = document.getElementById('alert');
+  const kowloon = fused[h].find(x=>x.name==='九龍').mmph;
+  let level = null;
+  if (kowloon >= 70) level = '黑雨（>70 mm/hr）';
+  else if (kowloon >= 50) level = '紅雨（>50 mm/hr）';
+  else if (kowloon >= 30) level = '黃雨（>30 mm/hr）';
+  a.innerHTML = level ? `<strong>⚠️ ${level}</strong>  於九龍，${h} 小時後` : '—';
+}
+
+// 語音播報
+function speak(h){
+  const s = window.speechSynthesis;
+  if (!s) return;
+  const kowloon = fused[h].find(x=>x.name==='九龍').mmph.toFixed(0);
+  const u = new SpeechSynthesisUtterance(`預報 ${h} 小時後，九龍降雨率約每小時 ${kowloon} 毫米。`);
+  u.lang = 'zh-HK';
+  s.cancel(); s.speak(u);
+}
+
+// 交互
+const lead = document.getElementById('lead');
+lead.addEventListener('input', e=> drawHour(Number(e.target.value)));
+
+// 播放
+let timer=null;
+document.getElementById('play').onclick = ()=>{
+  if (timer){ clearInterval(timer); timer=null; return; }
+  let h = Number(lead.value);
+  timer = setInterval(()=>{
+    h = (h+1)%7; lead.value=h; drawHour(h);
+  }, 1200);
+};
+
+document.getElementById('speak').onclick = ()=> speak(Number(lead.value));
+
+// 初始顯示
+drawHour(0);
+</script>
+</html>
