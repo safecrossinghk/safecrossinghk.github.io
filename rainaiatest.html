@@ -1,0 +1,12 @@
+<script>
+async function testWorker() {
+try {
+const res = await fetch("https://rainaia.ctakwah.workers.dev");
+const json = await res.json();
+document.body.innerHTML += `<p>Worker 測試: ${json.message}</p>`;
+} catch (e) {
+console.error("Fetch Worker Error:", e);
+}
+}
+testWorker();
+</script>
