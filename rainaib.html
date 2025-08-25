@@ -1,0 +1,15 @@
+<script>
+async function loadForecast() {
+const res = await fetch("https://rainaia.ctakwah.workers.dev/?lat=22.32&lon=114.17")
+const data = await res.json()
+
+document.getElementById("ai").innerText =
+`Google AI 降雨概率: ${(data.ai_rain_probability * 100).toFixed(1)}%`
+document.getElementById("hko").innerText =
+`天文台預報: ${data.hko_condition} ( ${data.hko_rain_mm} mm )`
+}
+loadForecast()
+</script>
+
+<div id="ai"></div>
+<div id="hko"></div>
