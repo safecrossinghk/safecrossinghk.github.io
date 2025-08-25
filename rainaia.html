@@ -1,0 +1,21 @@
+<div>
+<p id="ai">AI 預測降雨概率: --%</p>
+<p id="hko-rain">天文台半小時雨量: -- mm</p>
+<p id="hko-condition">天氣狀況: --</p>
+</div>
+
+<script>
+async function loadForecast() {
+const res = await fetch('https://rainaia.ctakwah.workers.dev/')
+const data = await res.json()
+
+document.getElementById('ai').innerText =
+`AI 預測降雨概率: ${(data.ai_rain_probability * 100).toFixed(1)}%`
+document.getElementById('hko-rain').innerText =
+`天文台半小時雨量: ${data.hko_rain_mm} mm`
+document.getElementById('hko-condition').innerText =
+`天氣狀況: ${data.hko_condition}`
+}
+
+loadForecast()
+</script>
