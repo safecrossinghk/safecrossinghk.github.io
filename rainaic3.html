@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>AI + 天文台 雨量預測</title>
+</head>
+<body>
+<h2>AI 預測降雨機率: <span id="aiProb">--%</span></h2>
+<h2>天文台半小時雨量: <span id="hkoRain">-- mm</span></h2>
+<h2>天氣狀況: <span id="weather">--</span></h2>
+
+<script>
+async function loadForecast() {
+const lat = 22.3027; // 香港中間座標
+const lon = 114.1772;
+
+try {
+const res = await fetch(`https://rainaic3.ctakwah.workers.dev/?lat=${lat}&lon=${lon}`);
+const data = await res.json();
+
+console.log("Worker 回傳數據:", data);
+
+// --- AI / Google Weather (MetNet-3) ---
+if (data.google && data.google.dailyForecast) {
+const prob = data.google.dailyForecast[0]?.precipitationChance || 0;
+document.getElementById("aiProb").textContent = (prob * 100).toFixed(0) + "%";
+} else {
+document.getElementById("aiProb").textContent = "--%";
+}
+
+// --- HKO 半小時雨量 ---
+if (data.hko && data.hko.rain_mm !== undefined) {
+document.getElementById("hkoRain").textContent = data.hko.rain_mm + " mm";
+
+// ⚠️ 加入語音提示：如果雨量 > 5mm
+if (data.hko.rain_mm > 5) {
+playVoice("⚠️ 注意：未來半小時可能大雨");
+}
+}
+
+// --- 天氣狀況 ---
+if (data.hko && data.hko.condition) {
+document.getElementById("weather").textContent = data.hko.condition;
+} else if (data.google && data.google.currentWeather) {
+document.getElementById("weather").textContent = data.google.currentWeather.summary;
+}
+
+} catch (err) {
+console.error("載入失敗:", err);
+document.getElementById("aiProb").textContent = "錯誤";
+document.getElementById("hkoRain").textContent = "錯誤";
+document.getElementById("weather").textContent = "錯誤";
+}
+}
+
+// 語音播放函數
+function playVoice(text) {
+if ('speechSynthesis' in window) {
+const utter = new SpeechSynthesisUtterance(text);
+utter.lang = 'zh-HK'; // 粵語
+speechSynthesis.speak(utter);
+} else {
+console.warn("瀏覽器不支援語音播放");
+}
+}
+
+loadForecast();
+</script>
+</body>
+</html>
