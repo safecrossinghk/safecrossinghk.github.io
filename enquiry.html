@@ -121,10 +121,9 @@ msg += `\n未來30-60分鐘: ${data.futureRains.rain30} mm`;
 msg += `\n未來60-90分鐘: ${data.futureRains.rain60} mm`;
 msg += `\n未來90-120分鐘: ${data.futureRains.rain90} mm`;
 }
-
+} else {
 alertDiv.innerText = msg;
 
-} else {
 alertDiv.innerText = "⚠️ 系統繁忙，請稍後再試";
 }
 })
