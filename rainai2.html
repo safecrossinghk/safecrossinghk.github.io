@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>AI + 天文台 雨量預測</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h2 { margin: 10px 0; }
+pre { background: #f5f5f5; padding: 10px; border: 1px solid #ccc; max-height: 300px; overflow: auto; }
+</style>
+</head>
+<body>
+<h2>AI 預測降雨機率: <span id="aiProb">--%</span></h2>
+<h2>AI 預計降雨量: <span id="aiQpf">-- mm</span></h2>
+<h2>天文台半小時雨量: <span id="hkoRain">-- mm</span></h2>
+<h2>天氣狀況: <span id="weather">--</span></h2>
+
+<div id="debugBox" style="display:none;">
+<h3>Debug 原始數據</h3>
+<pre id="debugData"></pre>
+</div>
+
+<script>
+async function loadForecast() {
+const lat = 22.3027; // 香港中間座標
+const lon = 114.1772;
+const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
+
+try {
+const res = await fetch(`https://rainai2.ctakwah.workers.dev/?lat=${lat}&lon=${lon}${debugMode ? "&debug=1" : ""}`);
+const data = await res.json();
+
+console.log("Worker 回傳數據:", data);
+
+// --- AI / Google Weather (MetNet-3) ---
+let aiProb = null;
+if (data.ai && data.ai.pop_percent !== null) {
+aiProb = data.ai.pop_percent;
+document.getElementById("aiProb").textContent = aiProb + "%";
+} else {
+document.getElementById("aiProb").textContent = "--%";
+}
+
+if (data.ai && data.ai.qpf_mm !== null) {
+document.getElementById("aiQpf").textContent = data.ai.qpf_mm + " mm";
+} else {
+document.getElementById("aiQpf").textContent = "-- mm";
+}
+
+// ⚠️ 語音提示：AI 預測落雨機率 >= 50%
+if (aiProb !== null && aiProb >= 50) {
+playVoice(`注意：未來一小時落雨機率 ${aiProb} 百分比`);
+}
+
+// --- HKO 半小時雨量 ---
+if (data.hko && data.hko.rain_mm !== null) {
+document.getElementById("hkoRain").textContent = data.hko.rain_mm + " mm";
+if (data.hko.rain_mm > 5) playVoice("⚠️ 注意：未來半小時可能大雨");
+} else {
+document.getElementById("hkoRain").textContent = "-- mm";
+}
+
+// --- 天氣狀況 ---
+if (data.hko && data.hko.condition) {
+document.getElementById("weather").textContent = data.hko.condition;
+} else {
+document.getElementById("weather").textContent = "未知";
+}
+
+// --- Debug ---
+if (debugMode && data._debug) {
+document.getElementById("debugBox").style.display = "block";
+document.getElementById("debugData").textContent = JSON.stringify(data._debug, null, 2);
+}
+
+} catch (err) {
+console.error("載入失敗:", err);
+document.getElementById("aiProb").textContent = "錯誤";
+document.getElementById("aiQpf").textContent = "錯誤";
+document.getElementById("hkoRain").textContent = "錯誤";
+document.getElementById("weather").textContent = "錯誤";
+}
+}
+
+// 語音播放函數
+function playVoice(text) {
+if ('speechSynthesis' in window) {
+const utter = new SpeechSynthesisUtterance(text);
+utter.lang = 'zh-HK'; // 粵語
+speechSynthesis.speak(utter);
+} else {
+console.warn("瀏覽器不支援語音播放");
+}
+}
+
+loadForecast();
+</script>
+</body>
+</html>
