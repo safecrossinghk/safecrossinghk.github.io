@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI + HKO 雨量預報</title>
+<style>
+/* 簡易手機友善樣式 */
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang HK","Microsoft JhengHei",sans-serif;background:#f7f9fc;margin:12px}
+.card{background:#fff;padding:12px;margin:8px 0;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+.small{font-size:0.95rem}
+#enableVoiceBtn{display:inline-block;margin-top:8px;padding:8px 12px;border-radius:6px;background:#0066cc;color:#fff;border:0}
+</style>
+</head>
+<body>
+<div class="card small">AI 預測降雨機率: <strong id="aiProb">--%</strong></div>
+<div class="card small">AI 預計降雨量: <strong id="aiQpf">-- mm</strong></div>
+<div class="card small">天文台半小時雨量: <strong id="hkoRain">-- mm</strong></div>
+<div class="card small">天氣狀況: <strong id="weather">--</strong></div>
+
+<button id="enableVoiceBtn">啟用語音（按一次以允許語音）</button>
+
+<script>
+let voiceEnabled = false;
+document.getElementById('enableVoiceBtn').addEventListener('click', async ()=>{
+try {
+const u = new SpeechSynthesisUtterance('語音已啟用');
+u.lang = 'zh-HK';
+speechSynthesis.speak(u);
+voiceEnabled = true;
+document.getElementById('enableVoiceBtn').style.display = 'none';
+} catch (e) {
+console.warn('語音啟用失敗', e);
+voiceEnabled = false;
+}
+});
+
+function playVoice(text){
+if (!voiceEnabled) return console.log('語音未啟用（需要用戶點擊)');
+if (!('speechSynthesis' in window)) return;
+const utter = new SpeechSynthesisUtterance(text);
+utter.lang = 'zh-HK';
+speechSynthesis.speak(utter);
+}
+
+async function loadForecast(){
+const lat = 22.3027, lon = 114.1772;
+try {
+const res = await fetch(`https://rainai3.ctakwah.workers.dev/?lat=${lat}&lon=${lon}&debug=1`);
+const data = await res.json();
+
+// AI
+const aiProb = data.ai?.pop_percent;
+const aiQpf = data.ai?.qpf_mm;
+
+document.getElementById('aiProb').textContent =
+(aiProb!==null && aiProb!==undefined) ? aiProb + '%' : '--%';
+document.getElementById('aiQpf').textContent =
+(aiQpf!==null && aiQpf!==undefined) ? aiQpf.toFixed(1) + ' mm' : '0.0 mm';
+
+// HKO
+const hko = data.hko;
+if (hko && typeof hko.rain_mm === 'number') {
+document.getElementById('hkoRain').textContent = hko.rain_mm.toFixed(1) + ' mm';
+if (hko.rain_mm > 5) playVoice(`⚠️ 天文台提示：半小時內降雨可能超過 ${Math.round(hko.rain_mm)} 毫米`);
+} else if (hko && hko.chosen_station && hko.rain_mm === null) {
+document.getElementById('hkoRain').textContent = '-- mm（解析到站 ' + (hko.chosen_station || '') + ' 但無雨量）';
+} else {
+document.getElementById('hkoRain').textContent = '-- mm';
+}
+
+// 📢 語音播報 AI 機率 + 雨量
+if (aiProb !== null && aiProb >= 50) {
+const rainText = (aiQpf && aiQpf > 0) ? `，預計降雨量 ${aiQpf.toFixed(1)} 毫米` : '';
+playVoice(`注意：未來一小時落雨機率 ${aiProb} 百分比${rainText}`);
+}
+
+// 天氣狀況（從 hko 或 ai）
+document.getElementById('weather').textContent =
+(hko && hko.condition) ? hko.condition : (data.ai?.time ? '請見AI資料' : '--');
+
+console.log('DEBUG _debug:', data._debug || '（無 _debug）');
+} catch (err) {
+console.error('載入失敗', err);
+}
+}
+loadForecast();
+</script>
+</body>
+</html>
