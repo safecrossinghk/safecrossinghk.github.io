@@ -103,7 +103,7 @@ const alertDiv = document.getElementById('rain-alert');
 console.log("API 回傳資料：", data);
 
 if (data && typeof data.immediateRain === "number") {
-if (data.immediateRain > 2.5) {
+if (data.immediateRain > 0.5) {
 alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
 
 if (rainStatus === 0) {
