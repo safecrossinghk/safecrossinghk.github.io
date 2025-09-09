@@ -1,56 +1,46 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<title>未來半小時雨勢預報</title>
-<style>
-body {
-font-family: Arial, sans-serif;
-padding: 20px;
-background: #f0f0f0;
-}
-#rainText {
-font-size: 20px;
-font-weight: bold;
-color: #333;
-padding: 10px;
-background: #fff;
-border-radius: 8px;
-display: inline-block;
-}
-</style>
+<title>香港地區未來半小時雨勢</title>
 </head>
 <body>
 <h2>香港地區未來半小時雨勢</h2>
-<div id="rainText">正在載入雨勢資料...</div>
+<div id="rainText">⌛ 正在載入雨勢資料...</div>
 
 <script>
-const API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh"; // 請換成 Tomorrow.io 的 API Key
-const LAT = 22.329, LON = 114.144; // 香港座標，可改其他地點
+const API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh"; // <<< 換成你的 Tomorrow.io API Key
+const LAT = 22.329, LON = 114.144; // 香港座標
 
-fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&fields=rainIntensity,precipitationProbability&timesteps=1m&units=metric&apikey=${API_KEY}`)
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1m&units=metric&apikey=${API_KEY}`)
 .then(res => res.json())
 .then(data => {
-const minutes = data.data.timelines.minutely.slice(0, 30); // 取未來 30 分鐘
+console.log(data); // 測試用，先看看 API 回傳的完整 JSON
+
+// ⚠️ 注意：Tomorrow.io v4 JSON 結構係 data.timelines.minutely
+const minutes = data.timelines.minutely;
+if (!minutes) throw new Error("API 沒有返回 minutely 資料");
 
 let maxRain = 0;
 let maxProb = 0;
 
-minutes.forEach(m => {
+// 取半小時 (30分鐘) 資料
+minutes.slice(0, 30).forEach(m => {
 if (m.values.rainIntensity > maxRain) maxRain = m.values.rainIntensity;
 if (m.values.precipitationProbability > maxProb) maxProb = m.values.precipitationProbability;
 });
 
-let text = `未來半小時：☀️ 無雨（降雨機率 ${maxProb}%）`;
-if (maxRain > 0 && maxRain <= 2) text = `未來半小時：🌦 小雨（降雨機率 ${maxProb}%）`;
-else if (maxRain > 2 && maxRain <= 6) text = `未來半小時：🌧 中雨（降雨機率 ${maxProb}%）`;
-else if (maxRain > 6) text = `未來半小時：⛈ 大雨（降雨機率 ${maxProb}%）`;
+let text = "未來半小時：";
+if (maxRain === 0) text += "☀️ 無雨";
+else if (maxRain < 2) text += "🌦 小雨";
+else if (maxRain < 5) text += "🌧 中雨";
+else text += "⛈ 大雨";
 
-document.getElementById("rainText").innerText = text;
+document.getElementById("rainText").innerText = text + ` (最高降雨機率 ${maxProb}%)`;
 })
 .catch(err => {
-document.getElementById("rainText").innerText = "⚠️ 雨勢資料讀取失敗";
 console.error(err);
+document.getElementById("rainText").innerText = "⚠️ 雨勢資料讀取失敗";
 });
 </script>
 </body>
