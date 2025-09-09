@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>香港地區未來半小時雨勢</title>
+</head>
+<body>
+<h2>香港地區未來半小時雨勢</h2>
+<div id="rainText">⌛ 正在載入雨勢資料...</div>
+
+<script>
+const API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh"; // <<< 換成你的 Tomorrow.io API Key
+const LAT = 22.3, LON = 114.2; // 香港座標
+
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1m&units=metric&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+console.log(data); // 測試用，先看看 API 回傳的完整 JSON
+
+// ⚠️ 注意：Tomorrow.io v4 JSON 結構係 data.timelines.minutely
+const minutes = data.timelines.minutely;
+if (!minutes) throw new Error("API 沒有返回 minutely 資料");
+
+let maxRain = 0;
+let maxProb = 0;
+
+// 取半小時 (30分鐘) 資料
+minutes.slice(0, 30).forEach(m => {
+if (m.values.rainIntensity > maxRain) maxRain = m.values.rainIntensity;
+if (m.values.precipitationProbability > maxProb) maxProb = m.values.precipitationProbability;
+});
+
+let text = "未來半小時：";
+if (maxRain === 0) text += "☀️ 無雨";
+else if (maxRain < 2) text += "🌦 小雨";
+else if (maxRain < 5) text += "🌧 中雨";
+else text += "⛈ 大雨";
+
+document.getElementById("rainText").innerText = text + ` (最高降雨機率 ${maxProb}%)`;
+})
+.catch(err => {
+console.error(err);
+document.getElementById("rainText").innerText = "⚠️ 雨勢資料讀取失敗";
+});
+</script>
+</body>
+</html>
