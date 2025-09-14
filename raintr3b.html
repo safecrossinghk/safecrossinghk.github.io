@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港降雨預報</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body { display: flex; margin: 0; height: 100vh; font-family: sans-serif; }
+#map { flex: 1; }
+#chart-container { flex: 1; padding: 20px; }
+canvas { max-width: 100%; }
+#alert { position: absolute; top: 10px; left: 10px; background: red; color: white; padding: 5px; display: none; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="chart-container">
+<h2>未來24小時預報</h2>
+<canvas id="rainChart"></canvas>
+<canvas id="tempChart"></canvas>
+</div>
+<div id="alert">⚠️ 大雨警告</div>
+
+<script>
+// --- 初始化地圖 ---
+const map = L.map('map').setView([22.3, 114.2], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+maxZoom: 19
+}).addTo(map);
+
+// --- 從 Worker 拉數據 ---
+async function loadData() {
+const res = await fetch("https://raintr3b.ctakwah.workers.dev/"); // Worker Endpoint
+const data = await res.json();
+
+console.log("HKO Rain CSV:", data.hko_rain);
+console.log("Tomorrow.io Forecast:", data.tomorrow_forecast);
+
+// 簡單取 Tomorrow.io 降雨 & 溫度 (示例)
+const hours = data.tomorrow_forecast.timelines.hourly.map(x => x.time.slice(11,16));
+const rain = data.tomorrow_forecast.timelines.hourly.map(x => x.values.precipitationIntensity);
+const temp = data.tomorrow_forecast.timelines.hourly.map(x => x.values.temperature);
+
+renderCharts(hours, rain, temp);
+
+// 🚨 如果大雨 > 5mm
+if (Math.max(...rain) > 5) {
+document.getElementById("alert").style.display = "block";
+speak("注意，大雨警告，未來一小時可能出現強降雨。");
+}
+
+// 地圖示範：加一個 marker
+L.marker([22.3, 114.2]).addTo(map).bindPopup("香港中心點");
+}
+
+// --- 繪製圖表 ---
+function renderCharts(hours, rain, temp) {
+new Chart(document.getElementById("rainChart"), {
+type: 'bar',
+data: {
+labels: hours,
+datasets: [{ label: "降雨量 (mm)", data: rain }]
+}
+});
+
+new Chart(document.getElementById("tempChart"), {
+type: 'line',
+data: {
+labels: hours,
+datasets: [{ label: "溫度 (°C)", data: temp }]
+}
+});
+}
+
+// --- 語音提示 ---
+function speak(text) {
+const msg = new SpeechSynthesisUtterance(text);
+msg.lang = "zh-HK"; // 粵語
+speechSynthesis.speak(msg);
+}
+
+loadData();
+</script>
+</body>
+</html>
