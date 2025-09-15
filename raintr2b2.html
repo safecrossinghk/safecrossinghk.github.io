@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>未來2小時雨勢提示</title>
+</head>
+<body>
+<div id="rainMsg"></div>
+
+<script>
+const API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh"; // 換成你嘅 Tomorrow.io API Key
+const LAT = 22.3, LON = 114.2; // 香港座標
+
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1h&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+const hours = data.timelines.hourly.slice(0, 2); // 只取未來2小時
+let willRain = false;
+
+hours.forEach((h, idx) => {
+const rain = h.values.rainIntensity; // 每小時雨量 (mm/hr)
+const prob = h.values.precipitationProbability; // 降雨機率 (%)
+
+// Debug log
+console.log(`小時 ${idx + 1}: 雨量=${rain} mm/hr, 機率=${prob}%`);
+
+if (rain >= 1 && prob >= 70) {
+willRain = true;
+}
+});
+
+if (willRain) {
+document.getElementById("rainMsg").innerText = "🌧 你所在的位置預計未來約兩小時有雨";
+} else {
+document.getElementById("rainMsg").innerText = ""; // 空白
+}
+})
+.catch(() => document.getElementById("rainMsg").innerText = "⚠️ 資料讀取失敗");
+</script>
+</body>
+</html>
