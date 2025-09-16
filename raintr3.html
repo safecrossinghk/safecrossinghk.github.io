@@ -1,193 +1,35 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-HK">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>香港降雨預報 — Prototype</title>
-
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-integrity="sha256-sA+e2qY5r8g1k0vM6wq5u3q7GfQ9aY9gq8Y3Yzv+7hU=" crossorigin=""/>
-
-<style>
-:root { --bg: #0f1720; --card: rgba(255,255,255,0.06); --glass: rgba(255,255,255,0.04); }
-html,body { height:100%; margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial; background: linear-gradient(180deg,#0b1220 0%, #142032 100%); color:#e6eef8; }
-.container { display:flex; gap:18px; padding:22px; height:100vh; box-sizing:border-box; }
-.card { background:var(--card); border-radius:14px; box-shadow: 0 6px 18px rgba(0,0,0,0.6); padding:14px; display:flex; flex-direction:column; }
-.left { flex:0 0 58%; min-width:420px; }
-.right { flex:1; min-width:300px; display:flex; flex-direction:column; gap:12px; }
-#map { height:100%; border-radius:10px; overflow:hidden; }
-.mini { font-size:13px; color:#cfe6ff; opacity:0.9; }
-.header { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
-.title { font-weight:700; font-size:18px; }
-.controls { display:flex; gap:8px; align-items:center; }
-button { background:transparent; border:1px solid rgba(255,255,255,0.12); padding:6px 10px; color:inherit; border-radius:8px; cursor:pointer; }
-button.primary { background:linear-gradient(90deg,#0ea5e9,#7dd3fc); color:#042f3a; border:0; }
-canvas { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:6px; }
-.chart-wrap { flex:1; display:flex; flex-direction:column; gap:10px; }
-.chart-card { padding:8px; border-radius:8px; background:var(--glass); }
-.footer { font-size:12px; color:#c9d9ff; opacity:0.8; display:flex; justify-content:space-between; align-items:center; }
-.alert { padding:8px 10px; border-radius:8px; background:rgba(245,34,45,0.12); color:#ffd6d6; border:1px solid rgba(245,34,45,0.18); display:inline-block; }
-</style>
+<meta charset="UTF-8">
+<title>未來2小時雨勢提示</title>
 </head>
 <body>
-<div class="container">
-<div class="card left">
-<div class="header">
-<div>
-<div class="title">即時雨量（示範）</div>
-<div class="mini">更新：<span id="lastUpdated">-</span> · 資料來源：Cloudflare Worker</div>
-</div>
-<div class="controls">
-<select id="locationSelect">
-<option value="causeway_bay">銅鑼灣</option>
-<option value="kowloon_station">九龍站</option>
-<option value="lai_chi_kok">荔枝角</option>
-<option value="airport">機場</option>
-<option value="tsuen_wan">荃灣</option>
-</select>
-<button id="refreshBtn">手動更新</button>
-<button id="toggleVoice" class="primary">語音 On</button>
-</div>
-</div>
-<div id="map" aria-label="Rain map"></div>
-<div style="margin-top:8px;" class="footer">
-<div>地圖：Leaflet · 雷達熱力圖示範</div>
-<div id="warningArea"></div>
-</div>
-</div>
-
-<div class="card right">
-<div class="chart-wrap">
-<div class="chart-card">
-<div class="mini" style="margin-bottom:6px;">未來 24 小時 — 降雨量 (mm) & 溫度 (°C)</div>
-<canvas id="hourlyChart" height="220"></canvas>
-</div>
-
-<div class="chart-card" style="padding:10px; display:flex; gap:12px; align-items:center; justify-content:space-between;">
-<div>
-<div class="mini">目前狀態</div>
-<div style="font-size:20px; font-weight:700;" id="currentState">晴朗</div>
-<div class="mini" id="currentDetails">溫度：-- °C · 即時雨量：-- mm</div>
-</div>
-<div style="text-align:right;">
-<div class="mini">語音語言</div>
-<select id="voiceLang">
-<option value="yue">粵語 (yue)</option>
-<option value="en-US">English (en-US)</option>
-</select>
-<div style="height:8px"></div>
-<button id="testVoice">測試語音</button>
-</div>
-</div>
-</div>
-
-<div style="margin-top:8px;" class="footer">
-<div>Prototype · 直接呼叫 Worker</div>
-<div>版權示範</div>
-</div>
-</div>
-</div>
-
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<div id="rainMsg"></div>
 
 <script>
-const map = L.map('map').setView([22.32,114.17], 11);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-const blobLayer = L.layerGroup().addTo(map);
+const API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh"; // 換成你嘅 Tomorrow.io API Key
+const LAT = 22.33, LON = 114.144; //
 
-const locationMap = {
-'causeway_bay': [22.2793, 114.1822],
-'kowloon_station': [22.3008, 114.1691],
-'lai_chi_kok': [22.3389, 114.1510],
-'airport': [22.3080, 113.9185],
-'tsuen_wan': [22.3724, 114.1168]
-};
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1h&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+const hours = data.timelines.hourly.slice(0, 2); // 只取未來2小時
+let willRain = false;
 
-let hourlyChart;
-function initChart() {
-const ctx = document.getElementById('hourlyChart').getContext('2d');
-hourlyChart = new Chart(ctx, {
-type: 'bar',
-data: { labels: [], datasets: [
-{ type:'bar', label:'降雨量 (mm)', data:[], yAxisID:'y', barThickness:12, borderRadius:6 },
-{ type:'line', label:'溫度 (°C)', data:[], yAxisID:'y1', tension:0.35, pointRadius:3 }
-] },
-options: {
-responsive:true,
-maintainAspectRatio:false,
-scales: {
-y: { position:'left', title:{display:true, text:'雨量 (mm)'} },
-y1: { position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:'溫度 (°C)'} }
-}
+hours.forEach(h => {
+if (h.values.rainIntensity >= 1) {
+willRain = true;
 }
 });
-}
 
-initChart();
-
-function drawRainBlobs(blobs) {
-blobLayer.clearLayers();
-blobs.forEach(b=>{
-const circle = L.circle([b.lat, b.lon], {
-radius: b.radius_m,
-color: null,
-fillColor: `rgba(24,144,255,${0.1+ b.intensity*0.05})`,
-fillOpacity:0.7,
-stroke:false
-});
-circle.addTo(blobLayer);
-});
-}
-
-function speak(text) {
-if (!('speechSynthesis' in window)) return;
-const lang = document.getElementById('voiceLang').value;
-const u = new SpeechSynthesisUtterance(text);
-u.lang = lang === 'yue' ? 'zh-HK' : lang;
-speechSynthesis.cancel();
-speechSynthesis.speak(u);
-}
-
-async function updateAll() {
-const locKey = document.getElementById('locationSelect').value;
-const [lat, lon] = locationMap[locKey];
-const res = await fetch(`https://YOUR-WORKER-ENDPOINT/nearby?lat=${lat}&lon=${lon}`);
-const data = await res.json();
-
-// 更新地圖
-drawRainBlobs(data.radar_blobs);
-
-// 更新圖表
-hourlyChart.data.labels = data.hourly.map(d=>d.t);
-hourlyChart.data.datasets[0].data = data.hourly.map(d=>d.rain_mm);
-hourlyChart.data.datasets[1].data = data.hourly.map(d=>d.temp_c);
-hourlyChart.update();
-
-// 更新現況
-const now = data.hourly[0];
-document.getElementById('currentState').textContent = now.rain_mm > 5 ? '大雨' : now.rain_mm > 0 ? '有雨' : '晴朗';
-document.getElementById('currentDetails').textContent = `溫度：${now.temp_c} °C · 即時雨量：${now.rain_mm} mm`;
-document.getElementById('lastUpdated').textContent = new Date(data.updated).toLocaleString();
-
-if (now.rain_mm >= 5) {
-document.getElementById('warningArea').innerHTML = '<span class="alert">雨量警示：有較大降雨</span>';
-speak(`警告：${now.rain_mm} 毫米降雨`);
+if (willRain) {
+document.getElementById("rainMsg").innerText = "🌧 你所在的位置預計未來約兩小時有雨";
 } else {
-document.getElementById('warningArea').innerHTML = '';
+document.getElementById("rainMsg").innerText = ""; // 空白
 }
-}
-
-document.getElementById('refreshBtn').addEventListener('click', updateAll);
-document.getElementById('locationSelect').addEventListener('change', updateAll);
-document.getElementById('testVoice').addEventListener('click', ()=> speak('測試語音：有驟雨，請帶傘。'));
-
-updateAll();
-setInterval(updateAll, 5*60*1000);
+})
+.catch(() => document.getElementById("rainMsg").innerText = "⚠️ 資料讀取失敗");
 </script>
 </body>
 </html>
