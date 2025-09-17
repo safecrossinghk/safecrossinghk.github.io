@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>未來2小時雨勢提示</title>
+</head>
+<body>
+<div id="rainMsg"></div>
+
+<script>
+const API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh"; // Tomorrow.io API Key
+const LAT = 22.3, LON = 114.2; // 香港座標
+
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1h&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+const hours = data.timelines.hourly.slice(0, 2); // 只取未來2小時
+
+let totalRain = 0;
+let probs = [];
+
+hours.forEach((h, idx) => {
+const rain = h.values.rainIntensity; // 每小時雨量 (mm/hr)
+const prob = h.values.precipitationProbability; // 降雨機率 (%)
+totalRain += rain;
+probs.push(prob);
+
+// Debug log
+console.log(`小時 ${idx + 1}: 雨量=${rain} mm/hr, 機率=${prob}%`);
+});
+
+const avgRain = totalRain / hours.length; // 2小時平均雨量
+const maxProb = Math.max(...probs); // 取最高機率
+
+console.log(`平均雨量=${avgRain} mm/hr, 最高機率=${maxProb}%`);
+
+let msg = "";
+
+if (avgRain >= 20) {
+msg = "🌦 你所在的位置預計約兩小時內有雨";
+} else if (avgRain >= 10) {
+msg = "🌦 你所在的位置預計約兩小時內有雨";
+} else if (avgRain >= 5 && maxProb >= 70) {
+msg = "🌦 你所在的位置預計約兩小時內有雨";
+}
+
+if (msg) {
+document.getElementById("rainMsg").innerText = msg;
+} else {
+document.getElementById("rainMsg").innerText = "提供未來兩小時內降雨資訊";
+}
+})
+.catch(() => document.getElementById("rainMsg").innerText = "系統繁忙中，請稍候");
+</script>
+</body>
+</html>
