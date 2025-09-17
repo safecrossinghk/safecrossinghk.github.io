@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港地區未來雨勢預報</title>
+</head>
+<body>
+<h2>香港地區未來雨勢</h2>
+<div id="rain30">未來半小時：讀取中...</div>
+<div id="rain120">未來2小時：讀取中...</div>
+
+<script>
+const API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh"; // 換成你的 Tomorrow.io API Key
+const LAT = 22.33, LON = 114.14; //
+
+// 🔹 半小時（用 minutely）
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1m&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+const minutes = data.timelines.minutely.slice(0, 30); // 取30分鐘
+let maxRain = 0, maxProb = 0;
+
+minutes.forEach(m => {
+if (m.values.rainIntensity > maxRain) maxRain = m.values.rainIntensity;
+if (m.values.precipitationProbability > maxProb) maxProb = m.values.precipitationProbability;
+});
+
+let level = "☀️ 無雨";
+if (maxRain > 0 && maxRain <= 2.5) level = "🌦 小雨";
+else if (maxRain > 2.5 && maxRain <= 7.5) level = "🌧 中雨";
+else if (maxRain > 7.5) level = "⛈ 大雨";
+
+document.getElementById("rain30").innerText =
+`未來半小時：${level}（降雨機率 ${maxProb}%）`;
+})
+.catch(() => document.getElementById("rain30").innerText = "⚠️ 半小時資料讀取失敗");
+
+// 🔹 2小時（用 hourly）
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1h&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+const hours = data.timelines.hourly.slice(0, 2); // 取2小時
+let maxRain = 0, maxProb = 0;
+
+hours.forEach(h => {
+if (h.values.rainIntensity > maxRain) maxRain = h.values.rainIntensity;
+if (h.values.precipitationProbability > maxProb) maxProb = h.values.precipitationProbability;
+});
+
+let level = "☀️ 無雨";
+if (maxRain > 0 && maxRain <= 2.5) level = "🌦 小雨";
+else if (maxRain > 2.5 && maxRain <= 7.5) level = "🌧 中雨";
+else if (maxRain > 7.5) level = "⛈ 大雨";
+
+document.getElementById("rain120").innerText =
+`未來2小時：${level}（降雨機率 ${maxProb}%）`;
+})
+.catch(() => document.getElementById("rain120").innerText = "⚠️ 2小時資料讀取失敗");
+</script>
+</body>
+</html>
