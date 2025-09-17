@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<title>HK Nowcast Rainfall — 測試頁</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+html,body,#map { height: 100%; margin: 0; padding: 0; }
+#controls {
+position: absolute; left: 10px; top: 10px; z-index: 1000;
+background: rgba(255,255,255,0.95); padding: 10px; border-radius: 6px;
+box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-family: sans-serif;
+width: 260px;
+}
+label { display:block; margin-top:6px; font-size:13px; }
+button { margin-top:8px; padding:6px 8px; }
+.small { font-size:12px; color:#444; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="controls">
+<strong>HK Nowcast 測試</strong>
+<div class="small">資料來源：HKO Gridded rainfall nowcast（每 12 分鐘更新）</div>
+<label>雨量閾值（mm）：
+<input id="threshold" type="number" value="5" step="0.5" />
+</label>
+<label>偵測時間窗（分鐘）：
+<input id="minutes" type="number" value="30" min="6" step="6" />
+</label>
+<button id="refreshBtn">立即更新</button>
+<button id="toggleVoice">語音：開</button>
+<div id="status" class="small" style="margin-top:8px"></div>
+<div class="small" style="margin-top:6px">
+備註：若瀏覽器 Console 顯示 CORS 錯誤，請改用代理（Cloudflare Worker）抓取 CSV。
+</div>
+</div>
+
+<!-- libs: Leaflet + heat plugin + PapaParse -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+<script>
+(function(){
+// ====== CONFIG ======
+// 建議的 HKO 格點臨近雨量 CSV（data.gov.hk / HKO 提供）
+// 來源說明：https://data.weather.gov.hk/... (Gridded_rainfall_nowcast.csv)
+const HKO_CSV_URL = 'https://data.weather.gov.hk/weatherAPI/hko_data/F3/Gridded_rainfall_nowcast.csv';
+// 若 CORS 被阻擋，可改為自己的代理：
+// const HKO_CSV_URL = 'https://your-proxy.example.com/Gridded_rainfall_nowcast.csv';
+
+// map initial
+const map = L.map('map').setView([22.32, 114.17], 11);
+
+// base tiles (OpenStreetMap)
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+// heat layer placeholder
+let heatLayer = null;
+
+// UI elements
+const statusEl = document.getElementById('status');
+const refreshBtn = document.getElementById('refreshBtn');
+const thresholdInput = document.getElementById('threshold');
+const minutesInput = document.getElementById('minutes');
+const toggleVoiceBtn = document.getElementById('toggleVoice');
+
+let voiceEnabled = true;
+
+toggleVoiceBtn.addEventListener('click', ()=>{
+voiceEnabled = !voiceEnabled;
+toggleVoiceBtn.textContent = voiceEnabled ? '語音：開' : '語音：關';
+});
+
+// parse CSV and build heatmap points
+async function fetchAndRender() {
+setStatus('下載中...');
+try {
+const res = await fetch(HKO_CSV_URL);
+if (!res.ok) throw new Error('HTTP ' + res.status);
+const text = await res.text();
+
+// PapaParse CSV
+const parsed = Papa.parse(text, {header:true, skipEmptyLines:true});
+// The CSV format from HKO Gridded Nowcast:
+// - likely includes columns: lat, lon, forecast_time, acc_rainfall (or grid values)
+// Because formats vary, we try to detect common column names.
+const rows = parsed.data;
+if (!rows || rows.length === 0) {
+setStatus('CSV 無資料或格式不符');
+console.warn(parsed);
+return;
+}
+
+// Identify columns
+// Common approach: each row may represent a grid cell with columns like 'lat','lon','t+0','t+30' etc.
+// We'll attempt to find lat/lon and most-recent forecast columns.
+const keys = Object.keys(rows[0]);
+const latKey = keys.find(k => /lat/i.test(k)) || keys.find(k => /latitude/i.test(k));
+const lonKey = keys.find(k => /lon/i.test(k)) || keys.find(k => /longitude/i.test(k));
+// forecast keys: look for columns with "min" or "t+" or "time" or digit-only header
+const forecastKeys = keys.filter(k => /(^t\+)|min|^_\d+|^\d+/.test(k) || /\d{2}:\d{2}/.test(k));
+// fallback: take all numeric columns except lat/lon
+const numericKeys = keys.filter(k => k!==latKey && k!==lonKey && rows.some(r=> r[k] !== '' && !isNaN(parseFloat(r[k]))));
+
+// choose forecast column(s) to inspect based on minutes input.
+const minutes = parseInt(minutesInput.value,10) || 30;
+
+// Heuristic: if there are columns like "t+30" or "30" pick closest to minutes
+let chosenKey = null;
+const candidateKeys = forecastKeys.length ? forecastKeys : numericKeys;
+if (candidateKeys.length===0) {
+// if CSV is pivoted differently (grid as a matrix), fallback: try single 'value' column
+// We will try to detect 'value' or 'rainfall' column
+chosenKey = keys.find(k => /rain|value|acc|mm/i.test(k));
+} else {
+// pick a key whose label contains the minutes number
+chosenKey = candidateKeys.reduce((best,k)=>{
+const num = (k.match(/\d+/) || [NaN])[0];
+const diff = isNaN(num) ? 9999 : Math.abs(parseInt(num,10)-minutes);
+if (!best || diff < best.diff) return {k, diff}; return best;
+}, null);
+chosenKey = chosenKey ? chosenKey.k : candidateKeys[0];
+}
+
+if (!latKey || !lonKey || !chosenKey) {
+console.warn('columns', keys.slice(0,30));
+setStatus('CSV 欄位格式不符：未找到 lat/lon 或預報欄位，請檢查 CSV 格式。');
+return;
+}
+
+// build heat points [lat, lon, intensity] - intensity normalized
+const points = [];
+let maxVal = 0;
+rows.forEach(r=>{
+const lat = parseFloat(r[latKey]);
+const lon = parseFloat(r[lonKey]);
+const val = parseFloat(r[chosenKey]) || 0;
+if (isFinite(lat) && isFinite(lon)) {
+points.push([lat, lon, val]); // heat plugin expects [lat, lng, intensity]
+if (val > maxVal) maxVal = val;
+}
+});
+
+// convert to leaflet-heat format: [lat,lng,weightNormalized]
+const maxForNorm = Math.max(maxVal, 0.001);
+const heatData = points.map(p => [p[0], p[1], Math.min(1, p[2]/(maxForNorm))]);
+
+// add/remove heatLayer
+if (heatLayer) map.removeLayer(heatLayer);
+heatLayer = L.heatLayer(heatData, {radius: 18, blur: 30, maxZoom: 13}).addTo(map);
+
+setStatus(`已更新 — 檢測欄位: "${chosenKey}". 最大預報雨量: ${maxVal.toFixed(2)} mm`);
+
+// voice alert check: if any point value (in raw mm) > threshold within the chosen forecast col
+const threshold = parseFloat(thresholdInput.value) || 5;
+if (maxVal >= threshold) {
+const msg = `警告：未來 ${minutes} 分鐘內，偵測到最高預報雨量 ${maxVal.toFixed(1)} 毫米，超過閾值 ${threshold} 毫米。`;
+if (voiceEnabled) speak(msg);
+highlightMaxPoint(points, maxVal);
+}
+
+} catch (err) {
+console.error(err);
+setStatus('下載或解析失敗：' + err.message);
+}
+}
+
+// simple marker to show max point
+let maxMarker = null;
+function highlightMaxPoint(points, maxVal) {
+const p = points.find(x => x[2] === maxVal);
+if (!p) return;
+if (maxMarker) map.removeLayer(maxMarker);
+maxMarker = L.circleMarker([p[0], p[1]], {radius:8, color:'#ff0000', weight:2, fill:true, fillOpacity:0.8})
+.bindPopup(`最大預報：${maxVal} mm`).addTo(map).openPopup();
+map.panTo([p[0], p[1]]);
+}
+
+function speak(text) {
+try {
+if (!('speechSynthesis' in window)) return;
+const u = new SpeechSynthesisUtterance(text);
+// 可選：設定語言（粵語： zh-HK／zh-yue，效果依瀏覽器而異）
+u.lang = 'zh-HK';
+window.speechSynthesis.cancel();
+window.speechSynthesis.speak(u);
+} catch(e) { console.warn('TTS fail', e); }
+}
+
+function setStatus(s) { statusEl.textContent = s; }
+
+// events
+refreshBtn.addEventListener('click', ()=> fetchAndRender());
+
+// initial load
+fetchAndRender();
+
+// auto refresh every 12 minutes (12*60*1000 = 720000 ms) - HKO updates every ~12 min
+const intervalMs = 12 * 60 * 1000;
+setInterval(fetchAndRender, intervalMs);
+
+// Allow user to press Enter in inputs to update
+thresholdInput.addEventListener('keydown', e=> { if (e.key==='Enter') fetchAndRender(); });
+minutesInput.addEventListener('keydown', e=> { if (e.key==='Enter') fetchAndRender(); });
+
+})();
+</script>
+</body>
+</html>
