@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港即時天氣雷達+臨近預報</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body {
+font-family: 'Noto Sans HK', sans-serif;
+background-color: #1a202c; /* 深灰藍背景 */
+color: #e2e8f0; /* 淺灰色文字 */
+}
+.map-container {
+position: relative;
+width: 100%;
+max-width: 512px; /* 雷達圖的寬度是 512px */
+aspect-ratio: 1 / 1; /* 保持正方形比例 */
+margin: 0 auto;
+border: 2px solid #4a5568;
+border-radius: 0.75rem;
+overflow: hidden;
+background-color: #2d3748;
+}
+.map-layer {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+user-select: none;
+pointer-events: none;
+}
+.loader {
+border: 4px solid #f3f3f3;
+border-top: 4px solid #3498db;
+border-radius: 50%;
+width: 40px;
+height: 40px;
+animation: spin 1s linear infinite;
+position: absolute;
+top: 50%;
+left: 50%;
+margin-top: -20px;
+margin-left: -20px;
+}
+@keyframes spin {
+0% { transform: rotate(0deg); }
+100% { transform: rotate(360deg); }
+}
+.control-panel {
+background-color: #2d3748;
+border-radius: 0.75rem;
+padding: 1.5rem;
+margin-top: 1rem;
+border: 1px solid #4a5568;
+}
+</style>
+</head>
+<body class="p-4 md:p-8">
+
+<div class="max-w-xl mx-auto">
+<header class="text-center mb-6">
+<h1 class="text-3xl font-bold text-white">香港即時天氣雷達</h1>
+<p class="text-gray-400">雷達圖 + 臨近降雨預報 + 語音警告</p>
+</header>
+
+<main>
+<!-- 地圖容器 -->
+<div id="map-container" class="map-container shadow-lg">
+<div id="loader" class="loader"></div>
+<!-- 底層：天氣雷達圖 -->
+<img id="radar-img" src="" alt="天氣雷達圖" class="map-layer">
+<!-- 上層：臨近降雨預報圖 -->
+<img id="nowcast-img" src="" alt="臨近降雨預報圖" class="map-layer">
+</div>
+
+<!-- 控制面板 -->
+<div class="control-panel mt-6 shadow-lg">
+<div class="space-y-4">
+<!-- 預報圖透明度控制 -->
+<div>
+<label for="opacity-slider" class="block mb-2 text-sm font-medium text-gray-300">預報圖透明度</label>
+<div class="flex items-center space-x-4">
+<span class="text-sm">清晰</span>
+<input id="opacity-slider" type="range" min="0" max="1" value="0.5" step="0.05" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+<span class="text-sm">透明</span>
+</div>
+</div>
+
+<!-- 語音提示控制 -->
+<div>
+<label class="block mb-2 text-sm font-medium text-gray-300">語音提示</label>
+<div class="flex items-center space-x-4">
+<button id="mute-toggle" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors">
+<span>🔊 開啟</span>
+</button>
+<button id="test-speech" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors">
+測試語音
+</button>
+</div>
+</div>
+
+<!-- 狀態顯示 -->
+<div class="pt-4 border-t border-gray-600 text-sm text-gray-400 space-y-2">
+<p>圖像更新時間: <span id="last-updated" class="font-medium text-gray-200">正在載入...</span></p>
+<p>天氣警告: <span id="warning-status" class="font-medium text-gray-200">正在檢查...</span></p>
+</div>
+</div>
+</div>
+
+<footer class="text-center mt-8 text-xs text-gray-500">
+<p>資料來源：香港天文台。本頁面僅供技術測試及個人參考。</p>
+</footer>
+</main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+// DOM 元素
+const radarImg = document.getElementById('radar-img');
+const nowcastImg = document.getElementById('nowcast-img');
+const opacitySlider = document.getElementById('opacity-slider');
+const lastUpdatedSpan = document.getElementById('last-updated');
+const warningStatusSpan = document.getElementById('warning-status');
+const muteToggleBtn = document.getElementById('mute-toggle');
+const testSpeechBtn = document.getElementById('test-speech');
+const loader = document.getElementById('loader');
+
+// 狀態變數
+let isMuted = false;
+let lastWarnings = {};
+let imagesLoaded = { radar: false, nowcast: false };
+
+// --- 語音合成功能 ---
+function speak(text) {
+if (isMuted || !window.speechSynthesis) return;
+
+// 取消之前可能在隊列中的語音
+window.speechSynthesis.cancel();
+
+const utterance = new SpeechSynthesisUtterance(text);
+utterance.lang = 'zh-HK'; // 指定粵語（香港）
+utterance.rate = 1.0;
+utterance.pitch = 1.0;
+window.speechSynthesis.speak(utterance);
+}
+
+// --- 圖像更新功能 ---
+function updateImages() {
+console.log('正在更新圖像...');
+const timestamp = new Date().getTime(); // 防止快取
+
+// 使用 CORS 代理來解決跨域載入錯誤
+const proxy = 'https://corsproxy.io/?';
+const radarUrl = `${proxy}https://www.hko.gov.hk/wxinfo/radars/radar256/latest_rad256.jpg?t=${timestamp}`;
+const nowcastUrl = `${proxy}https://www.hko.gov.hk/wxinfo/nowcast/radar_range1/swir_256_dly.gif?t=${timestamp}`;
+
+// 使用預載入技術防止閃爍
+preloadImage(radarUrl, radarImg, 'radar');
+preloadImage(nowcastUrl, nowcastImg, 'nowcast');
+
+lastUpdatedSpan.textContent = new Date().toLocaleTimeString('zh-HK');
+}
+
+function preloadImage(url, imgElement, type) {
+const tempImg = new Image();
+tempImg.src = url;
+tempImg.onload = () => {
+imgElement.src = url;
+imagesLoaded[type] = true;
+// 當兩張圖片都載入完成後，隱藏載入動畫
+if (imagesLoaded.radar && imagesLoaded.nowcast) {
+loader.style.display = 'none';
+}
+};
+tempImg.onerror = () => {
+console.error(`無法載入圖像: ${url}`);
+}
+}
+
+// --- 天氣警告檢查 ---
+async function checkWeatherWarnings() {
+console.log('正在檢查天氣警告...');
+try {
+// 使用 CORS 代理來解決跨域載入錯誤
+const proxy = 'https://corsproxy.io/?';
+const warningUrl = `${proxy}https://data.weather.gov.hk/weather-data/json/WeatherWarningSummary.json?t=${new Date().getTime()}`;
+const response = await fetch(warningUrl);
+if (!response.ok) {
+throw new Error(`HTTP 錯誤! 狀態: ${response.status}`);
+}
+const data = await response.json();
+
+let activeWarnings = [];
+let newWarnings = [];
+
+// 遍歷所有可能的警告類型
+for (const key in data) {
+if (data.hasOwnProperty(key) && data[key].actionCode && data[key].actionCode !== 'CANCEL') {
+const warningName = data[key].name;
+activeWarnings.push(warningName);
+// 檢查這是不是一個新的警告
+if (!lastWarnings[warningName]) {
+newWarnings.push(warningName);
+}
+}
+}
+
+if (activeWarnings.length === 0) {
+warningStatusSpan.textContent = '沒有生效的警告。';
+warningStatusSpan.style.color = '#a0aec0'; // Gray
+} else {
+warningStatusSpan.textContent = activeWarnings.join('、');
+warningStatusSpan.style.color = '#f56565'; // Red
+}
+
+// 如果有新的警告，則觸發語音提示
+if (newWarnings.length > 0) {
+const speechText = `天氣報告：天文台發出 ${newWarnings.join('、')}。`;
+console.log('偵測到新警告:', speechText);
+speak(speechText);
+}
+
+// 更新最後的警告狀態
+lastWarnings = {};
+activeWarnings.forEach(name => {
+lastWarnings[name] = true;
+});
+
+} catch (error) {
+console.error('無法獲取天氣警告:', error);
+warningStatusSpan.textContent = '檢查失敗，請稍後再試。';
+}
+}
+
+// --- 事件監聽器 ---
+opacitySlider.addEventListener('input', (e) => {
+nowcastImg.style.opacity = e.target.value;
+});
+
+muteToggleBtn.addEventListener('click', () => {
+isMuted = !isMuted;
+muteToggleBtn.innerHTML = isMuted ? '<span>🔇 靜音</span>' : '<span>🔊 開啟</span>';
+muteToggleBtn.classList.toggle('bg-red-600', isMuted);
+muteToggleBtn.classList.toggle('hover:bg-red-700', isMuted);
+muteToggleBtn.classList.toggle('bg-blue-600', !isMuted);
+muteToggleBtn.classList.toggle('hover:bg-blue-700', !isMuted);
+
+if (!isMuted) {
+speak('語音提示已開啟');
+} else {
+window.speechSynthesis.cancel(); // 如果正在說話，立即停止
+}
+});
+
+testSpeechBtn.addEventListener('click', () => {
+speak('這是一個語音測試。');
+});
+
+// --- 初始化和定時任務 ---
+function initialize() {
+// 初始化透明度
+nowcastImg.style.opacity = opacitySlider.value;
+
+// 立即執行一次以獲取初始資料
+updateImages();
+checkWeatherWarnings();
+
+// 設定定時更新（天文台雷達圖大約6分鐘更新一次）
+setInterval(updateImages, 6 * 60 * 1000);
+// 定時檢查天氣警告（每分鐘）
+setInterval(checkWeatherWarnings, 60 * 1000);
+}
+
+initialize();
+});
+</script>
+</body>
+</html>
