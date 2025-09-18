@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港天氣雷達 + 臨近預報</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+body { margin:0; padding:0; font-family: Arial, sans-serif; }
+#map { height: 100vh; width: 100vw; }
+.info {
+position: absolute;
+top: 10px;
+left: 10px;
+background: rgba(255,255,255,0.9);
+padding: 8px;
+border-radius: 5px;
+font-size: 14px;
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="info">
+<b>香港天氣服務</b><br>
+<span id="lastUpdated">載入中...</span><br>
+<span id="warnings">警告查詢中...</span>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([22.3, 114.2], 9);
+
+// 基本圖層
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+maxZoom: 19,
+attribution: '© OpenStreetMap'
+}).addTo(map);
+
+// Proxy base（⚠️ 換成你 Worker 網址）
+const proxyBase = "https://newcastbr.ctakwah.workers.dev/?url=";
+
+// 雷達圖 / 臨近預報圖 overlay
+const radarLayer = L.imageOverlay("", [[21.5,113.5],[22.9,114.6]]).addTo(map);
+const nowcastLayer = L.imageOverlay("", [[21.5,113.5],[22.9,114.6]]).addTo(map);
+
+const lastUpdatedSpan = document.getElementById("lastUpdated");
+const warningsSpan = document.getElementById("warnings");
+
+// 更新圖片
+function updateImages() {
+const timestamp = Date.now();
+const radarTarget = `https://www.hko.gov.hk/wxinfo/radars/radar256/latest_rad256.jpg?t=${timestamp}`;
+const nowcastTarget = `https://www.hko.gov.hk/wxinfo/nowcast/radar_range1/swir_256_dly.gif?t=${timestamp}`;
+
+radarLayer.setUrl(proxyBase + encodeURIComponent(radarTarget));
+nowcastLayer.setUrl(proxyBase + encodeURIComponent(nowcastTarget));
+
+lastUpdatedSpan.textContent = "最後更新：" + new Date().toLocaleTimeString('zh-HK');
+}
+
+// 查詢天文台警告
+async function checkWeatherWarnings() {
+try {
+const target = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=tc";
+const resp = await fetch(proxyBase + encodeURIComponent(target));
+const data = await resp.json();
+
+if (Object.keys(data).length === 0) {
+warningsSpan.textContent = "目前沒有特別天氣警告";
+} else {
+warningsSpan.textContent = "⚠️ " + Object.values(data).map(w => w.name).join("、");
+}
+} catch (e) {
+warningsSpan.textContent = "警告載入失敗";
+}
+}
+
+// 初始更新
+updateImages();
+checkWeatherWarnings();
+
+// 每 5 分鐘自動刷新
+setInterval(updateImages, 5 * 60 * 1000);
+setInterval(checkWeatherWarnings, 5 * 60 * 1000);
+</script>
+</body>
+</html>
