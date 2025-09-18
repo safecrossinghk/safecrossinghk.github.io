@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港即時天氣雷達+臨近預報</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+body { font-family: 'Noto Sans HK', sans-serif; background-color: #1a202c; color: #e2e8f0; }
+#map { height: 512px; border-radius: 0.75rem; border: 2px solid #4a5568; }
+.control-panel { background-color: #2d3748; border-radius: 0.75rem; padding: 1.5rem; margin-top: 1rem; border: 1px solid #4a5568; }
+</style>
+</head>
+<body class="p-4 md:p-8">
+<div class="max-w-xl mx-auto">
+<header class="text-center mb-6">
+<h1 class="text-3xl font-bold text-white">香港即時天氣雷達</h1>
+<p class="text-gray-400">地圖底圖 + 雷達圖 + 臨近降雨預報 + 語音警告</p>
+</header>
+
+<main>
+<!-- Leaflet 地圖 -->
+<div id="map" class="shadow-lg"></div>
+
+<!-- 控制面板 -->
+<div class="control-panel mt-6 shadow-lg">
+<div class="space-y-4">
+<div>
+<label for="opacity-slider" class="block mb-2 text-sm font-medium text-gray-300">預報圖透明度</label>
+<div class="flex items-center space-x-4">
+<span class="text-sm">清晰</span>
+<input id="opacity-slider" type="range" min="0" max="1" value="0.5" step="0.05"
+class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+<span class="text-sm">透明</span>
+</div>
+</div>
+<div>
+<label class="block mb-2 text-sm font-medium text-gray-300">語音提示</label>
+<div class="flex items-center space-x-4">
+<button id="mute-toggle" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors"><span>🔊 開啟</span></button>
+<button id="test-speech" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors">測試語音</button>
+</div>
+</div>
+<div class="pt-4 border-t border-gray-600 text-sm text-gray-400 space-y-2">
+<p>圖像更新時間: <span id="last-updated" class="font-medium text-gray-200">正在載入...</span></p>
+<p>天氣警告: <span id="warning-status" class="font-medium text-gray-200">正在檢查...</span></p>
+</div>
+</div>
+</div>
+
+<footer class="text-center mt-8 text-xs text-gray-500"><p>資料來源：香港天文台。本頁面僅供技術測試及個人參考。</p></footer>
+</main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+const opacitySlider = document.getElementById('opacity-slider');
+const lastUpdatedSpan = document.getElementById('last-updated');
+const warningStatusSpan = document.getElementById('warning-status');
+const muteToggleBtn = document.getElementById('mute-toggle');
+const testSpeechBtn = document.getElementById('test-speech');
+
+let isMuted = false;
+let lastWarnings = {};
+
+// 初始化地圖
+const map = L.map('map').setView([22.3, 114.2], 9);
+const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+attribution: '&copy; OpenStreetMap 貢獻者'
+}).addTo(map);
+
+// 雷達 & 預報圖 overlay（香港範圍大概座標）
+const radarLayer = L.imageOverlay('', [[21.6, 113.6], [22.7, 114.6]]);
+const nowcastLayer = L.imageOverlay('', [[21.6, 113.6], [22.7, 114.6]], { opacity: 0.5 });
+
+// 加入 Layer Control
+const overlays = {
+"🌧️ 雷達圖": radarLayer,
+"☔ 臨近預報圖": nowcastLayer
+};
+L.control.layers(null, overlays).addTo(map);
+
+// 語音播報
+function speak(text) {
+if (isMuted || !window.speechSynthesis) return;
+window.speechSynthesis.cancel();
+const utterance = new SpeechSynthesisUtterance(text);
+utterance.lang = 'zh-HK';
+window.speechSynthesis.speak(utterance);
+}
+
+// 更新雷達 & 預報圖
+function updateImages() {
+const timestamp = new Date().getTime();
+const proxy = "https://newcastb.ctakwah.workers.dev/?url=";
+
+radarLayer.setUrl(`${proxy}https://www.hko.gov.hk/wxinfo/radars/radar256/latest_rad256.jpg?t=${timestamp}`);
+nowcastLayer.setUrl(`${proxy}https://www.hko.gov.hk/wxinfo/nowcast/radar_range1/swir_256_dly.gif?t=${timestamp}`);
+
+lastUpdatedSpan.textContent = new Date().toLocaleTimeString('zh-HK');
+}
+
+// 檢查天氣警告
+async function checkWeatherWarnings() {
+try {
+const proxy = "https://newcastb.ctakwah.workers.dev/?url=";
+const warningUrl = `${proxy}https://data.weather.gov.hk/weather-data/json/WeatherWarningSummary.json?t=${new Date().getTime()}`;
+const response = await fetch(warningUrl);
+const data = await response.json();
+let activeWarnings = [], newWarnings = [];
+
+for (const key in data) {
+if (data[key].actionCode && data[key].actionCode !== 'CANCEL') {
+const warningName = data[key].name;
+activeWarnings.push(warningName);
+if (!lastWarnings[warningName]) newWarnings.push(warningName);
+}
+}
+
+if (activeWarnings.length === 0) {
+warningStatusSpan.textContent = '沒有生效的警告。';
+warningStatusSpan.style.color = '#a0aec0';
+} else {
+warningStatusSpan.textContent = activeWarnings.join('、');
+warningStatusSpan.style.color = '#f56565';
+}
+
+if (newWarnings.length > 0) speak(`天氣報告：天文台發出 ${newWarnings.join('、')}。`);
+lastWarnings = {}; activeWarnings.forEach(name => { lastWarnings[name] = true; });
+} catch (err) {
+warningStatusSpan.textContent = '檢查失敗，請稍後再試。';
+}
+}
+
+// 控制透明度
+opacitySlider.addEventListener('input', e => {
+nowcastLayer.setOpacity(e.target.value);
+});
+
+// 控制語音
+muteToggleBtn.addEventListener('click', () => {
+isMuted = !isMuted;
+muteToggleBtn.innerHTML = isMuted ? '<span>🔇 靜音</span>' : '<span>🔊 開啟</span>';
+muteToggleBtn.classList.toggle('bg-red-600', isMuted);
+muteToggleBtn.classList.toggle('bg-blue-600', !isMuted);
+if (!isMuted) speak('語音提示已開啟');
+});
+testSpeechBtn.addEventListener('click', () => { speak('這是一個語音測試。'); });
+
+// 初始化
+updateImages(); checkWeatherWarnings();
+setInterval(updateImages, 6 * 60 * 1000);
+setInterval(checkWeatherWarnings, 60 * 1000);
+});
+</script>
+</body>
+</html>
