@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>未來降雨提示</title>
+</head>
+<body>
+<div id="rainMsg"></div>
+
+<script>
+const API_KEY = "你的API_KEY";
+const LAT = 22.3, LON = 114.2; // 香港座標
+const THRESHOLD = 1.0; // 門檻改為 1 mm/hr
+
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1m&endTime=+360m&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+const minutes = data.timelines.minutely.slice(0, 360); // 6小時共360分鐘
+const rains = minutes.map(m => m.values.rainIntensity);
+
+let msg = "暫時未見需要提示。";
+
+// -------- 條件1: 0–2小時內 ≥ 1 且有上升 --------
+const rains2h = rains.slice(0, 120);
+const overThreshold2h = rains2h.some(r => r >= THRESHOLD);
+
+let hasRising2h = false;
+for (let i = 1; i < rains2h.length; i++) {
+if (rains2h[i] > rains2h[i - 1]) {
+hasRising2h = true;
+break;
+}
+}
+
+let triggered = false;
+if (overThreshold2h && hasRising2h) {
+msg = `🌧 未來兩小時雨量將達到 ≥${THRESHOLD}mm/hr，並出現上升趨勢！`;
+triggered = true;
+}
+
+// -------- 條件2: 3–6小時內 ≥ 1 且有上升 --------
+if (!triggered) { // ✅ 優先級：如果 0–2 小時已經觸發，就唔再檢查
+const rains3to6h = rains.slice(120, 360);
+
+const overThreshold3to6h = rains3to6h.some(r => r >= THRESHOLD);
+
+let hasRising3to6h = false;
+for (let i = 1; i < rains3to6h.length; i++) {
+if (rains3to6h[i] > rains3to6h[i - 1]) {
+hasRising3to6h = true;
+break;
+}
+}
+
+if (overThreshold3to6h && hasRising3to6h) {
+for (let i = 1; i < rains3to6h.length; i++) {
+if (rains3to6h[i] >= THRESHOLD && rains3to6h[i] > rains3to6h[i - 1]) {
+const hour = Math.floor((120 + i) / 60);
+msg = `⏰ 估計約 ${hour} 小時內將有雨（≥${THRESHOLD}mm/hr 且呈上升趨勢）。`;
+triggered = true;
+break;
+}
+}
+}
+}
+
+// -------- 條件3: 連續30分鐘維持近似平均 --------
+if (!triggered) { // ✅ 只會獨立顯示
+let hasStable30min = false;
+for (let start = 0; start <= rains2h.length - 30; start++) {
+const window = rains2h.slice(start, start + 30);
+const maxVal = Math.max(...window);
+const minVal = Math.min(...window);
+if (maxVal - minVal <= 0.5 && maxVal > 0) { // 波幅 ≤ 0.5，且有雨
+hasStable30min = true;
+break;
+}
+}
+if (hasStable30min) {
+msg = "☁️ 發現連續30分鐘以上雨量維持近似平均水平。";
+}
+}
+
+document.getElementById("rainMsg").innerText = msg;
+})
+.catch(() => document.getElementById("rainMsg").innerText = "⚠️ 資料讀取失敗");
+</script>
+</body>
+</html>
