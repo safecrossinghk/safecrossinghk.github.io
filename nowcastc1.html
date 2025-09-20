@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>未來兩小時雨量提示</title>
+</head>
+<body>
+<div id="rainMsg"></div>
+
+<script>
+const API_KEY = "你的API_KEY";
+const LAT = 22.3, LON = 114.2; // 香港座標
+
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1m&endTime=+120m&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+const minutes = data.timelines.minutely.slice(0, 120); // 取未來120分鐘
+const rains = minutes.map(m => m.values.rainIntensity);
+
+// 條件1: 是否有 >= 2.5 mm/hr
+const overThreshold = rains.some(r => r >= 2.5);
+
+// 條件2: 是否有上升趨勢（簡單：最後值 > 最初值）
+const upwardTrend = rains[rains.length - 1] > rains[0];
+
+// 你可以用更嚴謹嘅方法，例如「有一段連續上升」：
+let hasRising = false;
+for (let i = 1; i < rains.length; i++) {
+if (rains[i] > rains[i - 1]) {
+hasRising = true;
+break;
+}
+}
+
+let msg = "暫時未見需要提示。";
+if (overThreshold && (upwardTrend || hasRising)) {
+msg = "🌧 未來兩小時雨量將達到 2.5mm/hr 以上，並出現上升趨勢！請留意。";
+}
+
+document.getElementById("rainMsg").innerText = msg;
+})
+.catch(() => document.getElementById("rainMsg").innerText = "⚠️ 資料讀取失敗");
+</script>
+</body>
+</html>
