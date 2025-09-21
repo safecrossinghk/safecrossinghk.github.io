@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>未來降雨提示</title>
+</head>
+<body>
+<div id="rainMsg"></div>
+
+<script>
+const API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
+const LAT = 22.3, LON = 114.2; // 香港座標
+const THRESHOLD = 1.0; // 門檻 1 mm/hr
+
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1m&endTime=+180m&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+const minutes = data.timelines.minutely.slice(0, 180); // 0–3小時共180分鐘
+const rains = minutes.map(m => m.values.rainIntensity);
+
+console.log("🔎 逐分鐘雨量 (0–3h):", rains);
+
+let msg = "暫時未見需要提示。";
+let triggered1 = false;
+let triggered2 = false;
+
+// -------- 條件1: 1–3小時內 ≥1 且有上升 --------
+const rains1to3h = rains.slice(60, 180); // 1–3小時 (60–180分鐘)
+const overThreshold1to3h = rains1to3h.some(r => r >= THRESHOLD);
+
+let hasRising = false;
+let risingMinute = -1;
+let risingTime = "";
+for (let i = 61; i < 180; i++) {
+if (rains[i] > rains[i - 1] && rains[i] >= THRESHOLD) {
+hasRising = true;
+risingMinute = i;
+risingTime = new Date(minutes[i].time).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" });
+break;
+}
+}
+
+if (overThreshold1to3h && hasRising) {
+triggered1 = true;
+const minutesLater = risingMinute; // 幾多分鐘後
+if (risingMinute <= 60) {
+msg = `🌧 你所在的位置預計約一小時內有雨（約 ${minutesLater} 分鐘後，即 ${risingTime} 開始）。`;
+} else if (risingMinute <= 120) {
+msg = `🌧 你所在的位置預計約兩小時內有雨（約 ${minutesLater} 分鐘後，即 ${risingTime} 開始）。`;
+} else {
+msg = `🌧 你所在的位置預計約三小時內有雨（約 ${minutesLater} 分鐘後，即 ${risingTime} 開始）。`;
+}
+console.log("✅ 條件1觸發 → risingMinute:", risingMinute, " risingTime:", risingTime, " msg:", msg);
+}
+
+// -------- 條件2: 0–3小時內有連續30分鐘 ≥1 且波幅 ≤0.5 --------
+if (!triggered1) { // ✅ 條件1優先，若未觸發才檢查條件2
+let hasStable30min = false;
+let stableStart = -1;
+let stableTime = "";
+for (let start = 0; start <= rains.length - 30; start++) {
+const window = rains.slice(start, start + 30);
+const maxVal = Math.max(...window);
+const minVal = Math.min(...window);
+if (maxVal - minVal <= 0.5 && maxVal >= THRESHOLD) {
+hasStable30min = true;
+stableStart = start;
+stableTime = new Date(minutes[start].time).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" });
+break;
+}
+}
+if (hasStable30min) {
+triggered2 = true;
+msg = `☁️ 發現未來三小時內有連續30分鐘以上雨量維持近似平均水平 (≥1mm)，約 ${stableStart} 分鐘後 (${stableTime} 開始)。`;
+console.log("✅ 條件2觸發 → stableStart:", stableStart, " stableTime:", stableTime, " msg:", msg);
+}
+}
+
+document.getElementById("rainMsg").innerText = msg;
+})
+.catch(() => document.getElementById("rainMsg").innerText = "⚠️ 資料讀取失敗");
+</script>
+</body>
+</html>
