@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>未來降雨提示</title>
+</head>
+<body>
+<div id="rainMsg"></div>
+
+<script>
+const API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
+const LAT = 22.3, LON = 114.2; // 香港座標
+const THRESHOLD = 1.0; // 門檻改為 1 mm/hr
+
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${LAT},${LON}&timesteps=1m&endTime=+180m&apikey=${API_KEY}`)
+.then(res => res.json())
+.then(data => {
+const minutes = data.timelines.minutely.slice(0, 180); // 0–3小時共180分鐘
+const rains = minutes.map(m => m.values.rainIntensity);
+
+// Debug log: 印出全部逐分鐘雨量數據
+console.log("🔎 逐分鐘雨量 (0–3h):", rains);
+
+let msg = "暫時未見需要提示。";
+let triggered = false;
+
+// -------- 條件1: 0–3小時內 ≥ 1 且有上升 --------
+const overThreshold = rains.some(r => r >= THRESHOLD);
+
+let hasRising = false;
+for (let i = 1; i < rains.length; i++) {
+if (rains[i] > rains[i - 1]) {
+hasRising = true;
+break;
+}
+}
+
+console.log("條件1檢查 → overThreshold:", overThreshold, " hasRising:", hasRising);
+
+if (overThreshold && hasRising) {
+msg = `🌧 未來 0–3 小時內雨量將達到 ≥${THRESHOLD}mm/hr，並出現上升趨勢！`;
+triggered = true;
+}
+
+// -------- 條件2: 連續30分鐘維持近似平均 (0–3小時, ≥1mm 且波幅 ≤0.5) --------
+if (!triggered) { // ✅ 優先級：只會喺條件1未觸發時顯示
+let hasStable30min = false;
+for (let start = 0; start <= rains.length - 30; start++) {
+const window = rains.slice(start, start + 30);
+const maxVal = Math.max(...window);
+const minVal = Math.min(...window);
+if (maxVal - minVal <= 0.5 && maxVal >= THRESHOLD) {
+hasStable30min = true;
+console.log(`條件2觸發 → 由第 ${start} 分鐘開始連續30分鐘維持穩定 (範圍: ${minVal}–${maxVal})`);
+break;
+}
+}
+if (hasStable30min) {
+msg = "☁️ 發現未來三小時內有連續30分鐘以上雨量維持近似平均水平 (≥1mm)。";
+}
+}
+
+document.getElementById("rainMsg").innerText = msg;
+})
+.catch(() => document.getElementById("rainMsg").innerText = "⚠️ 資料讀取失敗");
+</script>
+</body>
+</html>
