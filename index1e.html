@@ -310,9 +310,8 @@ localStorage.setItem("iosPromptShown", "1");
 }
 }
 
-// 所有裝置的自訂提示框
+// ✅ 全裝置共用提示框（只顯示一次）
 function showCustomPrompt() {
-// ✅ 檢查 localStorage，已經訂閱過就唔再顯示
 if (localStorage.getItem("subscribedToRainAlert")) return;
 
 document.getElementById("customPrompt").style.display = "block";
@@ -322,19 +321,16 @@ OneSignal.push(function() {
 OneSignal.showNativePrompt(); // 🔔 觸發 OneSignal 系統級提示框
 });
 document.getElementById("customPrompt").style.display = "none";
-
-// ✅ 記錄已經訂閱
-localStorage.setItem("subscribedToRainAlert", "1");
+localStorage.setItem("subscribedToRainAlert", "1"); // ✅ 記錄已訂閱
 };
 
 document.getElementById("closeCustomBtn").onclick = function() {
 document.getElementById("customPrompt").style.display = "none";
-// ⚠️ 用戶揀「稍後再說」，唔會 set localStorage
-// 下次入網頁仍然會再見到
 };
 }
 
-// 呼叫
+initLocation();
+showIosPromptOnce();
 showCustomPrompt();
 </script>
 </body>
