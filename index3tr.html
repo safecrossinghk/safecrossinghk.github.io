@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港降雨推播測試頁面</title>
+<!-- OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<script>
+// 初始化 OneSignal
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // ⚠️ 你的 OneSignal App ID
+});
+});
+
+// ✅ 發送真推播（REST API）
+async function sendNotification(message) {
+const REST_API_KEY = "os_v2_app_rabedtomivecbnpmuerwwdr6tciiske3mk5ez3mancrg7qmdy275ruzqq3c623gckamggtnnaqow5hyvghfdfbhhcbq2llehcl6jwki"; // 注意：千祈唔好公開
+const APP_ID = "880241cd-cc45-4820-b5ec-a1236b0e3e98";
+
+try {
+const res = await fetch("https://onesignal.com/api/v1/notifications", {
+method: "POST",
+headers: {
+"Content-Type": "application/json; charset=utf-8",
+"Authorization": "Basic " + REST_API_KEY
+},
+body: JSON.stringify({
+app_id: APP_ID,
+included_segments: ["Subscribed Users"], // 所有已訂閱用戶
+headings: { "en": "⚠️ 降雨提示" },
+contents: { "en": message },
+url: "https://safecrossinghk.github.io/index2a.html",
+large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
+})
+});
+
+const result = await res.json();
+console.log("✅ 已送出推播：", result);
+
+} catch (err) {
+console.error("❌ 推播失敗：", err);
+}
+}
+
+// ✅ 檢查指定經緯度雨量
+async function checkRain(lat, lon) {
+try {
+const res = await fetch(`https://crowdtest8tr.ctakwah.workers.dev/check?lat=${lat}&lon=${lon}`);
+const data = await res.json();
+
+console.log("雨量數據：", data);
+
+// 門檻：0.01mm 以上觸發推播
+if (data.immediateRain > 0.01) {
+sendNotification(`⚠️ ${lat},${lon} 未來可能有雨 ${data.immediateRain}mm`);
+}
+
+} catch (err) {
+console.error("❌ 查詢雨量失敗：", err);
+}
+}
+
+// ✅ 頁面載入時檢查一次
+document.addEventListener("DOMContentLoaded", () => {
+checkRain(23.004, 115.252); // 指定測試經緯度
+});
+</script>
+</head>
+<body>
+<h1>香港降雨推播測試頁面</h1>
+<p>此頁會自動查詢指定經緯度雨量，達門檻即推播。</p>
+</body>
+</html>
