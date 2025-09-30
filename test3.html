@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港降雨推播測試頁面（Worker 版）</title>
+<!-- OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<script>
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+});
+});
+
+async function checkRain(lat, lon) {
+try {
+const WORKER_URL = `https://test3workers.ctakwah.workers.dev/check?lat=${lat}&lon=${lon}`;
+const res = await fetch(WORKER_URL);
+const data = await res.json();
+console.log(`雨量數據 (${lat},${lon})：`, data);
+} catch (err) {
+console.error("❌ 查詢雨量失敗：", err);
+}
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+const defaultLat = 22.932;
+const defaultLon = 114.299;
+checkRain(defaultLat, defaultLon);
+
+const btn = document.getElementById("checkBtn");
+btn.addEventListener("click", () => {
+const lat = parseFloat(document.getElementById("latInput").value);
+const lon = parseFloat(document.getElementById("lonInput").value);
+if (!isNaN(lat) && !isNaN(lon)) {
+checkRain(lat, lon);
+} else {
+alert("請輸入有效的經緯度！");
+}
+});
+});
+</script>
+</head>
+<body>
+<h1>香港降雨推播測試頁面（Worker 版）</h1>
+<p>頁面會自動檢查預設經緯度雨量，達門檻即推播。</p>
+
+<h3>手動查詢任意經緯度</h3>
+<label>緯度 (Lat)：<input type="text" id="latInput" placeholder="例如 22.932"></label><br>
+<label>經度 (Lon)：<input type="text" id="lonInput" placeholder="例如 114.299"></label><br>
+<button id="checkBtn">檢查並發送推播</button>
+</body>
+</html>
