@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港降雨推播測試頁面</title>
+<!-- OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<script>
+// 初始化 OneSignal
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // 你的 App ID
+});
+});
+
+// 呼叫 Cloudflare Worker 發送推播
+async function sendWorkerNotification(message) {
+try {
+const WORKER_URL = "https://crowdtest8r.ctakwah.workers.dev/"; // 替換成你的 Worker URL
+const res = await fetch(WORKER_URL, {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({ message })
+});
+const data = await res.json();
+console.log("Worker 推播結果：", data);
+} catch (err) {
+console.error("❌ Worker 推播失敗：", err);
+}
+}
+
+// 查詢指定經緯度雨量
+async function checkRain(lat, lon) {
+try {
+const res = await fetch(`https://crowdtest8tr.ctakwah.workers.dev/check?lat=${lat}&lon=${lon}`);
+const data = await res.json();
+console.log(`雨量數據 (${lat},${lon})：`, data);
+
+// 門檻：0.01mm 以上觸發推播
+if (data.immediateRain > 0.01) {
+sendWorkerNotification(`⚠️ (${lat},${lon}) 未來可能有雨 ${data.immediateRain}mm`);
+}
+
+} catch (err) {
+console.error("❌ 查詢雨量失敗：", err);
+}
+}
+
+// 自動檢查預設經緯度
+document.addEventListener("DOMContentLoaded", () => {
+const defaultLat = 22.932;
+const defaultLon = 114.299;
+checkRain(defaultLat, defaultLon);
+
+// 綁定手動查詢按鈕
+const btn = document.getElementById("checkBtn");
+btn.addEventListener("click", () => {
+const lat = parseFloat(document.getElementById("latInput").value);
+const lon = parseFloat(document.getElementById("lonInput").value);
+if (!isNaN(lat) && !isNaN(lon)) {
+checkRain(lat, lon);
+} else {
+alert("請輸入有效的經緯度！");
+}
+});
+});
+</script>
+</head>
+<body>
+<h1>香港降雨推播測試頁面</h1>
+<p>頁面會自動檢查預設經緯度雨量，達門檻即推播。</p>
+
+<h3>手動查詢任意經緯度</h3>
+<label>緯度 (Lat)：<input type="text" id="latInput" placeholder="例如 22.932"></label><br>
+<label>經度 (Lon)：<input type="text" id="lonInput" placeholder="例如 114.299"></label><br>
+<button id="checkBtn">檢查並發送推播</button>
+</body>
+</html>
