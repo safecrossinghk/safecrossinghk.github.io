@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港降雨預報推播測試</title>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<script>
+// OneSignal 初始化
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // <<<<<< 換成你 OneSignal App ID
+});
+});
+
+// 查詢指定經緯度雨量
+async function checkRain(lat, lon) {
+try {
+const res = await fetch(`https://crowdtest8r.ctakwah.workers.dev/check?lat=${lat}&lon=${lon}`);
+const data = await res.json();
+
+console.log("雨量查詢結果:", data);
+
+// 假設 Worker 回傳格式: { "rain_mm": 6.2, "will_rain": true }
+if (data.rain_mm >= 0.01) {
+sendNotification(`⚠️ ${lat},${lon} 未來可能有大雨 ${data.rain_mm}mm！`);
+}
+} catch (err) {
+console.error("查詢雨量失敗:", err);
+}
+}
+
+// 透過 OneSignal 發送推播
+function sendNotification(message) {
+OneSignal.push(function() {
+OneSignal.sendSelfNotification(
+"香港降雨提示",
+message,
+"https://safecrossinghk.github.io/index2a.html", // 點擊後導向網址
+"https://cdn-icons-png.flaticon.com/512/1163/1163624.png" // icon
+);
+});
+}
+
+// 測試：指定經緯度 (旺角附近)
+document.addEventListener("DOMContentLoaded", () => {
+checkRain(22.878, 114.727);
+});
+</script>
+</head>
+<body>
+<h1>香港降雨推播測試頁面</h1>
+<p>此頁會自動查詢指定經緯度雨量，達門檻就推播。</p>
+</body>
+</html>
