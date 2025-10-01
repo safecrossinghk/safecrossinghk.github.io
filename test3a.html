@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<title>降雨推播測試（Worker + Debug）</title>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<style>body{font-family:Arial,Helvetica,sans-serif;padding:18px} input{width:200px}</style>
+</head>
+<body>
+<h2>降雨推播測試（Worker + Debug）</h2>
+
+<div>
+<strong>OneSignal 訂閱狀態：</strong>
+<span id="subStatus">正在檢查...</span>
+<br/>
+<strong>player_id (UserId)：</strong>
+<input id="playerId" placeholder="尚未取得 player id" />
+<button id="copyPid">複製 player_id</button>
+<button id="selfNotifyBtn">前端 self-notify（測試，只寄自己）</button>
+</div>
+
+<hr/>
+
+<div>
+<h4>自動檢查預設經緯度（頁面載入會檢查）</h4>
+<div>
+Lat <input id="latInput" value="22.932" />
+Lon <input id="lonInput" value="114.299" />
+<button id="checkBtn">檢查並由 Worker 發送</button>
+</div>
+<div style="margin-top:10px">
+<button id="sendTargetedBtn">用 player_id 向 Worker 發送測試推播</button>
+</div>
+</div>
+
+<hr/>
+
+<div>
+<h4>Debug 輸出</h4>
+<pre id="output" style="background:#f7f7f7;padding:10px;height:220px;overflow:auto"></pre>
+</div>
+
+<script>
+const WORKER_URL = "https://test3a.ctakwah.workers.dev"; // ← 改成你的 Worker URL（不要多 /check，Worker 程式會用 request.method 判斷）
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({ appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98" }); // 確保和 Worker 裡的 app id 一致
+
+// 檢查訂閱狀態與取得 player id
+OneSignal.isPushNotificationsEnabled().then(enabled => {
+document.getElementById("subStatus").innerText = enabled ? "已啟用 (Subscribed)" : "未啟用 (Not subscribed)";
+});
+
+OneSignal.getUserId().then(id => {
+if (id) {
+document.getElementById("playerId").value = id;
+log("player_id 已取得: " + id);
+} else {
+log("未取得 player_id（可能尚未允許推播）");
+}
+});
+});
+
+function log(...args){
+const o = document.getElementById("output");
+o.textContent = new Date().toLocaleTimeString() + " " + args.map(a => (typeof a === "object" ? JSON.stringify(a,null,2) : a)).join(" ") + "\n" + o.textContent;
+}
+
+async function checkRain(lat, lon){
+try {
+log("呼叫 Worker 檢查雨量: ", lat, lon);
+const url = `${WORKER_URL}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+const res = await fetch(url);
+const json = await res.json().catch(()=>null);
+log("Worker 回傳：", json);
+if (json && json.pushResult) {
+if (json.pushResult.ok) log("推播 API 回傳 OK，狀態碼:", json.pushResult.status, "回應 body:", json.pushResult.body);
+else log("推播 API 回傳錯誤：", json.pushResult);
+} else {
+log("沒有發送推播（雨量未達門檻或 pushResult 為 null）");
+}
+} catch (err) {
+log("呼叫 Worker 失敗：", err);
+}
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+document.getElementById("checkBtn").addEventListener("click", () => {
+const lat = parseFloat(document.getElementById("latInput").value);
+const lon = parseFloat(document.getElementById("lonInput").value);
+if (!isNaN(lat) && !isNaN(lon)) checkRain(lat, lon);
+else alert("請輸入有效經緯度");
+});
+
+// 頁面載入時自動檢查一次
+checkRain(parseFloat(document.getElementById("latInput").value), parseFloat(document.getElementById("lonInput").value));
+
+// 自行向 Worker 發送針對 player_id 的測試推播
+document.getElementById("sendTargetedBtn").addEventListener("click", async () => {
+const pid = document.getElementById("playerId").value.trim();
+if (!pid) { alert("請先取得 player_id (OneSignal.getUserId()) 並貼到欄位"); return; }
+try {
+log("向 Worker 以 POST 送出針對 player_id 的推播請求 (可看到 Worker 回傳)");
+const res = await fetch(WORKER_URL, {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({ playerId: pid, message: "測試：從前端發送的測試推播" })
+});
+const json = await res.json().catch(()=>null);
+log("Worker 回傳：", json);
+if (json && json.pushResult) {
+if (json.pushResult.ok) log("針對推播成功，OneSignal 回傳：", json.pushResult.body);
+else log("針對推播失敗：", json.pushResult);
+}
+} catch (err) {
+log("POST 發送失敗：", err);
+}
+});
+
+// copy player id
+document.getElementById("copyPid").addEventListener("click", () => {
+const pid = document.getElementById("playerId").value;
+if (!pid) return alert("無 player_id");
+navigator.clipboard.writeText(pid).then(()=>alert("已複製"));
+});
+
+// 前端 self-notify（只會送到當前裝置 / 非透過 Worker，可快速檢測前端訂閱）
+document.getElementById("selfNotifyBtn").addEventListener("click", () => {
+OneSignal.sendSelfNotification(
+"前端 Self-Notify 測試",
+"這是前端測試通知（只送到當前裝置）",
+window.location.href,
+null
+);
+});
+});
+</script>
+</body>
+</html>
