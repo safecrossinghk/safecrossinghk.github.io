@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港降雨推播測試 (OneSignal Debug)</title>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<style>
+body { font-family: Arial, sans-serif; padding: 15px; }
+#debug { background: #f7f7f7; padding: 10px; margin-top: 15px; white-space: pre-line; }
+input { margin: 5px; }
+</style>
+</head>
+<body>
+<h2>☔ 降雨推播測試 (Worker + OneSignal Debug)</h2>
+
+<p>OneSignal 訂閱狀態：<span id="subStatus">檢查中...</span></p>
+<p>player_id (userId)：<input type="text" id="playerIdField" size="40" readonly></p>
+
+<button onclick="checkRain()">檢查當前經緯度並發送推播</button>
+
+<div id="debug">Debug 輸出：</div>
+
+<script>
+// 初始化 OneSignal
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "🔑你的-onesignal-app-id", // 換成你的 appId
+safari_web_id: "", // Safari 才需要，其他可留空
+notifyButton: { enable: true },
+allowLocalhostAsSecureOrigin: true
+});
+
+// 檢查推播是否啟用
+OneSignal.isPushNotificationsEnabled(function(isEnabled) {
+document.getElementById("subStatus").innerText = isEnabled ? "✅ 已啟用推播" : "❌ 未啟用推播";
+});
+
+// 嘗試取得 userId
+OneSignal.getUserId().then(function(userId) {
+document.getElementById("playerIdField").value = userId || "尚未取得 player id";
+log("取得的 player_id: " + userId);
+});
+});
+
+// Debug log
+function log(msg) {
+let dbg = document.getElementById("debug");
+dbg.innerText += "\n" + new Date().toLocaleTimeString() + " " + msg;
+}
+
+// 測試呼叫 Worker
+async function checkRain() {
+let playerId = document.getElementById("playerIdField").value;
+if (!playerId || playerId.includes("尚未取得")) {
+log("❌ 無法發送，因為未取得 player_id");
+return;
+}
+
+let lat = 22.32, lon = 114.17; // 你可以改
+log("呼叫 Worker，lat=" + lat + " lon=" + lon);
+
+try {
+let res = await fetch("https://test3a.ctakwah.workers.dev", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({ lat, lon, player_id: playerId })
+});
+let data = await res.json();
+log("Worker 回應: " + JSON.stringify(data));
+} catch (e) {
+log("❌ Worker 呼叫失敗: " + e);
+}
+}
+</script>
+</body>
+</html>
