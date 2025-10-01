@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>OneSignal Debug 測試</title>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+.ok { color: green; }
+.err { color: red; }
+</style>
+</head>
+<body>
+<h2>🔔 OneSignal Debug 測試</h2>
+<p>訂閱狀態：<span id="status">檢查中...</span></p>
+<p>player_id (User ID)：<input id="player_id" type="text" readonly style="width:300px"></p>
+<button id="subscribeBtn">📩 手動觸發訂閱</button>
+
+<script>
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "⚠️如果有的話，填你的safari_web_id⚠️",
+notifyButton: { enable: true }
+});
+
+// 檢查訂閱狀態
+OneSignal.isPushNotificationsEnabled(function(isEnabled) {
+document.getElementById("status").textContent =
+isEnabled ? "✅ 已啟用通知" : "❌ 未訂閱";
+document.getElementById("status").className = isEnabled ? "ok" : "err";
+});
+
+// 監聽狀態變化
+OneSignal.on('subscriptionChange', function (isSubscribed) {
+document.getElementById("status").textContent =
+isSubscribed ? "✅ 已訂閱成功" : "❌ 已取消訂閱";
+document.getElementById("status").className = isSubscribed ? "ok" : "err";
+
+if (isSubscribed) {
+OneSignal.getUserId().then(function(userId) {
+console.log("player_id =", userId);
+document.getElementById("player_id").value = userId || "⚠️ 無法取得";
+});
+}
+});
+});
+
+// 手動觸發訂閱
+document.getElementById("subscribeBtn").addEventListener("click", function() {
+OneSignal.push(function() {
+OneSignal.registerForPushNotifications();
+});
+});
+</script>
+</body>
+</html>
