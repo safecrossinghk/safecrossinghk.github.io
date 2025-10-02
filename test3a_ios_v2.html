@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>Test iOS PWA Standalone 檢測</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body { font-family: sans-serif; padding: 20px; }
+.ok { color: green; font-weight: bold; }
+.warn { color: red; font-weight: bold; }
+pre { background: #f0f0f0; padding: 10px; }
+</style>
+</head>
+<body>
+<h2>📱 iOS PWA 測試 (test3a_ios_v2.html)</h2>
+<div id="status">初始化中...</div>
+<pre id="ua"></pre>
+
+<script>
+function detectEnv() {
+const ua = navigator.userAgent;
+const isIOS = /iPhone|iPad|iPod/i.test(ua);
+const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+const inStandalone = window.navigator.standalone === true;
+
+document.getElementById("ua").innerText = ua;
+let msg = `isIOS: ${isIOS}, isSafari: ${isSafari}, inStandalone(PWA): ${inStandalone}`;
+
+if (isIOS && isSafari && !inStandalone) {
+msg += "\n⚠️ 你係 iOS Safari，但仲未以 PWA 主畫面模式打開。";
+msg += "\n👉 請用 Safari → 分享 → 加到主畫面，再由新 icon 開啟。";
+document.getElementById("status").innerHTML = "<span class='warn'>" + msg + "</span>";
+alert("⚠️ 請確認你係由主畫面 Icon 開啟，而唔係直接用 Safari。");
+} else if (inStandalone) {
+msg += "\n✅ 已確認係 PWA 主畫面模式，可以進一步測試 OneSignal Web Push。";
+document.getElementById("status").innerHTML = "<span class='ok'>" + msg + "</span>";
+alert("✅ 成功偵測到 Standalone 模式！");
+} else {
+document.getElementById("status").innerHTML = msg;
+}
+}
+
+detectEnv();
+</script>
+</body>
+</html>
