@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>☔ 降雨推播測試 (iOS Safari Debug)</title>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<style>
+body { font-family: sans-serif; padding: 20px; }
+.error { color: red; font-weight: bold; }
+.ok { color: green; font-weight: bold; }
+#debug { white-space: pre-wrap; background: #f8f8f8; padding: 10px; border: 1px solid #ccc; }
+</style>
+</head>
+<body>
+<h2>☔ 降雨推播測試 (iOS Safari Debug)</h2>
+
+<div id="status">檢查中...</div>
+<p>player_id (UserId)：<span id="playerId">尚未取得</span></p>
+
+<h3>Debug 輸出：</h3>
+<div id="debug">初始化中...</div>
+
+<script>
+(async () => {
+const debugEl = document.getElementById("debug");
+const statusEl = document.getElementById("status");
+const playerIdEl = document.getElementById("playerId");
+
+function log(msg) {
+debugEl.textContent += "\n" + msg;
+console.log(msg);
+}
+
+// 檢查是否 iOS Safari
+const ua = navigator.userAgent;
+const isIOS = /iPhone|iPad|iPod/i.test(ua);
+const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+const inStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+log("UA: " + ua);
+log("isIOS: " + isIOS + ", isSafari: " + isSafari);
+log("inStandalone(PWA): " + inStandalone);
+
+if (isIOS && isSafari && !inStandalone) {
+statusEl.innerHTML = "⚠️ 請先將此頁 <b>加入主畫面</b>，再由主畫面開啟才可訂閱推播。";
+return;
+}
+
+// --- OneSignal 初始化 ---
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+log("開始初始化 OneSignal...");
+
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "👉 換成 OneSignal 生成嘅 safari_web_id 👈"
+});
+
+const subs = await OneSignal.User.PushSubscription.getSubscription();
+if (subs && subs.id) {
+statusEl.innerHTML = "✅ 已訂閱通知";
+playerIdEl.textContent = subs.id;
+log("取得 player_id: " + subs.id);
+} else {
+statusEl.innerHTML = "❌ 尚未訂閱，請允許通知";
+log("未能取得 player_id");
+}
+});
+})();
+</script>
+</body>
+</html>
