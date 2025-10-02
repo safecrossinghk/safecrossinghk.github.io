@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>🌧️ 降雨推播測試 (Worker + OneSignal v6 Debug)</title>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+.ok { color: green; }
+.fail { color: red; }
+textarea { width: 100%; height: 150px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h2>🌧️ 降雨推播測試 (Worker + OneSignal v6 Debug)</h2>
+
+<div id="status">OneSignal 訂閱狀態：檢查中...</div>
+<div id="playerIdBox">player_id (UserId)：<span id="player_id">尚未取得</span></div>
+
+<button onclick="sendTestNotification()">📩 發送測試推播</button>
+<br><br>
+
+<h3>Debug 輸出：</h3>
+<textarea id="debugLog"></textarea>
+
+<script>
+// 初始化 OneSignal v6
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+try {
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "🔴如果有就填🔴"
+});
+
+const id = await OneSignal.User.PushSubscription.id;
+if (id) {
+document.getElementById("status").innerHTML = "✅ 已訂閱推播";
+document.getElementById("player_id").textContent = id;
+log("成功取得 player_id: " + id);
+} else {
+document.getElementById("status").innerHTML = "❌ 尚未訂閱推播";
+log("未能取得 player_id");
+}
+} catch (e) {
+log("初始化錯誤: " + e);
+}
+});
+
+// Debug log function
+function log(msg) {
+const box = document.getElementById("debugLog");
+box.value += new Date().toLocaleTimeString() + " " + msg + "\n";
+box.scrollTop = box.scrollHeight;
+}
+
+// 測試推播 (直接呼叫 OneSignal API)
+async function sendTestNotification() {
+const playerId = document.getElementById("player_id").textContent;
+if (!playerId || playerId === "尚未取得") {
+log("❌ 無法發送，因為未取得 player_id");
+return;
+}
+
+log("準備發送測試推播至 player_id: " + playerId);
+
+try {
+const response = await fetch("https://onesignal.com/api/v1/notifications", {
+method: "POST",
+headers: {
+"Content-Type": "application/json; charset=utf-8",
+"Authorization": "Basic os_v2_app_rabedtomivecbnpmuerwwdr6tciiske3mk5ez3mancrg7qmdy275ruzqq3c623gckamggtnnaqow5hyvghfdfbhhcbq2llehcl6jwki"
+},
+body: JSON.stringify({
+app_id: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+include_player_ids: [playerId],
+contents: { "en": "這是一個測試推播 ✅" }
+})
+});
+
+const result = await response.json();
+log("API 回應: " + JSON.stringify(result, null, 2));
+} catch (e) {
+log("推播發送錯誤: " + e);
+}
+}
+</script>
+</body>
+</html>
