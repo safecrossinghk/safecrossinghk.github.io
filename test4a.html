@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>☔ 降雨推播測試 (OneSignal v6)</title>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+</head>
+<body>
+<h2>☔ 降雨推播測試 (Worker + OneSignal v6)</h2>
+<div id="status">檢查中...</div>
+<div id="player"></div>
+
+<script>
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+window.OneSignalDeferred.push(async function(OneSignal) {
+try {
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // ⚠️ 換成你 OneSignal Dashboard 入面嘅 App ID
+safari_web_id: "YOUR-SAFARI-WEB-ID", // ⚠️ 如要支援 iOS Safari PWA，必須設定
+notifyButton: { enable: true }
+});
+
+const status = await OneSignal.User.PushSubscription.optedIn;
+document.getElementById("status").innerText =
+status ? "✅ 已訂閱推播" : "❌ 未訂閱推播";
+
+const playerId = await OneSignal.User.PushSubscription.id;
+document.getElementById("player").innerText =
+playerId ? "player_id: " + playerId : "⚠️ 未取得 player_id";
+} catch (e) {
+document.getElementById("status").innerText = "❌ 錯誤: " + e;
+console.error(e);
+}
+});
+</script>
+</body>
+</html>
