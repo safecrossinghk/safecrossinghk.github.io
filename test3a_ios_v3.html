@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iOS PWA 測試</title>
+
+<!-- iOS PWA 必須 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<style>
+body { font-family: sans-serif; padding: 20px; }
+.ok { color: green; }
+.warn { color: red; }
+</style>
+</head>
+<body>
+<h1>📱 iOS PWA 測試 (test3a_ios_v2.html)</h1>
+<div id="status"></div>
+<div id="ua"></div>
+
+<script>
+(function() {
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+// iOS PWA 判斷
+const inStandalone = (() => {
+// iOS Safari 舊方法
+if (window.navigator.standalone) return true;
+
+// 現代標準方法
+if (window.matchMedia('(display-mode: standalone)').matches) return true;
+
+// iOS 18+ 新版 Safari 有時候 navigator.standalone 仍 false
+// 嘗試檢查 window.navigator.userAgent 與 window.navigator.platform
+// （這裡暫用 fallback，不影響一般情況）
+return false;
+})();
+
+const statusDiv = document.getElementById('status');
+const uaDiv = document.getElementById('ua');
+
+if (isIOS && inStandalone) {
+statusDiv.innerHTML = '✅ 你已以 PWA 主畫面模式打開！';
+statusDiv.className = 'ok';
+} else if (isIOS && isSafari) {
+statusDiv.innerHTML = '⚠️ 你係 iOS Safari，但仲未以 PWA 主畫面模式打開。<br>👉 請用 Safari → 分享 → 加到主畫面，再由新 icon 開啟。';
+statusDiv.className = 'warn';
+} else {
+statusDiv.innerHTML = '⚠️ 你唔係 iOS Safari，PWA 模式未測試';
+statusDiv.className = 'warn';
+}
+
+uaDiv.textContent = navigator.userAgent;
+})();
+</script>
+</body>
+</html>
