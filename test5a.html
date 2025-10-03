@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>iOS PWA OneSignal 測試</title>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+</head>
+<body>
+<h2>📢 OneSignal iOS PWA 測試</h2>
+<button id="sendBtn" disabled>發送測試通知</button>
+<div id="status">⏳ 檢查訂閱狀態中...</div>
+
+<script>
+const workerUrl = "https://crowdtest8r.ctakwah.workers.dev/";
+
+// 初始化 OneSignal
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "🔑 換成你的 Safari Web ID (如有)",
+notifyButton: { enable: false }
+});
+});
+
+// 發送推播
+async function sendPush() {
+const res = await fetch(workerUrl + "sendPush", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+title: "⚠️ 降雨提示",
+message: "你所在的位置將會有雨",
+url: "https://safecrossinghk.github.io"
+})
+});
+const data = await res.json();
+alert("通知已送出：" + JSON.stringify(data));
+}
+
+document.getElementById("sendBtn").addEventListener("click", sendPush);
+
+// 定時檢查是否已訂閱
+setInterval(async () => {
+try {
+const optedIn = await OneSignal.User.PushSubscription.optedIn;
+if (optedIn) {
+document.getElementById("status").textContent = "✅ 已訂閱通知，可以發送";
+document.getElementById("sendBtn").disabled = false;
+} else {
+document.getElementById("status").textContent = "⚠️ 尚未允許通知，請允許後再試";
+document.getElementById("sendBtn").disabled = true;
+}
+} catch (e) {
+document.getElementById("status").textContent = "❌ 無法檢查通知狀態";
+}
+}, 3000);
+</script>
+</body>
+</html>
