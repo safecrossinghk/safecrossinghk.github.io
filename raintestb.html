@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>天文台臨近雨量 - 頭半小時 ≥0.1mm</title>
+<style>
+body { font-family: Arial, sans-serif; padding: 20px; }
+h2 { color: #0066cc; }
+table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: center; }
+th { background: #f0f0f0; }
+</style>
+</head>
+<body>
+<h2>實時臨近雨量（頭半小時 ≥0.1mm）</h2>
+<table id="rainTable">
+<tr><th>測站</th><th>緯度</th><th>經度</th><th>雨量 (mm)</th></tr>
+</table>
+
+<script>
+async function loadRainfall() {
+try {
+const url = "https://data.weather.gov.hk/weatherAPI/hko_data/F3/Gridded_rainfall_nowcast_tc.csv";
+const res = await fetch(url);
+const data = await res.json();
+
+const table = document.getElementById("rainTable");
+
+// 每個站點只有一個最新數據 record
+data.stations.forEach(st => {
+if (st.record && st.record.length > 0) {
+const rec = st.record[0]; // 頭半小時數據
+if (parseFloat(rec.value) >= 0.1) {
+const row = table.insertRow();
+row.insertCell(0).innerText = st.stationName;
+row.insertCell(1).innerText = st.lat;
+row.insertCell(2).innerText = st.lon;
+row.insertCell(3).innerText = rec.value;
+}
+}
+});
+} catch (e) {
+console.error("載入天文台雨量數據失敗:", e);
+}
+}
+
+loadRainfall();
+</script>
+</body>
+</html>
