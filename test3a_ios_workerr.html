@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>☔ 降雨推播測試 (iOS Safari + Worker Debug)</title>
+
+<!-- PWA 必要設定 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+
+<style>
+body { font-family: sans-serif; padding: 20px; }
+.ok { color: green; font-weight: bold; }
+.warn { color: red; font-weight: bold; }
+#debug, #debugBox {
+white-space: pre-wrap;
+background: #f8f8f8;
+padding: 10px;
+border: 1px solid #ccc;
+margin-top: 10px;
+}
+button { padding: 8px 16px; font-size: 16px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h2>☔ 降雨推播測試 (iOS Safari + Worker Debug)</h2>
+
+<div id="status">檢查中...</div>
+<p>player_id (UserId)：<span id="playerId">尚未取得</span></p>
+
+<button id="sendTest" disabled>📨 測試推播</button>
+<button id="forceRequest">🔔 強制 Request Permission</button>
+
+<h3>Debug 輸出：</h3>
+<div id="debug">初始化中...</div>
+<div id="debugBox">Debug info...</div>
+
+<script>
+(async () => {
+const debugEl = document.getElementById("debug");
+const statusEl = document.getElementById("status");
+const playerIdEl = document.getElementById("playerId");
+const sendBtn = document.getElementById("sendTest");
+const forceBtn = document.getElementById("forceRequest");
+const debugBox = document.getElementById("debugBox");
+
+let currentPlayerId = null;
+
+function log(msg) {
+debugEl.textContent += "\n" + msg;
+console.log(msg);
+}
+
+// PWA 偵測
+const ua = navigator.userAgent;
+const isIOS = /iPhone|iPad|iPod/i.test(ua);
+const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+const inStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+
+log("UA: " + ua);
+log("isIOS: " + isIOS + ", isSafari: " + isSafari + ", inStandalone: " + inStandalone);
+
+if (isIOS && isSafari && !inStandalone) {
+statusEl.innerHTML = "⚠️ 請先將此頁 <b>加入主畫面</b>，再由主畫面開啟才可訂閱推播。";
+return;
+}
+
+// --- OneSignal 初始化 ---
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+log("開始初始化 OneSignal...");
+
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "👉 換成 OneSignal 生成嘅 safari_web_id 👈"
+});
+
+const subs = await OneSignal.User.PushSubscription.getSubscription();
+if (subs && subs.id) {
+statusEl.innerHTML = "✅ 已訂閱通知";
+playerIdEl.textContent = subs.id;
+currentPlayerId = subs.id;
+sendBtn.disabled = false;
+log("取得 player_id: " + subs.id);
+} else {
+statusEl.innerHTML = "❌ 尚未訂閱，請允許通知";
+log("未能取得 player_id");
+}
+
+// Debug 訂閱變化
+OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+console.log("🔔 Subscription change event:", event);
+const isSubscribed = await OneSignal.User.PushSubscription.optedIn;
+const id = OneSignal.User.PushSubscription.id;
+console.log("✅ isSubscribed:", isSubscribed);
+console.log("✅ player_id (PushSubscription.id):", id);
+
+debugBox.innerHTML += "<br>isSubscribed: " + isSubscribed;
+debugBox.innerHTML += "<br>player_id: " + (id ? id : "尚未取得");
+
+if (id) {
+playerIdEl.textContent = id;
+currentPlayerId = id;
+sendBtn.disabled = false;
+}
+});
+
+// 初始 Debug 狀態
+const permission = await OneSignal.Notifications.permission;
+const isSubscribed = await OneSignal.User.PushSubscription.optedIn;
+const id = OneSignal.User.PushSubscription.id;
+debugBox.innerHTML += "<br>Permission: " + permission;
+debugBox.innerHTML += "<br>isSubscribed: " + isSubscribed;
+debugBox.innerHTML += "<br>player_id: " + (id ? id : "尚未取得");
+});
+
+// --- 測試推播按鈕 ---
+sendBtn.addEventListener("click", async () => {
+if (!currentPlayerId) {
+log("❌ 無法發送，因為無 player_id");
+return;
+}
+log("呼叫 Worker 發送通知給: " + currentPlayerId);
+
+try {
+const res = await fetch("👉 換成你 Cloudflare Worker API URL 👈", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+player_id: currentPlayerId,
+title: "☔ 測試通知",
+message: "這是一個 iOS Safari Worker 推播測試"
+})
+});
+
+const data = await res.json();
+log("Worker 回應: " + JSON.stringify(data, null, 2));
+} catch (err) {
+log("❌ Worker 呼叫失敗: " + err);
+}
+});
+
+// --- 強制 Request Permission 按鈕 ---
+forceBtn.addEventListener("click", async () => {
+try {
+log("👉 嘗試強制呼叫 requestPermission()");
+const result = await OneSignal.Notifications.requestPermission();
+log("🔔 Permission request result: " + result);
+debugBox.innerHTML += "<br>Force Request 結果: " + result;
+} catch (err) {
+log("❌ Request Permission 錯誤: " + err);
+}
+});
+})();
+</script>
+</body>
+</html>
