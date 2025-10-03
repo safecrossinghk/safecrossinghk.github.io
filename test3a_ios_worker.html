@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>☔ 降雨推播測試 (iOS Safari + Worker Debug)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- iOS PWA 必須 meta -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<style>
+body { font-family: sans-serif; padding: 20px; }
+.error { color: red; font-weight: bold; }
+.ok { color: green; font-weight: bold; }
+#debug { white-space: pre-wrap; background: #f8f8f8; padding: 10px; border: 1px solid #ccc; }
+button { padding: 8px 16px; font-size: 16px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h2>☔ 降雨推播測試 (iOS Safari + Worker Debug)</h2>
+
+<div id="status">初始化中...</div>
+<p>player_id (UserId)：<span id="playerId">尚未取得</span></p>
+
+<button id="sendTest" disabled>📨 測試推播</button>
+
+<h3>Debug 輸出：</h3>
+<div id="debug">初始化中...</div>
+
+<script>
+(async () => {
+const debugEl = document.getElementById("debug");
+const statusEl = document.getElementById("status");
+const playerIdEl = document.getElementById("playerId");
+const sendBtn = document.getElementById("sendTest");
+
+let currentPlayerId = null;
+
+function log(msg) {
+debugEl.textContent += "\n" + msg;
+console.log(msg);
+}
+
+// --- PWA 檢測 ---
+const ua = navigator.userAgent;
+const isIOS = /iPhone|iPad|iPod/i.test(ua);
+const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+
+const inStandalone = (() => {
+if (window.navigator.standalone) return true; // 舊 iOS
+if (window.matchMedia('(display-mode: standalone)').matches) return true; // 新標準
+return false;
+})();
+
+log("UA: " + ua);
+log("isIOS: " + isIOS + ", isSafari: " + isSafari + ", inStandalone: " + inStandalone);
+
+if (isIOS && isSafari && !inStandalone) {
+statusEl.innerHTML = "⚠️ 你係 iOS Safari，但仲未以 PWA 模式打開。<br>👉 請先用 Safari → 分享 → 加到主畫面，再由新 icon 開啟。";
+statusEl.className = "error";
+return; // ❌ 中止，不進行 OneSignal
+}
+
+if (isIOS && inStandalone) {
+statusEl.innerHTML = "✅ 你已以 PWA 主畫面模式打開，可以嘗試推播！";
+statusEl.className = "ok";
+}
+
+// --- OneSignal 初始化 ---
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+log("開始初始化 OneSignal...");
+
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "👉 換成 OneSignal 生成嘅 safari_web_id 👈"
+});
+
+const subs = await OneSignal.User.PushSubscription.getSubscription();
+if (subs && subs.id) {
+statusEl.innerHTML = "✅ 已訂閱通知";
+playerIdEl.textContent = subs.id;
+currentPlayerId = subs.id;
+sendBtn.disabled = false;
+log("取得 player_id: " + subs.id);
+} else {
+statusEl.innerHTML = "❌ 尚未訂閱，請允許通知";
+log("未能取得 player_id");
+}
+});
+
+// --- 測試推播按鈕 ---
+sendBtn.addEventListener("click", async () => {
+if (!currentPlayerId) {
+log("❌ 無法發送，因為無 player_id");
+return;
+}
+
+log("呼叫 Worker 發送通知給: " + currentPlayerId);
+
+try {
+const res = await fetch("https://crowdtest8r.ctakwah.workers.dev/", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+player_id: currentPlayerId,
+title: "☔ 測試通知",
+message: "這是一個 iOS Safari Worker 推播測試"
+})
+});
+
+const data = await res.json();
+log("Worker 回應: " + JSON.stringify(data, null, 2));
+} catch (err) {
+log("❌ Worker 呼叫失敗: " + err);
+}
+});
+})();
+</script>
+</body>
+</html>
