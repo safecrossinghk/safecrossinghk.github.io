@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>☔ 降雨推播測試 (iOS Safari PWA)</title>
+
+<!-- PWA 設定 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+
+<style>
+body { font-family: sans-serif; padding: 20px; }
+.ok { color: green; font-weight: bold; }
+.warn { color: red; font-weight: bold; }
+#debugBox {
+white-space: pre-wrap;
+background: #f8f8f8;
+padding: 10px;
+border: 1px solid #ccc;
+margin-top: 10px;
+}
+button { padding: 8px 16px; font-size: 16px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h2>☔ 降雨推播測試 (iOS Safari PWA)</h2>
+
+<div id="status">檢查中...</div>
+<p>player_id: <span id="playerId">尚未取得</span></p>
+
+<button id="sendTest" disabled>📨 測試推播</button>
+
+<h3>Debug 輸出：</h3>
+<div id="debugBox">初始化中...</div>
+
+<script>
+(async () => {
+const statusEl = document.getElementById("status");
+const playerIdEl = document.getElementById("playerId");
+const sendBtn = document.getElementById("sendTest");
+const debugBox = document.getElementById("debugBox");
+
+let currentPlayerId = null;
+
+function log(msg) {
+debugBox.innerHTML += "<br>" + msg;
+console.log(msg);
+}
+
+// PWA 偵測
+const ua = navigator.userAgent;
+const isIOS = /iPhone|iPad|iPod/i.test(ua);
+const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+const inStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+
+if (isIOS && isSafari && !inStandalone) {
+statusEl.innerHTML = "⚠️ 請先將此頁 <b>加入主畫面</b>，再由主畫面開啟才可訂閱推播。";
+return;
+}
+
+// 初始化 OneSignal
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "👉 換成 OneSignal 生成嘅 safari_web_id 👈"
+});
+
+// 檢查訂閱
+const permission = await OneSignal.Notifications.permission;
+const isSubscribed = await OneSignal.User.PushSubscription.optedIn;
+const subsId = OneSignal.User.PushSubscription.id;
+
+log("Permission: " + permission);
+log("已訂閱: " + isSubscribed);
+log("player_id: " + (subsId ? subsId : "尚未取得"));
+
+if (subsId) {
+currentPlayerId = subsId;
+playerIdEl.textContent = subsId;
+sendBtn.disabled = false;
+statusEl.innerHTML = "✅ 已訂閱通知";
+} else if (permission !== "denied") {
+const result = await OneSignal.Notifications.requestPermission();
+log("自動 RequestPermission 結果: " + result);
+
+// 再次取得 player_id
+const newId = OneSignal.User.PushSubscription.id;
+if (newId) {
+currentPlayerId = newId;
+playerIdEl.textContent = newId;
+sendBtn.disabled = false;
+statusEl.innerHTML = "✅ 已訂閱通知 (自動)";
+}
+}
+
+// 監聽訂閱變化
+OneSignal.User.PushSubscription.addEventListener("change", async () => {
+const id = OneSignal.User.PushSubscription.id;
+if (id) {
+currentPlayerId = id;
+playerIdEl.textContent = id;
+sendBtn.disabled = false;
+log("🔔 Subscription 變更，取得 player_id: " + id);
+}
+});
+});
+
+// 測試推播按鈕
+sendBtn.addEventListener("click", async () => {
+if (!currentPlayerId) return;
+try {
+const res = await fetch("https://crowdtest8r.ctakwah.workers.dev/", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+player_id: currentPlayerId,
+title: "☔ 測試通知",
+message: "iOS Safari PWA 自動推播測試"
+})
+});
+const data = await res.json();
+log("Worker 回應: " + JSON.stringify(data, null, 2));
+} catch (err) {
+log("❌ Worker 呼叫失敗: " + err);
+}
+});
+})();
+</script>
+</body>
+</html>
