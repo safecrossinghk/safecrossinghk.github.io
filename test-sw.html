@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>Service Worker 測試</title>
+</head>
+<body>
+<h2>Service Worker 註冊檢查</h2>
+<pre id="output">檢查中...</pre>
+
+<script>
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.getRegistrations()
+.then(regs => {
+console.log("所有 Service Worker:", regs);
+if (regs.length === 0) {
+document.getElementById("output").innerText = "❌ 沒有註冊任何 Service Worker";
+} else {
+let info = regs.map(r => r.scope).join("\n");
+document.getElementById("output").innerText = "✅ 已註冊 Service Worker:\n" + info;
+}
+})
+.catch(err => {
+console.error("檢查失敗:", err);
+document.getElementById("output").innerText = "⚠️ 檢查出錯: " + err;
+});
+} else {
+document.getElementById("output").innerText = "❌ 瀏覽器不支援 Service Worker";
+}
+</script>
+</body>
+</html>
