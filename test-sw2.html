@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>Service Worker 註冊檢查</title>
+</head>
+<body>
+<h2>Service Worker 註冊檢查</h2>
+<div id="result">檢查中...</div>
+
+<script>
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.getRegistrations().then(regs => {
+if (regs.length === 0) {
+document.getElementById("result").innerHTML = "❌ 沒有任何已註冊的 Service Worker";
+} else {
+let html = "<ul>";
+regs.forEach(r => {
+html += `<li>
+✅ Scope: <b>${r.scope}</b><br>
+Script URL: <b>${r.active ? r.active.scriptURL : '（未啟動）'}</b>
+</li>`;
+});
+html += "</ul>";
+document.getElementById("result").innerHTML = html;
+}
+}).catch(err => {
+document.getElementById("result").innerHTML = "⚠️ 錯誤: " + err;
+});
+} else {
+document.getElementById("result").innerHTML = "❌ 瀏覽器不支援 Service Worker";
+}
+</script>
+</body>
+</html>
