@@ -78,13 +78,13 @@ border-radius: 5px;
 <meta name="apple-mobile-web-app-title" content="香港降雨預報">
 
 <!-- 🔔 OneSignal SDK -->
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" async></script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <script>
-window.OneSignal = window.OneSignal || [];
-OneSignal.push(function() {
-OneSignal.init({
-appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // ✅ 換成你的 App ID
-safari_web_id: "🔑 換成你的 Safari Web ID"
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "web.onesignal.auto.YOUR_SAFARI_WEB_ID" // ✅ 必須換成真ID
 });
 });
 </script>
