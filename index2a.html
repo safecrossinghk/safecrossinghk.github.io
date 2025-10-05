@@ -85,6 +85,7 @@ OneSignalDeferred.push(async function(OneSignal) {
 await OneSignal.init({
 appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
 safari_web_id: "web.onesignal.auto.YOUR_SAFARI_WEB_ID" // ✅ 必須換成真ID
+serviceWorkerPath: '/OneSignalSDKWorker.js' // 一定要同檔案路徑一致！
 });
 });
 </script>
