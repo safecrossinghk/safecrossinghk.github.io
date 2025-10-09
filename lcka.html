@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>高德紅綠燈倒數估算（Cloudflare Worker）</title>
+<script src="https://webapi.amap.com/maps?v=2.0&key=c739c1ac829fc2acf00599662cca95f9"></script>
+<style>
+html, body, #map { width:100%; height:100%; margin:0; padding:0; }
+.info-box {
+position: absolute;
+top: 10px; left: 10px;
+background: rgba(255,255,255,0.9);
+padding: 10px 15px; border-radius: 8px;
+box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+font-family: Arial; font-size: 14px; line-height: 1.6em;
+}
+</style>
+</head>
+
+<body>
+<div id="map"></div>
+<div class="info-box" id="info">🚦 載入中...</div>
+
+<script>
+// === 初始化地圖 ===
+const map = new AMap.Map('map', {
+zoom: 17,
+center: [114.148551, 22.337974] // 荔枝角道 / 長荔街交界
+});
+
+const marker = new AMap.Marker({
+position: [114.148551, 22.337974],
+title: "位置 A：荔枝角道近長荔街"
+});
+map.add(marker);
+
+// === 基本參數設定 ===
+const V_free = 10; // 自由流速度（m/s 約 36km/h）
+const D = 120; // 距離路口距離（m，假設）
+const k = 1.3; // 調整因子
+
+// === 計算紅綠燈狀態 ===
+function estimateSignal(V_realtime) {
+const V_mps = V_realtime / 3.6;
+if (V_mps <= 0) return {state:"STOP", remain:null};
+const T_arrival = D / V_mps;
+const delay_ratio = Math.max(0, Math.min(1, 1 - V_mps / V_free));
+
+let state, T_remain;
+if (V_mps < 2) {
+state = "RED";
+T_remain = delay_ratio * T_arrival * k;
+} else if (V_mps < 8) {
+state = "MAY_CHANGE";
+T_remain = delay_ratio * T_arrival;
+} else {
+state = "GREEN";
+T_remain = (1 - delay_ratio) * T_arrival / 2;
+}
+
+return {state, remain:Math.round(T_remain)};
+}
+
+// === 呼叫 Cloudflare Worker ===
+async function updateTraffic() {
+try {
+const res = await fetch("https://traffic.ctakwah.com/road?road_name=荔枝角道");
+const data = await res.json();
+
+const estimate = estimateSignal(data.speed);
+const color = estimate.state === "RED" ? "🔴"
+: estimate.state === "GREEN" ? "🟢" : "🟠";
+
+document.getElementById("info").innerHTML = `
+<b>${color} 道路狀態</b><br>
+🛣️ 路段：${data.road}<br>
+🚗 平均速度：${data.speed} km/h<br>
+📊 狀態：${data.status}<br>
+⏱️ 預估倒數：${estimate.remain || '-'} 秒<br>
+🕒 更新：${new Date(data.timestamp).toLocaleTimeString()}
+`;
+} catch (err) {
+document.getElementById("info").innerHTML = "⚠️ 無法取得交通資料";
+}
+}
+
+updateTraffic();
+setInterval(updateTraffic, 10000); // 每10秒更新一次
+</script>
+</body>
+</html>
