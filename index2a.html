@@ -78,14 +78,14 @@ border-radius: 5px;
 <meta name="apple-mobile-web-app-title" content="香港降雨預報">
 
 <!-- 🔔 OneSignal SDK -->
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"></script>
 <script>
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
 await OneSignal.init({
-appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
-safari_web_id: "web.onesignal.auto.YOUR_SAFARI_WEB_ID" // ✅ 必須換成真ID
-serviceWorkerPath: '/OneSignalSDKWorker.js' // 一定要同檔案路徑一致！
+appId: "880424cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "web.onesignal.auto.YOUR_SAFARI_WEB_ID", // ✅ 請改成真實 ID
+serviceWorkerPath: "./OneSignalSDKWorker.js" // ✅ 這行放這裡就對了！
 });
 });
 </script>
