@@ -64,7 +64,7 @@ return {state, remain:Math.round(T_remain)};
 // === 呼叫 Cloudflare Worker ===
 async function updateTraffic() {
 try {
-const res = await fetch("https://traffic.ctakwah.com/road?road_name=荔枝角道");
+const res = await fetch("https://lcka.ctakwah.workers.dev/road?road_name=荔枝角道");
 const data = await res.json();
 
 const estimate = estimateSignal(data.speed);
