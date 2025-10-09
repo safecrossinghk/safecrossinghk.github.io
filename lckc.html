@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>高德道路實時交通測試</title>
+<script src="https://webapi.amap.com/maps?v=2.0&key=c739c1ac829fc2acf00599662cca95f9"></script>
+<style>
+body { font-family: "Microsoft JhengHei", sans-serif; margin: 20px; }
+#map { width: 100%; height: 400px; margin-top: 10px; }
+#output { margin-top: 10px; padding: 10px; background: #f6f6f6; border: 1px solid #ccc; }
+</style>
+</head>
+<body>
+
+<h2>🚦 高德地圖 - 道路實時交通測試</h2>
+<p>輸入道路名稱（例如：荔枝角道）：</p>
+<input id="roadName" value="荔枝角道" size="20">
+<button onclick="getTraffic()">查詢</button>
+
+<div id="output">尚未查詢</div>
+<div id="map"></div>
+
+<script>
+let map;
+
+function initMap() {
+map = new AMap.Map("map", {
+zoom: 14,
+center: [114.1607, 22.3378] // 荔枝角道中段（九龍）
+});
+}
+
+async function getTraffic() {
+const key = "c739c1ac829fc2acf00599662cca95f9"; // ← 請改成你在高德開發者平台申請的 Web Key
+const road = document.getElementById("roadName").value.trim();
+
+const url = `https://restapi.amap.com/v3/traffic/status/road?key=${key}&name=${encodeURIComponent(road)}&extensions=all`;
+
+try {
+const res = await fetch(url);
+const data = await res.json();
+console.log(data);
+
+if (data.status === "1") {
+const info = data.trafficinfo;
+const eval = info.evaluation || {};
+const desc = eval.description || "未提供";
+const speed = eval.speed || "0";
+const status = eval.status || "未知";
+
+document.getElementById("output").innerHTML = `
+<b>道路名稱：</b>${road}<br>
+<b>交通狀態：</b>${status}<br>
+<b>平均速度：</b>${speed} km/h<br>
+<b>說明：</b>${desc}<br>
+<b>資料更新時間：</b>${info.updateTime || "未知"}
+`;
+
+// 顯示道路大致位置
+const polylineData = info.roads?.[0]?.polyline;
+if (polylineData) {
+const path = polylineData.split(";").map(p => p.split(",").map(Number));
+new AMap.Polyline({
+map,
+path,
+strokeColor: "blue",
+strokeWeight: 6,
+});
+map.setFitView();
+}
+} else {
+document.getElementById("output").innerHTML = `❌ 查詢失敗：${data.info}`;
+}
+} catch (e) {
+console.error(e);
+document.getElementById("output").innerHTML = "⚠️ 請求失敗，請檢查網路或金鑰";
+}
+}
+
+initMap();
+</script>
+
+</body>
+</html>
