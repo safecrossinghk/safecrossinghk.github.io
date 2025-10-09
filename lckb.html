@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>高德 API 前端測試</title>
+<script src="https://webapi.amap.com/maps?v=2.0&key=你的Web金鑰"></script>
+</head>
+<body>
+<h2>高德道路交通狀態測試</h2>
+<div id="output">載入中...</div>
+
+<script>
+const roadName = "荔枝角道";
+const key = "c739c1ac829fc2acf00599662cca95f9";
+
+async function getTraffic() {
+try {
+// 高德 Traffic Status API (Web 請求)
+const url = `https://restapi.amap.com/v3/traffic/status/road?key=${key}&name=${encodeURIComponent(roadName)}&extensions=all`;
+
+const res = await fetch(url);
+const data = await res.json();
+
+console.log(data); // 查看完整 JSON
+
+if(data.status === "1"){
+const speed = data.trafficinfo?.evaluation?.speed || "無資料";
+const status = data.trafficinfo?.evaluation?.status || "未知";
+document.getElementById("output").innerHTML = `
+道路: ${roadName}<br>
+狀態: ${status}<br>
+平均速度: ${speed} km/h
+`;
+} else {
+document.getElementById("output").innerHTML = `API 錯誤: ${data.info}`;
+}
+} catch(e){
+console.error(e);
+document.getElementById("output").innerHTML = "請求失敗，請檢查金鑰與網路";
+}
+}
+
+getTraffic();
+</script>
+</body>
+</html>
