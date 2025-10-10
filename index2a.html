@@ -84,8 +84,7 @@ window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
 await OneSignal.init({
 appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
-safari_web_id: "web.onesignal.auto.YOUR_SAFARI_WEB_ID",
-serviceWorkerPath: "/OneSignalSDKWorker.js" // ✅ 注意這裡「有斜線 /」而不是 ./
+serviceWorkerPath: "/OneSignalSDKWorker.js" // ✅ 根目錄
 });
 });
 </script>
@@ -149,14 +148,29 @@ attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
 let marker;
-let rainStatus = 0; // 0 = 無雨，1 = 已推送過
+let rainStatus = 0;
 
 function setMarker(lat, lon) {
 if (marker) map.removeLayer(marker);
 marker = L.marker([lat, lon]).addTo(map);
 }
 
-// 天文台即時預報
+// 🟢 OneSignal 自動推播封裝
+function sendPush(title, message) {
+if (window.OneSignal) {
+OneSignalDeferred.push(async function(OneSignal) {
+await OneSignal.sendSelfNotification({
+title: title,
+message: message,
+icon: "https://safecrossinghk.github.io/icon-192.png",
+url: "https://safecrossinghk.github.io/index2a.html"
+});
+console.log("✅ OneSignal 本地推播已觸發");
+});
+}
+}
+
+// 🟡 天文台即時預報
 function fetchForecast(lat, lon) {
 fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
 .then(res => res.json())
@@ -169,7 +183,7 @@ if (data.immediateRain > 0.01) {
 alertDiv.innerText = `⚠️ 即時預報：你所在的位置將會有雨`;
 if (rainStatus === 0) {
 speak("⚠️ 你所在的位置將會有雨");
-sendPush();
+sendPush("⚠️ 降雨提示", "你所在的位置將會有雨");
 rainStatus = 1;
 }
 } else {
@@ -186,7 +200,7 @@ document.getElementById('rain-alert').innerText = "⚠️ 系統繁忙，請稍�
 });
 }
 
-// Tomorrow.io AI 預報
+// 🔵 Tomorrow.io AI 預報
 function fetchTomorrowAI(lat, lon) {
 fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&timesteps=1m&endTime=+180m&apikey=${TOMORROW_API_KEY}`)
 .then(res => res.json())
@@ -235,29 +249,14 @@ document.getElementById("rainMsg").innerText = msg;
 .catch(() => document.getElementById("rainMsg").innerText = "⚠️ 系統繁忙，請稍後再試");
 }
 
+// 🔊 語音播放
 function speak(text) {
 const msg = new SpeechSynthesisUtterance(text);
 msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
 }
 
-// ✅ 改用 Worker 推播
-function sendPush() {
-fetch(workerUrl + "sendPush", {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-title: "⚠️ 降雨提示",
-message: "你所在的位置將會有雨",
-url: "https://safecrossinghk.github.io"
-})
-})
-.then(res => res.json())
-.then(response => console.log("✅ Worker 已觸發推播", response))
-.catch(err => console.error("❌ Worker 推播失敗", err));
-}
-
-// 定位初始化
+// 📍 定位初始化
 function initLocation() {
 if (!navigator.geolocation) {
 alert("此瀏覽器不支援定位功能");
@@ -290,7 +289,7 @@ fetchTomorrowAI(fallbackLat, fallbackLon);
 );
 }
 
-// iOS 提示框只顯示一次
+// 🧠 提示框邏輯
 function showIosPromptOnce() {
 if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
 if (!localStorage.getItem("iosPromptShown")) {
@@ -303,20 +302,16 @@ localStorage.setItem("iosPromptShown", "1");
 }
 }
 
-// ✅ 全裝置共用提示框（只顯示一次）
 function showCustomPrompt() {
 if (localStorage.getItem("subscribedToRainAlert")) return;
-
 document.getElementById("customPrompt").style.display = "block";
-
 document.getElementById("subscribeBtn").onclick = function() {
 OneSignal.push(function() {
-OneSignal.showNativePrompt(); // 🔔 觸發 OneSignal 系統級提示框
+OneSignal.showNativePrompt();
 });
 document.getElementById("customPrompt").style.display = "none";
-localStorage.setItem("subscribedToRainAlert", "1"); // ✅ 記錄已訂閱
+localStorage.setItem("subscribedToRainAlert", "1");
 };
-
 document.getElementById("closeCustomBtn").onclick = function() {
 document.getElementById("customPrompt").style.display = "none";
 };
