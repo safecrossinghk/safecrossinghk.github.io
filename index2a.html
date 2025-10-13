@@ -7,118 +7,67 @@
 <title>🌧️ 香港降雨預報</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
-<!-- 🔧 自動判斷裝置切換 PWA 模式 -->
+<!-- PWA manifest -->
+<link rel="manifest" href="/manifest.json">
+
 <script>
 (function() {
-const metaManifest = document.createElement("link");
-metaManifest.rel = "manifest";
-metaManifest.href = "/manifest.json";
-document.head.appendChild(metaManifest);
-
 const metaCapable = document.createElement("meta");
-const metaStatusBar = document.createElement("meta");
-const metaTitle = document.createElement("meta");
-
 metaCapable.name = "apple-mobile-web-app-capable";
+metaCapable.content = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "yes" : "no";
+document.head.appendChild(metaCapable);
+
+const metaStatusBar = document.createElement("meta");
 metaStatusBar.name = "apple-mobile-web-app-status-bar-style";
+metaStatusBar.content = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "black" : "default";
+document.head.appendChild(metaStatusBar);
+
+const metaTitle = document.createElement("meta");
 metaTitle.name = "apple-mobile-web-app-title";
 metaTitle.content = "香港降雨預報";
-
-if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-metaCapable.content = "yes";
-metaStatusBar.content = "black";
-console.log("✅ iOS 偵測到：已啟用 PWA 模式");
-} else {
-metaCapable.content = "no";
-metaStatusBar.content = "default";
-console.log("✅ 非 iOS 裝置：使用普通網頁模式");
-}
-
-document.head.appendChild(metaCapable);
-document.head.appendChild(metaStatusBar);
 document.head.appendChild(metaTitle);
+
+console.log(/iPhone|iPad|iPod/i.test(navigator.userAgent) ? "✅ iOS 偵測到：已啟用 PWA 模式" : "✅ 非 iOS 裝置：使用普通網頁模式");
 })();
 </script>
 
 <style>
 body {
 font-family: "Helvetica Neue", sans-serif;
-margin: 0;
-padding: 0;
+margin: 0; padding: 0;
 background: #f0f8ff;
 color: #333;
 text-align: center;
 }
-h1 {
-font-size: 1.4em;
-margin: 1em 0 0.5em;
-}
-#map {
-height: 300px;
-margin: 0 10px;
-border-radius: 8px;
-border: 1px solid #ccc;
-}
-#ai-forecast {
-margin: 1em;
-padding: 1em;
-border: 2px solid #0077cc;
-border-radius: 8px;
-background: #fff;
-text-align: left;
-}
-#rain-alert {
-margin: 1em;
-font-size: 1.2em;
-font-weight: bold;
-line-height: 1.8em;
-white-space: pre-line;
-}
-#footer-text {
-margin: 1.5em;
-font-size: 0.9em;
-color: #555;
-line-height: 1.6em;
-}
+h1 { font-size: 1.4em; margin: 1em 0 0.5em; }
+#map { height: 300px; margin: 0 10px; border-radius: 8px; border: 1px solid #ccc; }
+#ai-forecast { margin: 1em; padding: 1em; border: 2px solid #0077cc; border-radius: 8px; background: #fff; text-align: left; }
+#rain-alert { margin: 1em; font-size: 1.2em; font-weight: bold; line-height: 1.8em; white-space: pre-line; }
+#footer-text { margin: 1.5em; font-size: 0.9em; color: #555; line-height: 1.6em; }
 .promptBox {
-position: fixed;
-bottom: 20px;
-left: 10%;
-right: 10%;
-background: #fff3cd;
-color: #333;
-border: 1px solid #ffeeba;
-padding: 15px;
-border-radius: 10px;
-font-size: 0.95em;
-box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-z-index: 9999;
+position: fixed; bottom: 20px; left: 10%; right: 10%;
+background: #fff3cd; color: #333; border: 1px solid #ffeeba;
+padding: 15px; border-radius: 10px; font-size: 0.95em;
+box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 9999;
 }
-.promptBox button {
-margin-top: 10px;
-padding: 6px 12px;
-background: #0077cc;
-color: white;
-border: none;
-border-radius: 5px;
-}
+.promptBox button { margin-top: 10px; padding: 6px 12px; background: #0077cc; color: white; border: none; border-radius: 5px; }
 </style>
 
-<!-- 🔔 OneSignal SDK v16 -->
+<!-- OneSignal SDK v16 -->
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" async></script>
 <script>
 window.OneSignal = window.OneSignal || [];
 OneSignal.push(function() {
 OneSignal.init({
-appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // ✅ 換成你的 App ID
-safari_web_id: "🔑 換成你的 Safari Web ID"
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "你的 Safari Web ID"
 });
 
-// ✅ 儲存 playerId 供 Worker 使用
-OneSignal.User.PushSubscription.addEventListener("change", function(event) {
-if (event.newValue && event.newValue.id) {
-localStorage.setItem("playerId", event.newValue.id);
-console.log("✅ 儲存 playerId：", event.newValue.id);
+// ✅ 取得 playerId
+OneSignal.getUserId().then(playerId => {
+if (playerId) {
+localStorage.setItem("playerId", playerId);
+console.log("✅ 儲存 playerId：", playerId);
 }
 });
 });
@@ -129,7 +78,6 @@ console.log("✅ 儲存 playerId：", event.newValue.id);
 <h1>🌂 香港降雨預報</h1>
 <div id="map"></div>
 
-<!-- AI 超前預測 -->
 <div id="ai-forecast">
 <strong>🧠 AI 超前預測</strong>
 <div id="rainMsg">⏳ 正在載入...</div>
@@ -137,7 +85,6 @@ console.log("✅ 儲存 playerId：", event.newValue.id);
 
 <div id="rain-alert">⏳ 正在讀取預報資料...</div>
 
-<!-- 全裝置共用提示框 -->
 <div id="customPrompt" class="promptBox" style="display:none;">
 📢 歡迎使用《香港降雨預報》<br>
 👉 你可以訂閱通知，即時收到降雨提示。<br>
@@ -145,7 +92,6 @@ console.log("✅ 儲存 playerId：", event.newValue.id);
 <button id="closeCustomBtn">稍後再說</button>
 </div>
 
-<!-- iOS 專屬提示框 -->
 <div id="iosPrompt" class="promptBox" style="display:none;">
 📱 如果你用 iPhone / iPad：<br>
 請先按 Safari 底部的 <b>分享</b> 按鈕 <br>
@@ -153,7 +99,6 @@ console.log("✅ 儲存 playerId：", event.newValue.id);
 <button id="iosCloseBtn">知道了</button>
 </div>
 
-<!-- 文末三句 -->
 <div id="footer-text">
 <p style="text-align: left; margin-bottom: 1.5em;">
 本網站提供香港未來最多三小時內定點的降雨預測，用戶可即時得知身處地點的降雨情況。
@@ -225,8 +170,6 @@ fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&timest
 const minutes = data.timelines.minutely.slice(0, 180);
 const rains = minutes.map(m => m.values.rainIntensity);
 let msg = "當降雨前一至三小時內會提供相關訊息";
-let triggered1 = false;
-let triggered2 = false;
 const rains1to3h = rains.slice(60, 180);
 const overThreshold1to3h = rains1to3h.some(r => r >= 1.0);
 let hasRising = false;
@@ -239,7 +182,6 @@ break;
 }
 }
 if (overThreshold1to3h && hasRising) {
-triggered1 = true;
 if (risingMinute <= 60) msg = `🌧 約一小時內有雨`;
 else if (risingMinute <= 120) msg = `🌧 約兩小時內有雨`;
 else msg = `🌧 約三小時內有雨`;
@@ -255,7 +197,6 @@ msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
 }
 
-// ✅ 通知推播
 function sendPush() {
 const playerId = localStorage.getItem("playerId");
 if (!playerId) return console.warn("⚠️ 未取得 playerId，無法發送推播");
@@ -307,8 +248,7 @@ fetchTomorrowAI(lat, lon);
 }
 
 function showIosPromptOnce() {
-if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-if (!localStorage.getItem("iosPromptShown")) {
+if (/iPhone|iPad|iPod/i.test(navigator.userAgent) && !localStorage.getItem("iosPromptShown")) {
 document.getElementById("iosPrompt").style.display = "block";
 document.getElementById("iosCloseBtn").onclick = function() {
 document.getElementById("iosPrompt").style.display = "none";
@@ -316,15 +256,12 @@ localStorage.setItem("iosPromptShown", "1");
 };
 }
 }
-}
 
 function showCustomPrompt() {
 if (localStorage.getItem("subscribedToRainAlert")) return;
 document.getElementById("customPrompt").style.display = "block";
 document.getElementById("subscribeBtn").onclick = function() {
-OneSignal.push(function() {
-OneSignal.showNativePrompt();
-});
+OneSignal.push(function() { OneSignal.showNativePrompt(); });
 document.getElementById("customPrompt").style.display = "none";
 localStorage.setItem("subscribedToRainAlert", "1");
 };
