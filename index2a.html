@@ -7,6 +7,39 @@
 <title>🌧️ 香港降雨預報</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
+<!-- 🔧 自動判斷裝置切換 PWA 模式 -->
+<script>
+(function() {
+const metaManifest = document.createElement("link");
+metaManifest.rel = "manifest";
+metaManifest.href = "/manifest.json";
+document.head.appendChild(metaManifest);
+
+const metaCapable = document.createElement("meta");
+const metaStatusBar = document.createElement("meta");
+const metaTitle = document.createElement("meta");
+
+metaCapable.name = "apple-mobile-web-app-capable";
+metaStatusBar.name = "apple-mobile-web-app-status-bar-style";
+metaTitle.name = "apple-mobile-web-app-title";
+metaTitle.content = "香港降雨預報";
+
+if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+metaCapable.content = "yes";
+metaStatusBar.content = "black";
+console.log("✅ iOS 偵測到：已啟用 PWA 模式");
+} else {
+metaCapable.content = "no";
+metaStatusBar.content = "default";
+console.log("✅ 非 iOS 裝置：使用普通網頁模式");
+}
+
+document.head.appendChild(metaCapable);
+document.head.appendChild(metaStatusBar);
+document.head.appendChild(metaTitle);
+})();
+</script>
+
 <style>
 body {
 font-family: "Helvetica Neue", sans-serif;
@@ -71,20 +104,22 @@ border-radius: 5px;
 }
 </style>
 
-<!-- 🔔 PWA 設定 -->
-<link rel="manifest" href="/manifest.json">
-<meta name="apple-mobile-web-app-capable" content="no">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="香港降雨預報">
-
-<!-- 🔔 OneSignal SDK -->
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"></script>
+<!-- 🔔 OneSignal SDK v16 -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" async></script>
 <script>
-window.OneSignalDeferred = window.OneSignalDeferred || [];
-OneSignalDeferred.push(async function(OneSignal) {
-await OneSignal.init({
-appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
-serviceWorkerPath: "/OneSignalSDKWorker.js" // ✅ 根目錄
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // ✅ 換成你的 App ID
+safari_web_id: "🔑 換成你的 Safari Web ID"
+});
+
+// ✅ 儲存 playerId 供 Worker 使用
+OneSignal.User.PushSubscription.addEventListener("change", function(event) {
+if (event.newValue && event.newValue.id) {
+localStorage.setItem("playerId", event.newValue.id);
+console.log("✅ 儲存 playerId：", event.newValue.id);
+}
 });
 });
 </script>
@@ -155,35 +190,18 @@ if (marker) map.removeLayer(marker);
 marker = L.marker([lat, lon]).addTo(map);
 }
 
-// 🟢 OneSignal 自動推播封裝
-function sendPush(title, message) {
-if (window.OneSignal) {
-OneSignalDeferred.push(async function(OneSignal) {
-await OneSignal.sendSelfNotification({
-title: title,
-message: message,
-icon: "https://safecrossinghk.github.io/icon-192.png",
-url: "https://safecrossinghk.github.io/index2a.html"
-});
-console.log("✅ OneSignal 本地推播已觸發");
-});
-}
-}
-
-// 🟡 天文台即時預報
 function fetchForecast(lat, lon) {
 fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
 .then(res => res.json())
 .then(data => {
 const alertDiv = document.getElementById('rain-alert');
 console.log("API 回傳資料：", data);
-
 if (data && typeof data.immediateRain === "number") {
 if (data.immediateRain > 0.01) {
 alertDiv.innerText = `⚠️ 即時預報：你所在的位置將會有雨`;
 if (rainStatus === 0) {
 speak("⚠️ 你所在的位置將會有雨");
-sendPush("⚠️ 降雨提示", "你所在的位置將會有雨");
+sendPush();
 rainStatus = 1;
 }
 } else {
@@ -200,21 +218,17 @@ document.getElementById('rain-alert').innerText = "⚠️ 系統繁忙，請稍�
 });
 }
 
-// 🔵 Tomorrow.io AI 預報
 function fetchTomorrowAI(lat, lon) {
 fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&timesteps=1m&endTime=+180m&apikey=${TOMORROW_API_KEY}`)
 .then(res => res.json())
 .then(data => {
 const minutes = data.timelines.minutely.slice(0, 180);
 const rains = minutes.map(m => m.values.rainIntensity);
-
 let msg = "當降雨前一至三小時內會提供相關訊息";
 let triggered1 = false;
 let triggered2 = false;
-
 const rains1to3h = rains.slice(60, 180);
 const overThreshold1to3h = rains1to3h.some(r => r >= 1.0);
-
 let hasRising = false;
 let risingMinute = -1;
 for (let i = 61; i < 180; i++) {
@@ -224,47 +238,50 @@ risingMinute = i;
 break;
 }
 }
-
 if (overThreshold1to3h && hasRising) {
 triggered1 = true;
-if (risingMinute <= 60) msg = `🌧 你所在的位置預計約一小時內有雨`;
-else if (risingMinute <= 120) msg = `🌧 你所在的位置預計約兩小時內有雨`;
-else msg = `🌧 你所在的位置預計約三小時內有雨`;
-}
-
-if (!triggered1) {
-for (let start = 0; start <= rains.length - 30; start++) {
-const window = rains.slice(start, start + 30);
-const maxVal = Math.max(...window);
-const minVal = Math.min(...window);
-if (maxVal - minVal <= 0.5 && maxVal >= 1.0) {
-triggered2 = true;
-msg = `🌧 你所在的位置預計約三小時內有雨`;
-break;
-}
-}
+if (risingMinute <= 60) msg = `🌧 約一小時內有雨`;
+else if (risingMinute <= 120) msg = `🌧 約兩小時內有雨`;
+else msg = `🌧 約三小時內有雨`;
 }
 document.getElementById("rainMsg").innerText = msg;
 })
 .catch(() => document.getElementById("rainMsg").innerText = "⚠️ 系統繁忙，請稍後再試");
 }
 
-// 🔊 語音播放
 function speak(text) {
 const msg = new SpeechSynthesisUtterance(text);
 msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
 }
 
-// 📍 定位初始化
+// ✅ 通知推播
+function sendPush() {
+const playerId = localStorage.getItem("playerId");
+if (!playerId) return console.warn("⚠️ 未取得 playerId，無法發送推播");
+fetch(workerUrl + "sendPush", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+title: "⚠️ 降雨提示",
+message: "你所在的位置將會有雨",
+url: "https://safecrossinghk.github.io",
+playerId
+})
+})
+.then(res => res.json())
+.then(response => console.log("✅ Worker 已觸發推播", response))
+.catch(err => console.error("❌ Worker 推播失敗", err));
+}
+
 function initLocation() {
 if (!navigator.geolocation) {
 alert("此瀏覽器不支援定位功能");
-const fallbackLat = 22.3, fallbackLon = 114.2;
-map.setView([fallbackLat, fallbackLon], 11);
-setMarker(fallbackLat, fallbackLon);
-fetchForecast(fallbackLat, fallbackLon);
-fetchTomorrowAI(fallbackLat, fallbackLon);
+const lat = 22.3, lon = 114.2;
+map.setView([lat, lon], 11);
+setMarker(lat, lon);
+fetchForecast(lat, lon);
+fetchTomorrowAI(lat, lon);
 return;
 }
 navigator.geolocation.getCurrentPosition(
@@ -279,17 +296,16 @@ fetchTomorrowAI(lat, lon);
 },
 err => {
 console.warn("⚠️ 定位失敗，使用預設位置");
-const fallbackLat = 22.3, fallbackLon = 114.2;
-map.setView([fallbackLat, fallbackLon], 11);
-setMarker(fallbackLat, fallbackLon);
-fetchForecast(fallbackLat, fallbackLon);
-fetchTomorrowAI(fallbackLat, fallbackLon);
+const lat = 22.3, lon = 114.2;
+map.setView([lat, lon], 11);
+setMarker(lat, lon);
+fetchForecast(lat, lon);
+fetchTomorrowAI(lat, lon);
 },
 { enableHighAccuracy: true }
 );
 }
 
-// 🧠 提示框邏輯
 function showIosPromptOnce() {
 if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
 if (!localStorage.getItem("iosPromptShown")) {
