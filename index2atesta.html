@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>OneSignal 推播測試</title>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async=""></script>
+</head>
+<body>
+<h2>OneSignal 推播測試</h2>
+<p>Player ID: <span id="playerId">尚未取得</span></p>
+<button id="subscribeBtn">訂閱推播</button>
+<button id="sendBtn">發送測試推播</button>
+
+<script>
+// 初始化 OneSignal
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // 替換成你的 AppID
+notifyButton: {
+enable: true,
+},
+});
+
+// 取得 playerId
+OneSignal.getUserId().then(function(playerId) {
+console.log("playerId:", playerId);
+if (playerId) {
+localStorage.setItem("playerId", playerId);
+document.getElementById("playerId").innerText = playerId;
+}
+});
+
+// 檢查是否已訂閱
+OneSignal.isPushNotificationsEnabled(function(isEnabled) {
+console.log("Push enabled:", isEnabled);
+});
+});
+
+// 訂閱推播按鈕
+document.getElementById("subscribeBtn").addEventListener("click", function() {
+OneSignal.push(function() {
+OneSignal.showNativePrompt(); // 彈出訂閱提示
+});
+});
+
+// 發送測試推播按鈕
+document.getElementById("sendBtn").addEventListener("click", function() {
+const playerId = localStorage.getItem("playerId") || "";
+if (!playerId) {
+alert("尚未取得 playerId，請先訂閱推播");
+return;
+}
+
+fetch("你的Worker_URL/sendPush", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+title: "⚠️ 測試通知",
+message: "這是推播測試",
+playerId: playerId
+})
+})
+.then(res => res.json())
+.then(data => console.log("Push response:", data))
+.catch(err => console.error(err));
+});
+</script>
+</body>
+</html>
