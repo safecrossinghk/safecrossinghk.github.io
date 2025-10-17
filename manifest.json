@@ -1,20 +1,36 @@
 {
-"name": "Safe Crossing HK",
-"short_name": "SafeCrossing",
-"start_url": "/",
+"name": "香港降雨預報",
+"short_name": "Rain HK",
+"description": "即時查詢香港天文台雨量、預報與推播提示",
+"lang": "zh-HK",
+"start_url": "./index2a.html",
 "display": "standalone",
-"background_color": "#ffffff",
-"theme_color": "#000000",
+"orientation": "portrait",
+"background_color": "#0077cc",
+"theme_color": "#0077cc",
 "icons": [
 {
-"src": "/icon-192.png",
+"src": "icons/icon-192.png",
 "sizes": "192x192",
-"type": "image/png"
+"type": "image/png",
+"purpose": "any"
 },
 {
-"src": "/icon-512.png",
+"src": "icons/icon-512.png",
 "sizes": "512x512",
-"type": "image/png"
+"type": "image/png",
+"purpose": "any"
+},
+{
+"src": "icons/maskable-icon-512.png",
+"sizes": "512x512",
+"type": "image/png",
+"purpose": "maskable"
 }
-]
+],
+"permissions": [
+"notifications"
+],
+"related_applications": [],
+"prefer_related_applications": false
 }
