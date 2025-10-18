@@ -78,16 +78,21 @@ border-radius: 5px;
 <!-- 🔔 OneSignal SDK -->
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" async></script>
 <script>
+// ✅ 確保 Service Worker 先註冊，然後再初始化 OneSignal
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.register('/onesignal-sw.js', { scope: '/' })
+.then(() => {
+console.log('📱 Service Worker 已註冊完成');
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
 await OneSignal.init({
 appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
-safari_web_id: "web.onesignal.auto.c8a9d5f2-xxxxx-xxxxx", // 🔑 改為你真實的 Safari Web ID
 notifyButton: { enable: true },
 allowLocalhostAsSecureOrigin: true
 });
 console.log("✅ OneSignal 已初始化");
 
+// 🔍 訂閱變化監控
 OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
 if (event.to.isSubscribed) {
 const playerId = await OneSignal.User.PushSubscription.id;
@@ -100,24 +105,24 @@ console.log("✅ Player ID 已儲存：", playerId);
 
 try {
 const currentId = await OneSignal.User.PushSubscription.id;
-if (currentId) localStorage.setItem("playerId", currentId);
+if (currentId) {
+localStorage.setItem("playerId", currentId);
+console.log("🎯 已偵測現有 Player ID：", currentId);
+}
 } catch (err) {
 console.error("❌ 取得 Player ID 時發生錯誤：", err);
 }
 });
-</script>
-
-<!-- ✅ iOS Safari PWA 推播檢查 -->
-<script>
-if ('Notification' in window && navigator.serviceWorker) {
-navigator.serviceWorker.register('onesignal-sw.js')
-.then(() => console.log('📱 iOS PWA Service Worker 已註冊'))
+})
 .catch(err => console.warn('⚠️ 無法註冊 Service Worker', err));
+} else {
+console.warn("❌ 此瀏覽器不支援 Service Worker");
 }
 
 // ✅ 自動提示用戶開啟通知
+window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(function(OneSignal) {
-OneSignal.Slidedown.promptPush(); // Safari PWA 模式彈出系統提示
+OneSignal.Slidedown.promptPush();
 });
 </script>
 </head>
