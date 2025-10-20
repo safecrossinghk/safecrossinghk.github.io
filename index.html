@@ -92,6 +92,19 @@ allowLocalhostAsSecureOrigin: true
 });
 console.log("✅ OneSignal 已初始化");
 
+<script>
+navigator.geolocation.getCurrentPosition(pos => {
+const { latitude, longitude } = pos.coords;
+OneSignal.getUserId().then(pid => {
+fetch("https://crowdtest8r.ctakwah.workers.dev/registerLocation", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({ playerId: pid, lat: latitude, lon: longitude })
+});
+});
+});
+</script>
+
 // 🔍 訂閱變化監控
 OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
 if (event.to.isSubscribed) {
@@ -190,7 +203,7 @@ if (data.immediateRain > 0.01) {
 alertDiv.innerText = `⚠️ 即時預報：你所在的位置將會有雨`;
 if (rainStatus === 0) {
 speak("⚠️ 你所在的位置將會有雨");
-sendPush(lat, lon);
+sendPush();
 rainStatus = 1;
 }
 } else {
@@ -200,6 +213,11 @@ rainStatus = 0;
 } else {
 alertDiv.innerText = "⚠️ 系統繁忙，請稍後再試";
 }
+});
+}
+.catch(err => {
+console.error("讀取預報錯誤", err);
+document.getElementById('rain-alert').innerText = "⚠️ 系統繁忙，請稍後再試";
 });
 }
 
