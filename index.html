@@ -243,14 +243,14 @@ msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
 }
 
-function sendPush(lat, lon) {
+function sendPush() {
 const playerId = localStorage.getItem("playerId") || "";
 fetch(workerUrl + "sendPush", {
 method: "POST",
 headers: { "Content-Type": "application/json" },
 body: JSON.stringify({
 title: "⚠️ 降雨提示",
-message: `你所在 (${lat.toFixed(3)}, ${lon.toFixed(3)}) 將會有雨`,
+message: "你所在的位置將會有雨 ☔️",
 playerId: playerId,
 url: location.href
 })
