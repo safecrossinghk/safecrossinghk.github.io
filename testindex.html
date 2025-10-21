@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>OneSignal 測試推播</title>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async=""></script>
+</head>
+<body>
+
+<h2>OneSignal 推播測試</h2>
+<button id="testPushBtn">發送測試推播</button>
+<p id="playerIdDisplay">Player ID: 尚未取得</p>
+
+<script>
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+// 初始化 OneSignal
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+allowLocalhostAsSecureOrigin: true
+});
+
+// 檢查是否啟用推播
+OneSignal.isPushNotificationsEnabled().then(function(isEnabled) {
+console.log("推播是否啟用:", isEnabled);
+if (!isEnabled) {
+OneSignal.registerForPushNotifications();
+}
+});
+
+// 取得最新 Player ID
+OneSignal.getUserId().then(function(playerId) {
+console.log("最新 Player ID:", playerId);
+document.getElementById("playerIdDisplay").innerText = "Player ID: " + playerId;
+
+// 將 Player ID 存起來給按鈕使用
+window.latestPlayerId = playerId;
+});
+});
+
+// 按鈕點擊測試推播
+document.getElementById("testPushBtn").addEventListener("click", function() {
+if (!window.latestPlayerId) {
+alert("尚未取得 Player ID，請稍等或重新整理頁面");
+return;
+}
+
+// Worker URL 請替換成你的 Worker 網址
+const workerUrl = `https://crowdtest8r.ctakwah.workers.dev/?playerId=${window.latestPlayerId}&title=測試&message=Hello`;
+
+fetch(workerUrl)
+.then(response => response.json())
+.then(data => {
+console.log("Worker 回傳結果:", data);
+alert("推播請求已送出，請查看瀏覽器通知");
+})
+.catch(err => {
+console.error("推播請求錯誤:", err);
+});
+});
+</script>
+
+</body>
+</html>
