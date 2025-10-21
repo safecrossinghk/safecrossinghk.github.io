@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>OneSignal 測試推播</title>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async=""></script>
+</head>
+<body>
+
+<h2>OneSignal 推播測試</h2>
+<p id="status">狀態：初始化中...</p>
+<p id="playerIdDisplay">Player ID: 尚未取得</p>
+<button id="testPushBtn" disabled>發送測試推播</button>
+
+<script>
+window.OneSignal = window.OneSignal || [];
+
+OneSignal.push(function() {
+// 初始化 SDK
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // 替換成你的 OneSignal App ID
+allowLocalhostAsSecureOrigin: true
+});
+
+document.getElementById("status").innerText = "狀態：SDK 初始化完成，檢查推播授權...";
+
+// 檢查是否已訂閱推播，若未訂閱則自動請求授權
+OneSignal.getSubscription().then(function(isSubscribed) {
+console.log("推播是否啟用:", isSubscribed);
+if (!isSubscribed) {
+document.getElementById("status").innerText = "狀態：尚未授權，正在請求通知授權...";
+OneSignal.registerForPushNotifications().then(() => {
+console.log("使用者授權通知完成");
+document.getElementById("status").innerText = "狀態：授權完成，正在抓取 Player ID...";
+}).catch(() => {
+console.log("使用者拒絕通知授權");
+document.getElementById("status").innerText = "狀態：使用者拒絕通知，無法取得 Player ID";
+});
+}
+});
+
+// 自動重試抓取 Player ID
+function fetchPlayerId(retryCount = 0) {
+OneSignal.getUserId().then(function(playerId) {
+if (playerId) {
+console.log("最新 Player ID:", playerId);
+document.getElementById("playerIdDisplay").innerText = "Player ID: " + playerId;
+document.getElementById("status").innerText = "狀態：已取得 Player ID，可發送推播";
+window.latestPlayerId = playerId;
+document.getElementById("testPushBtn").disabled = false;
+} else {
+console.log("尚未取得 Player ID，重試中...");
+document.getElementById("status").innerText = "狀態：尚未取得 Player ID，可能需要授權或插件阻擋";
+if (retryCount < 30) { // 最多重試 30 次
+setTimeout(() => fetchPlayerId(retryCount + 1), 1000); // 1 秒後重試
+} else {
+document.getElementById("status").innerText = "狀態：長時間未取得 Player ID，可能被插件阻擋或未授權通知";
+}
+}
+});
+}
+
+fetchPlayerId();
+});
+
+// 按鈕點擊測試推播
+document.getElementById("testPushBtn").addEventListener("click", function() {
+if (!window.latestPlayerId) {
+alert("尚未取得 Player ID，請稍等或重新整理頁面");
+return;
+}
+
+// 替換成你的 Worker URL
+const workerUrl = `https://crowdtest8r.ctakwah.workers.dev/?playerId=${window.latestPlayerId}&title=測試&message=Hello`;
+
+fetch(workerUrl)
+.then(response => response.json())
+.then(data => {
+console.log("Worker 回傳結果:", data);
+alert("推播請求已送出，請查看瀏覽器通知");
+})
+.catch(err => {
+console.error("推播請求錯誤:", err);
+alert("推播請求發生錯誤，請查看 console");
+});
+});
+</script>
+
+</body>
+</html>
