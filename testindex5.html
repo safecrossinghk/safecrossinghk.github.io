@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OneSignal v16 推播測試</title>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async=""></script>
+<style>
+body {
+font-family: "Microsoft JhengHei", sans-serif;
+background: #f7f7f7;
+text-align: center;
+padding: 30px;
+}
+#status {
+font-weight: bold;
+color: #0066cc;
+margin-top: 15px;
+}
+#playerId {
+color: #333;
+font-size: 14px;
+word-break: break-all;
+}
+button {
+margin-top: 20px;
+padding: 10px 20px;
+font-size: 16px;
+cursor: pointer;
+}
+#error {
+color: red;
+margin-top: 10px;
+}
+</style>
+</head>
+<body>
+<h2>📡 OneSignal v16 推播測試頁面</h2>
+<div id="status">初始化中...</div>
+<div>Player ID：</div>
+<div id="playerId">尚未取得</div>
+<button id="testBtn" disabled>發送測試推播</button>
+<div id="error"></div>
+
+<script>
+const appId = "880241cd-cc45-4820-b5ec-a1236b0e3e98"; // 🔹 請替換成你的 OneSignal App ID
+const workerUrl = "https://crowdtest8r.ctakwah.workers.dev"; // 🔹 請替換成你的 Worker 網址
+
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({ appId: appId });
+console.log("✅ OneSignal 已初始化");
+
+document.getElementById("status").innerText = "SDK 初始化完成，檢查授權...";
+
+// 檢查授權狀態
+OneSignal.isPushNotificationsEnabled(function(isEnabled) {
+if (isEnabled) {
+console.log("🔔 推播已啟用");
+document.getElementById("status").innerText = "推播已啟用，正在取得 Player ID...";
+
+OneSignal.getUserId(function(playerId) {
+if (playerId) {
+console.log("🎯 Player ID:", playerId);
+document.getElementById("playerId").innerText = playerId;
+document.getElementById("status").innerText = "✅ Player ID 已取得";
+enableTestButton(playerId);
+} else {
+document.getElementById("status").innerText = "⚠️ 尚未註冊 Player ID，請嘗試重新允許通知。";
+}
+});
+} else {
+console.log("🚫 尚未授權推播，嘗試註冊...");
+OneSignal.registerForPushNotifications();
+document.getElementById("status").innerText = "請允許通知以繼續。";
+}
+});
+});
+
+function enableTestButton(playerId) {
+const btn = document.getElementById("testBtn");
+btn.disabled = false;
+btn.addEventListener("click", async () => {
+const title = "測試通知";
+const message = "這是一則 OneSignal 推播測試訊息";
+
+const url = `${workerUrl}?playerId=${playerId}&title=${encodeURIComponent(title)}&message=${encodeURIComponent(message)}`;
+
+document.getElementById("status").innerText = "⏳ 正在發送推播...";
+
+try {
+const res = await fetch(url);
+const data = await res.json();
+console.log("📬 Worker 回傳結果:", data);
+document.getElementById("status").innerText = "✅ 推播發送成功，請查看通知。";
+} catch (err) {
+console.error("❌ 推播發送失敗:", err);
+document.getElementById("error").innerText = "❌ 發送失敗：" + err.message;
+}
+});
+}
+</script>
+</body>
+</html>
