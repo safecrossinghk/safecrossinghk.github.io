@@ -80,7 +80,7 @@ border-radius: 5px;
 <script>
 // ✅ 確保 Service Worker 先註冊，然後再初始化 OneSignal
 if ('serviceWorker' in navigator) {
-navigator.serviceWorker.register('/onesignal-sw.js', { scope: '/' })
+navigator.serviceWorker.register('/OneSignalSDKWorker.js', { scope: '/' })
 .then(() => {
 console.log('📱 Service Worker 已註冊完成');
 window.OneSignalDeferred = window.OneSignalDeferred || [];
