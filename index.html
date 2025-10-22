@@ -68,72 +68,57 @@ border-radius: 5px;
 }
 </style>
 
-<!-- 🔔 PWA 設定 -->
+<!-- ✅ PWA 設定 -->
 <link rel="manifest" href="manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="香港降雨預報">
 <link rel="apple-touch-icon" href="icon-192.png">
 
-<!-- 🔔 OneSignal SDK -->
+<!-- ✅ 官方 OneSignal SDK -->
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" async></script>
+
 <script>
-// ✅ 確保 Service Worker 先註冊，然後再初始化 OneSignal
-console.log('📱 Service Worker 已註冊完成');
+// ===============================
+// 🧩 OneSignal 推播整合修正版
+// ===============================
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
+
 await OneSignal.init({
 appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
 notifyButton: { enable: true },
-allowLocalhostAsSecureOrigin: true
+allowLocalhostAsSecureOrigin: true,
 });
 console.log("✅ OneSignal 已初始化");
 
-// 🔍 訂閱變化監控
-OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
-if (event.to.isSubscribed) {
+// 檢查與記錄 Player ID
+try {
 const playerId = await OneSignal.User.PushSubscription.id;
 if (playerId) {
 localStorage.setItem("playerId", playerId);
-console.log("✅ Player ID 已儲存：", playerId);
-
-// 🔹 新增：將用戶位置立即上報至 Worker
-if (navigator.geolocation) {
-navigator.geolocation.getCurrentPosition(pos => {
-fetch('https://crowdtest8r.ctakwah.workers.dev/registerLocation', {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-playerId: playerId,
-lat: pos.coords.latitude,
-lon: pos.coords.longitude
-})
-});
-});
-}
-}
-}
-});
-
-try {
-const currentId = await OneSignal.User.PushSubscription.id;
-if (currentId) {
-localStorage.setItem("playerId", currentId);
-console.log("🎯 已偵測現有 Player ID：", currentId);
-}
-} catch (err) {
-console.error("❌ 取得 Player ID 時發生錯誤：", err);
-}
-});
-})
-.catch(err => console.warn('⚠️ 無法註冊 Service Worker', err));
+console.log("🎯 已偵測現有 Player ID：", playerId);
 } else {
-console.warn("❌ 此瀏覽器不支援 Service Worker");
+console.warn("⚠️ 尚未取得 Player ID，請用戶允許通知");
+}
+} catch (e) {
+console.error("❌ 無法讀取 Player ID：", e);
 }
 
-// ✅ 自動提示用戶開啟通知
-window.OneSignalDeferred = window.OneSignalDeferred || [];
-OneSignalDeferred.push(function(OneSignal) {
+// 監控訂閱狀態變化
+OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+if (event.to.isSubscribed) {
+const newId = await OneSignal.User.PushSubscription.id;
+if (newId) {
+localStorage.setItem("playerId", newId);
+console.log("✅ 新 Player ID 已儲存：", newId);
+}
+}
+});
+});
+
+// ✅ 提示用戶開啟通知
+window.OneSignalDeferred.push(function(OneSignal) {
 OneSignal.Slidedown.promptPush();
 });
 </script>
