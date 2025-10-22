@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OneSignal 推播測試</title>
+
+<!-- 官方 OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.js" async></script>
+
+</head>
+<body>
+<h1>OneSignal Player ID 測試</h1>
+<p id="status">初始化中...</p>
+<button id="testPushBtn">發送測試推播</button>
+
+<script>
+// ===========================
+// 1️⃣ 解除舊 SW
+// ===========================
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.getRegistrations()
+.then(registrations => {
+for (let reg of registrations) {
+console.log('🗑️ 移除舊 SW:', reg.scope);
+reg.unregister();
+}
+});
+// 清除快取
+caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
+}
+
+// ===========================
+// 2️⃣ 初始化官方 OneSignal SDK
+// ===========================
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(async () => {
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // 你的 APP ID
+safari_web_id: "web.onesignal.auto.c8a9d5f2-xxxxx-xxxxx", // 真實 Safari Web ID
+notifyButton: { enable: true },
+allowLocalhostAsSecureOrigin: true
+});
+
+// 取得 Player ID
+const playerId = await OneSignal.getUserId();
+if (playerId) {
+localStorage.setItem("playerId", playerId);
+document.getElementById("status").innerText = "✅ Player ID 已取得: " + playerId;
+console.log("✅ Player ID:", playerId);
+} else {
+document.getElementById("status").innerText = "❌ 尚未取得 Player ID，請允許通知";
+console.warn("❌ Player ID 為 null，使用者可能未允許通知");
+}
+});
+
+// ===========================
+// 3️⃣ 測試推播按鈕
+// ===========================
+document.getElementById("testPushBtn").onclick = async () => {
+const playerId = localStorage.getItem("playerId");
+if (!playerId) {
+alert("❌ 尚未取得 Player ID，無法發送推播");
+return;
+}
+
+// 使用你的 Worker / 後端 API 發送推播
+fetch("https://crowdtest8r.ctakwah.workers.dev/sendPush", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+playerId: playerId,
+title: "🌧 測試推播",
+message: "這是一則測試訊息",
+url: location.href
+})
+})
+.then(res => res.json())
+.then(data => console.log("推播回傳:", data))
+.catch(err => console.error("推播錯誤:", err));
+};
+</script>
+
+</body>
+</html>
