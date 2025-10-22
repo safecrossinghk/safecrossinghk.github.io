@@ -78,21 +78,24 @@ border-radius: 5px;
 <!-- 🔔 OneSignal SDK -->
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" async></script>
 <script>
-// ✅ 確保 Service Worker 先註冊，然後再初始化 OneSignal
+// ✅ 修正版 OneSignal 初始化邏輯
 if ('serviceWorker' in navigator) {
 navigator.serviceWorker.register('/OneSignalSDKWorker.js', { scope: '/' })
-.then(() => {
-console.log('📱 Service Worker 已註冊完成');
+.then(reg => {
+console.log('📱 Service Worker 已註冊完成:', reg);
+
+// 🆕 確保 OneSignal 在 SW ready 後才執行初始化
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
+try {
 await OneSignal.init({
 appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
 notifyButton: { enable: true },
-allowLocalhostAsSecureOrigin: true
+allowLocalhostAsSecureOrigin: true,
+serviceWorkerRegistration: reg // 🆕 明確指定已註冊的 SW
 });
-console.log("✅ OneSignal 已初始化");
+console.log("✅ OneSignal 已初始化完成");
 
-// 🔍 訂閱變化監控
 OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
 if (event.to.isSubscribed) {
 const playerId = await OneSignal.User.PushSubscription.id;
@@ -100,7 +103,7 @@ if (playerId) {
 localStorage.setItem("playerId", playerId);
 console.log("✅ Player ID 已儲存：", playerId);
 
-// 🔹 新增：將用戶位置立即上報至 Worker
+// 🔹 新增：上報位置至 Worker
 if (navigator.geolocation) {
 navigator.geolocation.getCurrentPosition(pos => {
 fetch('https://crowdtest8r.ctakwah.workers.dev/registerLocation', {
@@ -118,14 +121,14 @@ lon: pos.coords.longitude
 }
 });
 
-try {
 const currentId = await OneSignal.User.PushSubscription.id;
 if (currentId) {
 localStorage.setItem("playerId", currentId);
 console.log("🎯 已偵測現有 Player ID：", currentId);
 }
+
 } catch (err) {
-console.error("❌ 取得 Player ID 時發生錯誤：", err);
+console.error("❌ OneSignal 初始化錯誤：", err);
 }
 });
 })
@@ -134,10 +137,15 @@ console.error("❌ 取得 Player ID 時發生錯誤：", err);
 console.warn("❌ 此瀏覽器不支援 Service Worker");
 }
 
-// ✅ 自動提示用戶開啟通知
+// ✅ 修正：確保 SDK 載入後才顯示推播提示
 window.OneSignalDeferred = window.OneSignalDeferred || [];
-OneSignalDeferred.push(function(OneSignal) {
-OneSignal.Slidedown.promptPush();
+OneSignalDeferred.push(async function(OneSignal) {
+try {
+await OneSignal.Slidedown.promptPush();
+console.log("📩 顯示推播提示成功");
+} catch (err) {
+console.warn("⚠️ 顯示推播提示失敗：", err);
+}
 });
 </script>
 </head>
@@ -181,6 +189,7 @@ OneSignal.Slidedown.promptPush();
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
+// ✅ Worker 與 Tomorrow.io 設定
 const workerUrl = 'https://crowdtest8r.ctakwah.workers.dev/';
 const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
 let marker, rainStatus = 0;
@@ -195,7 +204,6 @@ if (marker) map.removeLayer(marker);
 marker = L.marker([lat, lon]).addTo(map);
 }
 
-// 🔹 修改：統一使用新 Worker 查詢（支援 ?lat&lon）
 function fetchForecast(lat, lon) {
 fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
 .then(res => res.json())
