@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>🌧️ 香港降雨預報</title>
+<meta name="theme-color" content="#f0f8ff" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="香港降雨預報" />
+
+<style>
+body {
+font-family: "Helvetica Neue", sans-serif;
+margin: 0; padding: 0;
+background: #f0f8ff; color: #333; text-align: center;
+}
+h1 { font-size: 1.4em; margin: 1em 0; }
+#map { height: 300px; margin: 10px; border-radius: 8px; border: 1px solid #ccc; }
+#rain-alert { margin: 1em; font-size: 1.1em; font-weight: bold; }
+.promptBox {
+position: fixed; bottom: 20px; left: 10%; right: 10%;
+background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px;
+padding: 12px; z-index: 9999; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.promptBox button {
+margin-top: 8px; padding: 6px 12px;
+background: #0077cc; color: white; border: none; border-radius: 5px;
+}
+</style>
+
+<script>
+if ("serviceWorker" in navigator) {
+navigator.serviceWorker.register("service-worker.js")
+.then(() => console.log("✅ Service Worker 註冊成功"))
+.catch(e => console.error("❌ Service Worker 註冊失敗", e));
+}
+</script>
+
+<!-- ✅ OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" async></script>
+
+<script>
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // ← 改成你的 App ID
+safari_web_id: "web.onesignal.auto.<你的_safari_web_id>", // ⚠️ 改成你的 Safari Web ID
+notifyButton: { enable: true },
+allowLocalhostAsSecureOrigin: true
+});
+console.log("✅ OneSignal 已初始化");
+
+// 檢查 Player ID
+try {
+const pid = await OneSignal.User.PushSubscription.id;
+if (pid) {
+console.log("🎯 Player ID:", pid);
+localStorage.setItem("playerId", pid);
+}
+} catch (e) {
+console.warn("⚠️ 未取得 Player ID", e);
+}
+
+// 顯示訂閱提示
+OneSignal.Slidedown.promptPush();
+});
+</script>
+</head>
+
+<body>
+<h1>🌂 香港降雨預報（iOS 推播測試版）</h1>
+<div id="map"></div>
+<div id="rain-alert">⏳ 載入中...</div>
+
+<div id="iosPrompt" class="promptBox" style="display:none;">
+📱 iPhone 用戶：請先按 Safari 底部的「分享」→「加入主畫面」<br>
+✅ 然後從主畫面開啟，允許通知後即可收到推播。<br>
+<button id="iosCloseBtn">知道了</button>
+</div>
+
+<script>
+const ua = navigator.userAgent;
+if (/iPhone|iPad/i.test(ua)) {
+document.getElementById("iosPrompt").style.display = "block";
+document.getElementById("iosCloseBtn").onclick = () => {
+document.getElementById("iosPrompt").style.display = "none";
+};
+}
+</script>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</body>
+</html>
