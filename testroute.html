@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<title>路線天氣 & 人流分析示範</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+body{font-family:Arial; margin:0}
+#top{padding:8px;background:#1976d2;color:white}
+#map{height:60vh}
+.panel{padding:10px}
+.controls input{padding:6px;margin-right:6px}
+.btn{padding:6px 10px;background:#1976d2;color:#fff;border:0;border-radius:4px;cursor:pointer}
+.legend{display:flex;gap:8px;margin-top:8px}
+.legend div{padding:6px;border-radius:4px;color:#fff}
+</style>
+</head>
+<body>
+<div id="top">
+<strong>路線天氣 & 人流分析示範</strong>
+</div>
+
+<div class="panel">
+<div class="controls">
+起點：<input id="origin" value="尖沙咀" />
+目的地：<input id="destination" value="旺角" />
+抽樣點數：<input id="samples" type="number" value="7" style="width:80px" />
+<button id="btnAnalyze" class="btn">分析路線</button>
+<button id="btnClear" class="btn">清除</button>
+</div>
+<div class="legend" id="legend">
+<div style="background:blue">雨量低</div>
+<div style="background:orange">雨量中</div>
+<div style="background:red">雨量高</div>
+</div>
+</div>
+
+<div id="map"></div>
+
+<div class="panel">
+<h4>分析結果</h4>
+<pre id="output">尚未分析</pre>
+</div>
+
+<!-- Google Maps JS: put your key -->
+<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places"></script>
+<script>
+let map, directionsService, directionsRenderer, currentPolyline;
+function initMap() {
+map = new google.maps.Map(document.getElementById("map"), { center:{lat:22.3193,lng:114.1694}, zoom:12});
+directionsService = new google.maps.DirectionsService();
+directionsRenderer = new google.maps.DirectionsRenderer({map});
+}
+window.onload = initMap;
+
+document.getElementById("btnAnalyze").addEventListener("click", async () => {
+const origin = document.getElementById("origin").value;
+const destination = document.getElementById("destination").value;
+const samples = Math.max(2, parseInt(document.getElementById("samples").value || 7));
+document.getElementById("output").textContent = "正在查詢路線...";
+// Get route from DirectionsService
+directionsService.route({ origin, destination, travelMode: google.maps.TravelMode.DRIVING, departureTime: new Date() },
+async (result, status) => {
+if (status !== 'OK') {
+document.getElementById("output").textContent = "Directions error: " + status;
+return;
+}
+directionsRenderer.setDirections(result);
+// get overview_polyline and decode to latlngs
+const route = result.routes[0].overview_path;
+// sample evenly along route
+const pts = samplePoints(route, samples);
+// show temporary markers
+clearMarkers();
+pts.forEach(p => addMarker(p));
+// call backend analyze
+document.getElementById("output").textContent = "呼叫後端分析...";
+try {
+const resp = await fetch('/api/analyze', {
+method: 'POST',
+headers: {'Content-Type':'application/json'},
+body: JSON.stringify({ points: pts.map(p=>({lat:p.lat(), lng:p.lng()})) })
+});
+const j = await resp.json();
+if (!j.ok) { document.getElementById("output").textContent = "後端錯誤"; return; }
+renderAnalysis(j.points, route);
+} catch (e) {
+document.getElementById("output").textContent = "Fetch error: " + e.message;
+}
+});
+});
+
+// --- utilities ---
+let _markers = [];
+function addMarker(ll) {
+const m = new google.maps.Marker({ position: ll, map });
+_markers.push(m);
+}
+function clearMarkers() {
+_markers.forEach(m=>m.setMap(null)); _markers=[];
+if (currentPolyline) { currentPolyline.setMap(null); currentPolyline=null; }
+}
+
+// sample N points from array of google.maps.LatLng (evenly spaced by index)
+function samplePoints(path, n) {
+const pts = [];
+const L = path.length;
+if (L === 0) return pts;
+for (let i=0;i<=n;i++){
+const idx = Math.floor(i * (L-1)/n);
+pts.push(path[idx]);
+}
+return pts;
+}
+
+// render analysis: paint polyline segments by rain level and show info
+function renderAnalysis(pointsInfo, fullPath) {
+// pointsInfo: [{lat,lng,rain_mm_20min,crowd_pct,advice},...]
+// draw colored polyline segments between successive sample points
+const segments = [];
+for (let i=0;i<pointsInfo.length-1;i++){
+const a = pointsInfo[i], b = pointsInfo[i+1];
+const color = colorForRain(a.rain_mm_20min);
+const seg = new google.maps.Polyline({
+path: [ {lat:a.lat, lng:a.lng}, {lat:b.lat, lng:b.lng} ],
+strokeColor: color, strokeOpacity:0.9, strokeWeight:6, map
+});
+segments.push(seg);
+}
+currentPolyline = new google.maps.Polyline({ path: fullPath, strokeColor:'#555', strokeOpacity:0.2, strokeWeight:2, map });
+// show markers with info windows
+clearMarkers();
+pointsInfo.forEach(p=>{
+const pos = new google.maps.LatLng(p.lat, p.lng);
+const m = new google.maps.Marker({ position: pos, map });
+const info = `<div><b>雨量(20min估算)</b>: ${p.rain_mm_20min} mm<br/><b>人流</b>: ${p.crowd_pct}%<br/><b>建議</b>: ${p.advice}</div>`;
+const iw = new google.maps.InfoWindow({content: info});
+m.addListener('click', ()=>iw.open(map, m));
+_markers.push(m);
+});
+// aggregate advice and speak
+const advSet = new Set(pointsInfo.map(p=>p.advice));
+const advText = Array.from(advSet).join("； ");
+document.getElementById("output").textContent = JSON.stringify(pointsInfo, null, 2);
+speak(advText);
+}
+
+function colorForRain(v){
+if (v === null || v === undefined) return '#888';
+if (v >= 5) return 'red';
+if (v >= 2) return 'orange';
+return 'blue';
+}
+
+function speak(text){
+try {
+const u = new SpeechSynthesisUtterance(text);
+u.lang = 'zh-HK';
+speechSynthesis.speak(u);
+} catch(e){}
+}
+
+// clear button
+document.getElementById("btnClear").addEventListener("click", ()=> {
+directionsRenderer.setDirections({routes:[]});
+clearMarkers();
+document.getElementById("output").textContent = "已清除";
+});
+</script>
+</body>
+</html>
