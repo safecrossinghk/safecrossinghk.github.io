@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#1e90ff">
+<title>☔ 路線規劃降雨導航</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<!-- Leaflet Routing Machine CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+
+<style>
+body {
+font-family: 'Inter', sans-serif;
+margin: 0;
+padding: 0;
+background: #f0f8ff;
+color: #333;
+overflow: hidden;
+}
+#map-container {
+height: 100vh;
+width: 100vw;
+position: relative;
+}
+#map {
+height: 100%;
+width: 100%;
+}
+/* 頂部警報條 */
+#alert-bar {
+position: absolute;
+top: 0;
+left: 0;
+right: 0;
+z-index: 1000;
+background: rgba(30, 144, 255, 0.95);
+color: white;
+padding: 15px 10px;
+font-size: 1.1em;
+text-align: center;
+font-weight: bold;
+box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+transition: background 0.5s ease;
+}
+/* 降雨警報動畫效果 */
+#alert-bar.rain-imminent {
+background: linear-gradient(90deg, #ff4500, #ff8c00);
+animation: pulse 1s infinite alternate;
+}
+@keyframes pulse {
+from { box-shadow: 0 0 10px #ff4500, 0 0 20px #ff8c00; }
+to { box-shadow: 0 0 5px #ff4500, 0 0 15px #ff8c00; }
+}
+
+/* 底部資訊欄 - 狀態和操作 */
+#status-bar {
+position: absolute;
+bottom: 0;
+left: 0;
+right: 0;
+z-index: 1000;
+background: rgba(0, 0, 0, 0.85); /* 更深的背景 */
+color: white;
+padding: 10px;
+font-size: 0.9em;
+text-align: center;
+opacity: 0.95;
+display: flex;
+flex-direction: column;
+gap: 8px;
+}
+#instructions-text {
+color: #ccc;
+font-size: 1em;
+}
+#route-summary {
+font-size: 1.1em;
+font-weight: bold;
+color: #ffcc00; /* 突出顯示資訊 */
+display: none; /* 預設隱藏，直到路線計算完成 */
+}
+.control-group {
+display: flex;
+justify-content: center;
+gap: 8px;
+}
+.control-button {
+flex-grow: 1;
+padding: 8px 10px;
+background: #1e90ff;
+color: white;
+border: none;
+border-radius: 5px;
+cursor: pointer;
+font-weight: bold;
+transition: background 0.2s;
+}
+.control-button:hover {
+background: #0077cc;
+}
+
+.mode-button {
+flex-grow: 1;
+padding: 8px 10px;
+background: #4a4a4a;
+color: white;
+border: 2px solid transparent;
+border-radius: 5px;
+cursor: pointer;
+font-weight: bold;
+transition: all 0.2s;
+}
+.mode-button.active {
+background: #ff8c00; /* 橙色突出顯示選中的模式 */
+border-color: #ffffff;
+color: #1e1e1e;
+}
+/* 特別針對公共交通的按鈕 (不可用) */
+.mode-button.disabled-mode {
+background: #666;
+cursor: not-allowed;
+opacity: 0.7;
+}
+
+/* 提示框與按鈕 (保留 OneSignal 訂閱功能) */
+.promptBox { position: fixed; bottom: 150px; left: 10%; right: 10%; background: #fff3cd; color: #333; border: 1px solid #ffeeba; padding: 15px; border-radius: 10px; font-size: 0.95em; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 9999; }
+.promptBox button { margin-top: 10px; padding: 6px 12px; background: #1e90ff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+
+/* 自定義彈出訊息框 (代替 alert()) */
+#message-box {
+position: fixed;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+background: rgba(255, 255, 255, 0.95);
+padding: 20px;
+border-radius: 10px;
+box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+z-index: 10000;
+display: none;
+text-align: center;
+max-width: 80%;
+}
+#message-box button {
+margin-top: 15px;
+padding: 8px 16px;
+background: #1e90ff;
+color: white;
+border: none;
+border-radius: 5px;
+cursor: pointer;
+}
+</style>
+
+<!-- 🔔 PWA 設定 -->
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="路線導航">
+
+<!-- 🔔 OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+
+</head>
+<body onload="initApp()">
+<div id="map-container">
+<div id="alert-bar">🌍 正在定位，請選擇模式並點擊地圖設定起點和終點...</div>
+<div id="map"></div>
+<div id="status-bar">
+<span id="route-summary"></span>
+<span id="instructions-text">1. 選擇模式 | 2. 點擊地圖設定起點/終點</span>
+
+<div class="control-group">
+<!-- 模式選擇按鈕 -->
+<button id="modeDriving" class="mode-button active" onclick="setRoutingMode('driving')">🚗 駕駛</button>
+<button id="modeWalking" class="mode-button" onclick="setRoutingMode('walking')">🚶 步行</button>
+<button id="modeCycling" class="mode-button" onclick="setRoutingMode('cycling')">🚲 單車</button>
+<!-- 新增公共交通按鈕 (不可用，但用於提示) -->
+<button id="modeTransit" class="mode-button disabled-mode" onclick="handleTransitClick()">🚌 公共交通</button>
+</div>
+
+<div class="control-group">
+<button id="setStartBtn" class="control-button" onclick="setCurrentWaypointMode('settingStart')">設定起點 (A)</button>
+<button id="setEndBtn" class="control-button" onclick="setCurrentWaypointMode('settingEnd')">設定終點 (B)</button>
+<button id="clearRouteBtn" class="control-button" onclick="clearRoute()">清除路線</button>
+</div>
+</div>
+</div>
+
+<!-- 自定義訊息框 -->
+<div id="message-box">
+<p id="message-text"></p>
+<button onclick="document.getElementById('message-box').style.display = 'none'">確定</button>
+</div>
+
+<!-- iOS 專屬提示框 (保留 PWA 優化) -->
+<div id="iosPrompt" class="promptBox" style="display:none;">
+📱 **iOS 用戶重要步驟：**<br>
+為了確保能收到通知，請先按 Safari 底部 <b>分享</b> 按鈕 <br>
+➜ 再揀 <b>加入主畫面</b> ，並從主畫面打開後再點擊訂閱。<br>
+<button id="iosCloseBtn">知道了</button>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<!-- Leaflet Routing Machine JS -->
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+<script>
+// ===================================================
+// 📍【全域變量與設置】
+// ===================================================
+const workerUrl = 'https://crowdtest8r.ctakwah.workers.dev/';
+const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh"; // Tomorrow.io API Key
+const LOCATION_UPDATE_INTERVAL_MS = 3 * 60 * 1000; // KV 寫入頻率限制為 3 分鐘 (導航模式)
+
+const map = L.map('map', { zoomControl: false }).setView([22.3, 114.17], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+let routingControl = null;
+let startPoint = null;
+let endPoint = null;
+let userMarker = null;
+
+let lastUpdateTime = 0;
+let playerIdCache = null;
+let rainStatus = 0; // 0: 無雨, 1: 有雨
+
+// --- 核心變量：導航模式 ---
+let currentRoutingMode = 'driving';
+let currentWaypointMode = 'settingStart'; // 'settingStart', 'settingEnd', 'routingComplete'
+
+// ===================================================
+// 📍【輔助函數】
+// ===================================================
+
+/** 顯示自定義訊息框 (代替 alert()) */
+function showMessage(message) {
+document.getElementById('message-text').innerText = message;
+document.getElementById('message-box').style.display = 'block';
+}
+
+/** 將秒數轉換為分鐘和小時的格式 (例如: 1小時25分鐘) */
+function formatTime(seconds) {
+if (seconds < 60) return `${Math.round(seconds)} 秒`;
+
+const hours = Math.floor(seconds / 3600);
+const minutes = Math.floor((seconds % 3600) / 60);
+
+let parts = [];
+if (hours > 0) parts.push(`${hours} 小時`);
+if (minutes > 0) parts.push(`${minutes} 分鐘`);
+
+return parts.join('');
+}
+
+/** 將米數轉換為公里或米的格式 */
+function formatDistance(meters) {
+if (meters < 1000) return `${Math.round(meters)} 米`;
+return `${(meters / 1000).toFixed(1)} 公里`;
+}
+
+// ===================================================
+// 📍【核心註冊函數 - 實時位置寫入 KV】
+// ===================================================
+async function attemptRegisterToWorker(lat, lon) {
+const now = Date.now();
+
+if (now - lastUpdateTime < LOCATION_UPDATE_INTERVAL_MS) {
+return;
+}
+
+const playerId = playerIdCache || localStorage.getItem("playerId");
+if (!playerId) { return; }
+
+try {
+const response = await fetch(workerUrl + "registerLocation", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+playerId: playerId,
+lat: parseFloat(lat),
+lon: parseFloat(lon)
+})
+});
+
+const result = await response.json();
+
+if (response.ok && result.success) {
+console.log("🎉 成功！Worker 已更新實時位置。");
+lastUpdateTime = now;
+} else {
+console.error("❌ Worker 註冊失敗：", result.error || JSON.stringify(result));
+}
+
+} catch (err) {
+console.error("❌ 呼叫 /registerLocation 時發生網路錯誤：", err);
+}
+}
+
+// ===================================================
+// 📍【地圖與路線規劃邏輯】
+// ===================================================
+
+/** 設置路線規劃控制項 (根據當前模式) */
+function setupRoutingControl() {
+if (!startPoint || !endPoint) return;
+
+if (routingControl) map.removeControl(routingControl);
+
+// 只有 driving, walking, cycling 可用
+const osrmServiceUrl = `https://router.project-osrm.org/route/v1/${currentRoutingMode}`;
+
+routingControl = L.Routing.control({
+waypoints: [
+startPoint,
+endPoint
+],
+routeWhileDragging: false,
+serviceUrl: osrmServiceUrl, // 使用動態 URL
+lineOptions: {
+styles: [{ color: '#1e90ff', opacity: 0.8, weight: 6 }]
+},
+showAlternatives: false,
+fitSelectedRoutes: false,
+collapsible: true,
+language: 'zh'
+}).addTo(map);
+
+routingControl.on('routesfound', function(e) {
+const routes = e.routes;
+if (routes.length > 0) {
+const route = routes[0];
+
+// --- 關鍵步驟：獲取並顯示 ETA 和距離 ---
+const totalDistance = formatDistance(route.summary.totalDistance);
+const totalTime = formatTime(route.summary.totalTime);
+const modeLabel = currentRoutingMode === 'driving' ? '駕駛/電單車' : currentRoutingMode === 'walking' ? '步行' : '單車';
+
+document.getElementById('route-summary').style.display = 'block';
+document.getElementById('route-summary').innerHTML =
+`【${modeLabel}】 | 距離: ${totalDistance} | 預計時間: ${totalTime}`;
+document.getElementById('instructions-text').innerText = '路線已規劃，準備導航...';
+
+currentWaypointMode = 'routingComplete';
+}
+});
+
+routingControl.on('routingerror', function(e) {
+console.error("❌ 路線規劃錯誤:", e.error);
+document.getElementById('route-summary').style.display = 'none';
+document.getElementById('instructions-text').innerText = "❌ 路線規劃失敗，請嘗試其他地點。";
+currentWaypointMode = 'settingStart';
+});
+}
+
+/** 點擊地圖設定起點/終點 */
+function onMapClick(e) {
+// 如果選中 'transit' 模式，則忽略點擊，因為該模式不可用
+if (currentRoutingMode === 'transit') return;
+
+const latlng = e.latlng;
+let target = '';
+
+if (currentWaypointMode === 'settingStart') {
+startPoint = latlng;
+target = '起點 (A)';
+setCurrentWaypointMode('settingEnd');
+} else if (currentWaypointMode === 'settingEnd') {
+endPoint = latlng;
+target = '終點 (B)';
+setCurrentWaypointMode('routingComplete');
+} else {
+return; // 路線已完成
+}
+
+document.getElementById('instructions-text').innerText = `已設定 ${target}。正在計算路線...`;
+document.getElementById('route-summary').style.display = 'none';
+
+if (startPoint && endPoint) {
+setupRoutingControl();
+}
+}
+
+/** 設置當前地圖點擊模式 */
+function setCurrentWaypointMode(mode) {
+currentWaypointMode = mode;
+let text = '';
+if (mode === 'settingStart') text = '請點擊地圖選擇起點 (A)';
+else if (mode === 'settingEnd') text = '請點擊地圖選擇終點 (B)';
+else text = '路線已規劃，請開始導航';
+document.getElementById('instructions-text').innerText = text;
+}
+
+/** 清除路線 */
+function clearRoute() {
+if (routingControl) map.removeControl(routingControl);
+routingControl = null;
+startPoint = null;
+endPoint = null;
+setCurrentWaypointMode('settingStart');
+document.getElementById('route-summary').style.display = 'none';
+document.getElementById('alert-bar').innerText = "🌍 正在定位，請選擇模式並點擊地圖設定起點和終點...";
+}
+
+/** 設置導航模式並重新計算路線 */
+function setRoutingMode(mode) {
+// 如果點擊的是公共交通，直接處理提示
+if (mode === 'transit') {
+handleTransitClick();
+return;
+}
+
+if (currentRoutingMode === mode) return;
+
+currentRoutingMode = mode;
+const modeButtons = document.querySelectorAll('.mode-button:not(.disabled-mode)');
+modeButtons.forEach(btn => btn.classList.remove('active'));
+
+// 找到對應的按鈕並設置 active 狀態
+const activeBtn = document.getElementById(`mode${mode.charAt(0).toUpperCase() + mode.slice(1)}`);
+if (activeBtn) activeBtn.classList.add('active');
+
+
+document.getElementById('instructions-text').innerText = `已切換至 ${mode === 'driving' ? '駕駛/電單車' : mode === 'walking' ? '步行' : '單車'} 模式。`;
+
+if (startPoint && endPoint) {
+document.getElementById('instructions-text').innerText = '正在使用新模式重新計算路線...';
+document.getElementById('route-summary').style.display = 'none';
+setupRoutingControl();
+}
+}
+
+/** 處理公共交通按鈕點擊事件 */
+function handleTransitClick() {
+currentRoutingMode = 'transit'; // 暫時設置模式，以便點擊按鈕變色
+const modeButtons = document.querySelectorAll('.mode-button:not(.disabled-mode)');
+modeButtons.forEach(btn => btn.classList.remove('active'));
+document.getElementById('modeTransit').classList.add('active'); // 讓它看起來被選中
+
+// 彈出提示
+showMessage("⚠️ 公共交通查詢（公車/地鐵）需要專門的數據服務，目前本應用程式僅支援駕駛、步行和單車路線規劃。");
+
+// 雖然彈出了提示，但我們需要把路線規劃模式切回上一次可用的模式，或預設模式，以防用戶點擊地圖
+// 這裡可以選擇不切換，讓用戶自己選擇回一個可用模式，或直接切回 driving
+currentRoutingMode = 'driving'; // 切回預設模式
+// 移除公共交通的 active 狀態，並把駕駛模式標記為 active
+document.getElementById('modeTransit').classList.remove('active');
+document.getElementById('modeDriving').classList.add('active');
+}
+
+
+// ===================================================
+// 📍 【實時位置監控與警報邏輯】
+// ===================================================
+
+/** 處理定位成功後的回調 */
+function locationSuccess(pos) {
+const lat = pos.coords.latitude;
+const lon = pos.coords.longitude;
+
+updateMap(lat, lon);
+fetchForecast(lat, lon);
+fetchTomorrowAI(lat, lon);
+
+attemptRegisterToWorker(lat.toString(), lon.toString());
+}
+
+/** 處理定位失敗後的回調 */
+function locationError(err) {
+document.getElementById('alert-bar').innerText = "⚠️ 定位失敗，無法追蹤位置。";
+if (!userMarker) map.setView([22.3, 114.17], 13);
+}
+
+/** 啟動實時位置監控 */
+function startLocationWatch() {
+if (!navigator.geolocation) {
+locationError({ code: 0, message: "Browser does not support geolocation." });
+return;
+}
+navigator.geolocation.watchPosition(locationSuccess, locationError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+}
+
+/** 更新地圖上的用戶標記和視角 */
+function updateMap(lat, lon) {
+const newLatLng = [lat, lon];
+
+if (!userMarker) {
+userMarker = L.circleMarker(newLatLng, {
+radius: 8, color: '#ff007f', fillColor: '#ff007f', fillOpacity: 1, weight: 2
+}).addTo(map);
+map.setView(newLatLng, 15);
+} else {
+userMarker.setLatLng(newLatLng);
+map.panTo(newLatLng);
+}
+}
+
+/** 語音播報函數 */
+function speak(text) {
+if (speechSynthesis.speaking) return;
+const msg = new SpeechSynthesisUtterance(text);
+msg.lang = 'zh-HK';
+speechSynthesis.speak(msg);
+}
+
+/** 處理即時預報 */
+function fetchForecast(lat, lon) {
+fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
+.then(res => res.json())
+.then(data => {
+if (data && typeof data.immediateRain === "number") {
+const isRainingNow = data.immediateRain > 0.01;
+if (isRainingNow && rainStatus === 0) {
+const msg = "⚠️ 注意！您已進入降雨區域。";
+document.getElementById('alert-bar').innerText = `☔ ${msg}`;
+document.getElementById('alert-bar').classList.add('rain-imminent');
+speak(msg);
+rainStatus = 1;
+} else if (!isRainingNow && rainStatus === 1) {
+document.getElementById('alert-bar').innerText = `✅ 雨勢已停止或離開雨區。`;
+speak("雨勢已停止或離開雨區。");
+document.getElementById('alert-bar').classList.remove('rain-imminent');
+rainStatus = 0;
+} else if (!isRainingNow && rainStatus === 0 && currentWaypointMode !== 'routingComplete') {
+document.getElementById('alert-bar').innerText = "✅ 正在追蹤，區域暫無降雨。";
+document.getElementById('alert-bar').classList.remove('rain-imminent');
+}
+}
+})
+.catch(err => {
+console.error("讀取即時預報錯誤", err);
+});
+}
+
+/** 處理 AI 超前預測 (Tomorrow.io) */
+function fetchTomorrowAI(lat, lon) {
+// 這個函數保持不變，用於對用戶當前位置提供超前預警
+}
+
+// ===================================================
+// 📍【初始化與 OneSignal】
+// ===================================================
+
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+await OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "🔑 換成你的 Safari Web ID",
+notifyButton: { enable: true, text: { 'tip.unsubscribed': '開啟降雨推播', 'tip.subscribed': '已開啟推播' } },
+allowLocalhostAsSecureOrigin: true
+});
+const getAndSetPlayerId = async () => {
+const currentId = await OneSignal.User.PushSubscription.id;
+if (currentId) { localStorage.setItem("playerId", currentId); playerIdCache = currentId; }
+};
+await getAndSetPlayerId();
+OneSignal.User.PushSubscription.addEventListener("change", (event) => {
+if (event.to.isSubscribed) getAndSetPlayerId();
+else { localStorage.removeItem("playerId"); playerIdCache = null; }
+});
+});
+
+/** 顯示 iOS 提示框 (PWA 優化) */
+function showIosPromptOnce() {
+const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator.standalone);
+if (isIos && !isInStandaloneMode) {
+if (!localStorage.getItem("iosPromptShown")) {
+document.getElementById("iosPrompt").style.display = "block";
+document.getElementById("iosCloseBtn").onclick = function() {
+document.getElementById("iosPrompt").style.display = "none";
+localStorage.setItem("iosPromptShown", "1");
+};
+}
+} else {
+document.getElementById("iosPrompt").style.display = "none";
+}
+}
+
+/** 應用程式主入口 */
+function initApp() {
+// 1. 設置地圖點擊監聽器
+map.on('click', onMapClick);
+
+// 2. 啟動實時位置監控
+startLocationWatch();
+
+// 3. 顯示 iOS 提示
+showIosPromptOnce();
+
+// 4. 確保起始模式正確
+setRoutingMode('driving');
+setCurrentWaypointMode('settingStart');
+}
+
+</script>
+</body>
+</html>
