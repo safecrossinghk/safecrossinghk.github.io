@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<title>彌敦道人流 + OSRM 範例</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+#map { height: 76vh; }
+.controls { padding:10px; }
+.info { background:#fff;padding:8px;border-radius:6px; box-shadow:0 1px 6px rgba(0,0,0,0.12); }
+.btn { padding:8px 12px; border-radius:6px; border:none; background:#1e88e5;color:#fff; cursor:pointer; }
+.inline { display:inline-block; margin-right:8px; vertical-align:middle; }
+.badge { display:inline-block; padding:6px 10px; background:#efefef;border-radius:6px; margin-right:6px;}
+</style>
+</head>
+<body>
+<div class="controls">
+<div class="info">
+<div style="margin-bottom:8px;">
+<span class="inline"><strong>請點選地圖設定起點與終點（或按預設按鈕）</strong></span>
+<button id="btnPreset" class="btn inline">用預設路線（柯士甸→海防）</button>
+</div>
+<div>
+<span class="badge">OSRM 原始：<span id="osrmTime">-</span></span>
+<span class="badge">調整後：<span id="adjTime">-</span></span>
+<span class="badge">繁忙 A（沿線 POI1）：<span id="poiA">-</span></span>
+<span class="badge">繁忙 B（沿線 POI2）：<span id="poiB">-</span></span>
+<span class="badge">天氣：<span id="weather">-</span></span>
+</div>
+</div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ======= 參數設定（請替換成你自己的 Worker endpoint / API keys） =======
+const WORKER_BASE = "<PUT_YOUR_WORKER_URL_HERE>"; // e.g. https://your-worker.example.com
+// OSRM public demo (可改成自建 OSRM)
+const OSRM_BASE = "https://router.project-osrm.org";
+// 調整敏感係數（k），可用實測數據校準
+const K_FACTOR = 0.6;
+
+// 三個預設 POI（經緯度）: 你要求的三點
+const PRESETS = {
+top: { name: "柯士甸道/彌敦道", lat: 22.30590, lon: 114.17150 },
+mid: { name: "海防道/彌敦道", lat: 22.29690, lon: 114.17270 },
+bottom: { name: "海防道/廣東道", lat: 22.29540, lon: 114.17100 }
+};
+
+// 這兩個沿線人流 POI（示範名稱與座標）—— Worker 會用 place_id 或文字去 Outscraper 查
+const ALONG_POIS = [
+{ id: "poiA", label: "Kowloon Park Entrance", lat: 22.2978, lon: 114.1720 },
+{ id: "poiB", label: "Park Lane Shopper's Blvd", lat: 22.2971, lon: 114.1727 }
+];
+
+// ======================================================================
+// 初始化地圖
+const map = L.map('map').setView([22.2985, 114.1725], 16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+maxZoom: 19,
+attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+let startMarker = null, endMarker = null, routeLayer = null, segmentIconLayer = null;
+
+function setMarker(which, latlng, title) {
+if (which === 'start') {
+if (startMarker) startMarker.setLatLng(latlng);
+else startMarker = L.marker(latlng, { draggable: true }).addTo(map).bindPopup("起點");
+startMarker.bindTooltip("起點", {permanent:true, offset:[0,-18]});
+startMarker.on('dragend', () => { if (startMarker && endMarker) doRoute(); });
+} else {
+if (endMarker) endMarker.setLatLng(latlng);
+else endMarker = L.marker(latlng, { draggable: true }).addTo(map).bindPopup("終點");
+endMarker.bindTooltip("終點", {permanent:true, offset:[0,-18]});
+endMarker.on('dragend', () => { if (startMarker && endMarker) doRoute(); });
+}
+}
+
+map.on('click', (e) => {
+// 若未有起點，先設定起點；有起點就設定終點；再次點擊時覆蓋終點
+if (!startMarker) {
+setMarker('start', e.latlng);
+} else if (!endMarker) {
+setMarker('end', e.latlng);
+} else {
+// 覆蓋終點
+setMarker('end', e.latlng);
+}
+if (startMarker && endMarker) doRoute();
+});
+
+document.getElementById('btnPreset').addEventListener('click', () => {
+// 預設：top -> bottom
+setMarker('start', L.latLng(PRESETS.top.lat, PRESETS.top.lon), PRESETS.top.name);
+setMarker('end', L.latLng(PRESETS.bottom.lat, PRESETS.bottom.lon), PRESETS.bottom.name);
+map.panTo([ (PRESETS.top.lat + PRESETS.bottom.lat)/2, (PRESETS.top.lon + PRESETS.bottom.lon)/2 ]);
+doRoute();
+});
+
+// 將秒數轉成 mm:ss
+function secsToMMSS(s) {
+s = Math.round(s);
+const m = Math.floor(s/60); const r = s%60;
+return `${m} 分 ${r} 秒`;
+}
+
+// 從 OSRM 取 route（步行）
+async function fetchOSRMRoute(start, end) {
+const url = `${OSRM_BASE}/route/v1/foot/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+const res = await fetch(url);
+if (!res.ok) throw new Error("OSRM error");
+const j = await res.json();
+if (!j.routes || !j.routes.length) throw new Error("No OSRM route");
+return j.routes[0];
+}
+
+// 請求 Worker / 後端整合（Outscraper + Tomorrow + HKO CSV） 的 API
+// Worker 回傳格式示範
+// {
+// osrm_duration: 350,
+// osrm_distance: 480,
+// poi_values: { poiA: 75, poiB: 62 },
+// tomorrow_weather: { temp: 24, precip: 0.1 },
+// hko_nearby_rain: false
+// }
+async function fetchIntegratedData(start, end) {
+// 如果你還未部署 Worker，這裡會回傳模擬資料（方便本地測試）
+if (!WORKER_BASE || WORKER_BASE.includes("PUT_YOUR_WORKER")) {
+// 模擬：延遲 250ms
+await new Promise(r => setTimeout(r, 250));
+return {
+osrm_duration: null,
+osrm_distance: null,
+poi_values: { poiA: 68, poiB: 55 },
+tomorrow_weather: { temp: 23, precip: 0.0 },
+hko_nearby_rain: false
+};
+}
+const url = `${WORKER_BASE}/api/route-info?start=${start.lat},${start.lng}&end=${end.lat},${end.lng}`;
+const res = await fetch(url);
+if (!res.ok) {
+console.warn("Worker fetch failed", res.status);
+throw new Error("Worker request failed");
+}
+return await res.json();
+}
+
+// 把兩個 POI 的 busy 作平均（可用距離加權）
+function combinePoiBusy(poiValues) {
+const vals = Object.values(poiValues).filter(v => typeof v === 'number');
+if (!vals.length) return 0;
+const sum = vals.reduce((a,b)=>a+b,0);
+return Math.round(sum / vals.length);
+}
+
+// 調整公式（OSRM基準 * (1 + k * busy/100) )
+function adjustedTimeFromOsrm(osrmSec, busyAvg, k = K_FACTOR) {
+return osrmSec * (1 + (busyAvg/100) * k);
+}
+
+// 畫 route 與顯示資訊
+async function doRoute() {
+if (!startMarker || !endMarker) return;
+const start = startMarker.getLatLng();
+const end = endMarker.getLatLng();
+
+try {
+// 1) 先取得 OSRM route
+const osrmRoute = await fetchOSRMRoute(start, end);
+
+// 2) 取得整合資料（Outscraper / Tomorrow / HKO CSV via Worker）
+const integrated = await fetchIntegratedData(start, end);
+
+// 若 worker 沒回 osrm 時間，就用本次 osrm
+const osrmSec = osrmRoute.duration || integrated.osrm_duration || 0;
+const osrmDist = osrmRoute.distance || integrated.osrm_distance || 0;
+
+// 若 Worker 回傳 poi，下方顯示；若沒有，前端顯示模擬 poi
+const poiVals = integrated.poi_values || { poiA: 50, poiB: 50 };
+const busyAvg = combinePoiBusy(poiVals);
+
+// 計算調整後時間
+const adjSec = adjustedTimeFromOsrm(osrmSec, busyAvg, K_FACTOR);
+
+// 更新 UI
+document.getElementById('osrmTime').innerText = secsToMMSS(osrmSec);
+document.getElementById('adjTime').innerText = secsToMMSS(adjSec);
+document.getElementById('poiA').innerText = poiVals.poiA ?? "-";
+document.getElementById('poiB').innerText = poiVals.poiB ?? "-";
+document.getElementById('weather').innerText = `${integrated.tomorrow_weather?.temp ?? "-"} °C ${integrated.hko_nearby_rain ? "・近接雨警告" : ""}`;
+
+// 3) 在地圖上畫路徑與標示時間
+if (routeLayer) map.removeLayer(routeLayer);
+routeLayer = L.geoJSON(osrmRoute.geometry, {
+style: { color: busyAvg >= 80 ? '#d32f2f' : busyAvg >=60 ? '#fb8c00' : '#43a047', weight:5, opacity:0.9 }
+}).addTo(map);
+
+// 中間顯示 OSRM time 與 adjusted time 的 marker（沿路中點）
+if (segmentIconLayer) map.removeLayer(segmentIconLayer);
+const midIdx = Math.floor(osrmRoute.geometry.coordinates.length / 2);
+const mid = osrmRoute.geometry.coordinates[midIdx];
+segmentIconLayer = L.layerGroup();
+const midLatLng = L.latLng(mid[1], mid[0]);
+const popupHtml = `<div><strong>OSRM：</strong>${secsToMMSS(osrmSec)}<br><strong>調整後：</strong>${secsToMMSS(adjSec)}<br><small>繁忙平均 ${busyAvg}%</small></div>`;
+L.marker(midLatLng, { icon: L.divIcon({ className:'', html: `<div style="background:#fff;padding:6px;border-radius:6px;border:1px solid #ccc;">${Math.round(adjSec/60)} 分</div>` })}).addTo(segmentIconLayer).bindPopup(popupHtml);
+segmentIconLayer.addTo(map);
+
+// 將地圖移動到路徑範圍
+const coords = osrmRoute.geometry.coordinates.map(c => [c[1], c[0]]);
+map.fitBounds(coords, { padding:[40,40] });
+
+} catch (e) {
+console.error("Route error:", e);
+alert("路徑計算或資料擷取出錯，請查看 console 或檢查 Worker 設定。");
+}
+}
+
+// 初始載入：加入 ALONG_POIS 的小圓點 (示範)
+ALONG_POIS.forEach(p => {
+L.circleMarker([p.lat, p.lon], { radius:6, color:'#1565c0', fillColor:'#42a5f5', fillOpacity:0.9 })
+.addTo(map)
+.bindPopup(`${p.label}`);
+});
+
+// 載入示範預設按鈕
+// self-trigger: auto set preset
+document.getElementById('btnPreset').click();
+
+</script>
+</body>
+</html>
