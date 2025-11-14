@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<title>紅綠燈倒數模擬（OpenStreetMap版）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+html, body, #map { height: 100%; margin: 0; }
+.countdown {
+position: absolute;
+top: 10px;
+left: 10px;
+background: rgba(255,255,255,0.85);
+padding: 10px 15px;
+border-radius: 8px;
+font-family: 'Arial';
+font-size: 16px;
+}
+.light {
+width: 30px; height: 30px;
+border-radius: 50%;
+margin-top: 5px;
+transition: opacity 0.3s;
+}
+.green { background: green; }
+.red { background: red; }
+.blink { opacity: 0.2; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div class="countdown">
+<div>狀態：<span id="status">綠燈</span></div>
+<div>倒數：<span id="timer">--</span> 秒</div>
+<div id="light" class="light green"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+// === Leaflet 地圖設定 ===
+const map = L.map('map').setView([22.338, 114.147], 16); // 荔枝角附近
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+maxZoom: 19,
+attribution: '© OpenStreetMap'
+}).addTo(map);
+
+const marker = L.marker([22.338, 114.147]).addTo(map).bindPopup('模擬紅綠燈');
+
+// === 模擬紅綠燈邏輯 ===
+const greenTime = 20; // 綠燈秒數
+const redTime = 15; // 紅燈秒數
+const totalCycle = greenTime + redTime;
+
+// 上次切換時間（可改成伺服器時間同步）
+const startTime = new Date().getTime();
+
+const timerEl = document.getElementById('timer');
+const statusEl = document.getElementById('status');
+const lightEl = document.getElementById('light');
+
+function updateLight() {
+const now = new Date().getTime();
+const elapsed = Math.floor((now - startTime) / 1000);
+const mod = elapsed % totalCycle;
+
+let remaining, state;
+if (mod < greenTime) {
+state = "綠燈";
+remaining = greenTime - mod;
+lightEl.className = "light green";
+// 最後5秒閃爍
+if (remaining <= 5) {
+lightEl.classList.toggle("blink");
+} else {
+lightEl.classList.remove("blink");
+}
+} else {
+state = "紅燈";
+remaining = totalCycle - mod;
+lightEl.className = "light red";
+lightEl.classList.remove("blink");
+}
+
+statusEl.textContent = state;
+timerEl.textContent = remaining;
+}
+
+setInterval(updateLight, 1000);
+</script>
+</body>
+</html>
