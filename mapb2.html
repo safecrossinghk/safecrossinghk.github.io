@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>路線天氣與人流警報</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Load Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Load Inter Font -->
+<style>
+body { font-family: 'Inter', sans-serif; }
+/* 自定義樣式 */
+#map {
+width: 100%;
+height: 60vh;
+border-radius: 12px;
+overflow: hidden;
+box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.rain-alert {
+animation: pulse-red 1s infinite alternate;
+}
+@keyframes pulse-red {
+from { background-color: #fca5a5; } /* red-300 */
+to { background-color: #ef4444; } /* red-500 */
+}
+.safe-alert {
+background-color: #d1fae5; /* green-100 */
+}
+.busy-alert {
+background-color: #fef3c7; /* yellow-100 */
+color: #b45309; /* yellow-800 */
+border: 2px solid #fbbf24; /* yellow-400 */
+}
+.loading-overlay {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: rgba(255, 255, 255, 0.7);
+display: flex;
+justify-content: center;
+align-items: center;
+font-size: 1.5rem;
+border-radius: 12px;
+z-index: 1000;
+}
+</style>
+<!-- Load Leaflet CSS and JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body class="bg-gray-50 p-4 min-h-screen">
+
+<div class="max-w-4xl mx-auto">
+<h1 class="text-3xl font-extrabold text-center text-gray-800 mb-6 border-b pb-2">🧭 路線天氣與人流警報系統</h1>
+
+<div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+<div class="space-y-4 md:flex md:space-x-4 md:space-y-0">
+<div class="flex-1">
+<label for="startLocation" class="block text-sm font-medium text-gray-700 mb-1">起點 (A)</label>
+<input id="startLocation" type="text" placeholder="輸入起點，例如：尖沙咀" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+</div>
+<div class="flex-1">
+<label for="endLocation" class="block text-sm font-medium text-gray-700 mb-1">終點 (B)</label>
+<input id="endLocation" type="text" placeholder="輸入終點，例如：銅鑼灣" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+</div>
+</div>
+<button onclick="findRouteAndCheckRain()" id="routeButton" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200 w-full">
+規劃路線並檢查警報
+</button>
+</div>
+
+<div id="alertBox" class="p-4 rounded-xl text-center font-semibold mb-6 shadow-md hidden transition duration-500">
+<!-- Alert message will be inserted here -->
+</div>
+
+<div id="mapContainer" class="relative">
+<div id="map"></div>
+<div id="loading" class="loading-overlay hidden">
+<svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+</svg>
+正在規劃路線並檢查沿線警報...
+</div>
+</div>
+
+<div id="debugOutput" class="mt-6 p-4 bg-gray-100 rounded-lg text-sm text-gray-600 shadow-inner">
+<!-- Debug/info output -->
+<p><strong>資訊：</strong>本應用程式結合降雨預報和路線規劃，並內置了模擬的自訂人流點警報。</p>
+</div>
+</div>
+
+<script>
+// ============== 配置與全局變量 ==============
+let map;
+let routeLayer; // 用於存放路線圖層
+const RAIN_API_URL = "https://crowdtest8r.ctakwah.workers.dev"; // 您的 Worker API
+const OSRM_API_URL = "https://router.project-osrm.org/route/v1/foot/"; // OSRM Demo API
+const NOMINATIM_API_URL = "https://nominatim.openstreetmap.org/search?format=json&q=";
+const SAMPLE_INTERVAL_METERS = 500; // 每 500 米取樣一個點進行天氣檢查
+const POI_CHECK_DISTANCE_METERS = 500; // 路線附近 500 米範圍內檢查人流點
+const RAIN_THRESHOLD = 0.01; // 降雨量閾值 (mm)
+let poiMarkers = L.layerGroup(); // 用於存放人流點標記
+
+// 模擬的自定義人流點數據 (POI)
+// 模擬狀態: 1: 正常, 2: 偏多, 3: 繁忙
+const CUSTOM_POIS = [
+{ name: "旺角站", lat: 22.318357, lon: 114.169542, status: 3 }, // 繁忙
+{ name: "尖沙咀鐘樓", lat: 22.293424, lon: 114.171170, status: 3 }, // 繁忙
+{ name: "中環碼頭", lat: 22.285810, lon: 114.156540, status: 2 }, // 偏多
+{ name: "香港科學館", lat: 22.3000, lon: 114.1754, status: 1 }, // 正常
+{ name: "香港海洋公園", lat: 22.2476, lon: 114.1755, status: 2 }, // 偏多
+{ name: "沙田馬場", lat: 22.4048, lon: 114.2155, status: 3 }, // 繁忙 (假設有賽事)
+{ name: "香港國際機場", lat: 22.3089, lon: 113.9147, status: 3 }, // 繁忙
+];
+
+// POI 狀態樣式
+const POI_STATUS_MAP = {
+3: { label: '🔴 非常繁忙', color: 'red', icon: '🚨' },
+2: { label: '🟡 人流偏多', color: 'orange', icon: '⚠️' },
+1: { label: '🟢 人流正常', color: 'green', icon: '🚶' }
+};
+
+// 初始化地圖（默認香港中心點）
+window.onload = function() {
+initMap(22.302711, 114.177216);
+poiMarkers.addTo(map); // 將 POI 圖層加入地圖
+};
+
+// 監聽 Enter 鍵
+document.getElementById("startLocation").addEventListener("keydown", function (e) {
+if (e.key === "Enter") document.getElementById("endLocation").focus();
+});
+document.getElementById("endLocation").addEventListener("keydown", function (e) {
+if (e.key === "Enter") findRouteAndCheckRain();
+});
+
+// ============== 地圖操作函數 ==============
+
+function initMap(lat, lon) {
+if (map) map.remove();
+map = L.map("map").setView([lat, lon], 13);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+maxZoom: 19,
+attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+poiMarkers = L.layerGroup().addTo(map); // 重設 POI 圖層
+}
+
+function showLoading(show) {
+document.getElementById('loading').classList.toggle('hidden', !show);
+document.getElementById('routeButton').disabled = show;
+}
+
+function setAlert(message, type = 'safe') {
+const alertBox = document.getElementById('alertBox');
+alertBox.classList.remove('hidden', 'rain-alert', 'safe-alert', 'busy-alert', 'bg-red-100', 'bg-green-100', 'bg-yellow-100', 'text-red-800', 'text-green-800', 'text-yellow-800', 'border-red-400', 'border-green-400', 'border-yellow-400');
+alertBox.style.borderColor = 'initial'; // 清除 inline style
+
+if (type === 'rain') {
+alertBox.classList.add('rain-alert', 'bg-red-100', 'text-red-800', 'border-red-400');
+} else if (type === 'busy') {
+// 使用 custom busy-alert style
+alertBox.classList.add('busy-alert');
+} else if (type === 'safe') {
+alertBox.classList.add('safe-alert', 'bg-green-100', 'text-green-800', 'border-green-400');
+} else {
+alertBox.classList.add('bg-gray-100', 'text-gray-800');
+}
+alertBox.innerHTML = message;
+}
+
+
+// ============== 核心：路徑規劃與警報檢查 ==============
+
+/**
+* 執行整個流程：查詢座標 -> 規劃路線 -> 檢查沿線天氣 -> 檢查沿線人流 POI
+*/
+async function findRouteAndCheckRain() {
+showLoading(true);
+setAlert("規劃路線中...", 'info');
+poiMarkers.clearLayers(); // 清除舊的 POI 標記
+
+const startLoc = document.getElementById('startLocation').value.trim();
+const endLoc = document.getElementById('endLocation').value.trim();
+
+if (!startLoc || !endLoc) {
+setAlert("❗ 請輸入起點和終點。", 'info');
+showLoading(false);
+return;
+}
+
+try {
+// 1. 獲取 A, B 點座標
+const startCoords = await getCoordinates(startLoc);
+const endCoords = await getCoordinates(endLoc);
+
+if (!startCoords || !endCoords) {
+setAlert("❌ 無法找到起點或終點的精確座標。", 'error');
+showLoading(false);
+return;
+}
+
+// 重設地圖中心和標記
+initMap(startCoords.lat, startCoords.lon);
+L.marker([startCoords.lat, startCoords.lon]).addTo(map).bindPopup("起點").openPopup();
+L.marker([endCoords.lat, endCoords.lon]).addTo(map).bindPopup("終點");
+
+// 2. 規劃路線
+const routeData = await getOSRMRoute(startCoords, endCoords);
+
+// 3. 繪製路線並獲取取樣點
+const sampledPoints = drawRouteAndSamplePoints(routeData);
+
+// 4. 檢查沿線降雨
+const rainStatus = await checkRainForSampledPoints(sampledPoints);
+
+// 5. 檢查沿線自定義人流點
+const busyPOIs = checkCustomPOIsNearRoute(sampledPoints);
+
+// 6. 綜合警報顯示
+updateCombinedAlert(rainStatus, busyPOIs);
+
+} catch (error) {
+console.error("❌ 路線規劃或警報檢查發生錯誤:", error);
+setAlert(`❌ 處理失敗：${error.message} (詳情請查看控制台)`, 'error');
+} finally {
+showLoading(false);
+}
+}
+
+/**
+* 根據關鍵字獲取經緯度 (使用 Nominatim)
+*/
+async function getCoordinates(query) {
+const url = NOMINATIM_API_URL + encodeURIComponent(query);
+const response = await fetch(url);
+const data = await response.json();
+
+if (data && data.length > 0) {
+return {
+lat: parseFloat(data[0].lat),
+lon: parseFloat(data[0].lon)
+};
+}
+return null;
+}
+
+/**
+* 呼叫 OSRM 規劃路線
+*/
+async function getOSRMRoute(start, end) {
+const coords = `${start.lon},${start.lat};${end.lon},${end.lat}`;
+const url = `${OSRM_API_URL}${coords}?overview=full&steps=true&geometries=geojson`;
+
+const response = await fetch(url);
+if (!response.ok) {
+throw new Error(`OSRM 服務錯誤: ${response.statusText}`);
+}
+const data = await response.json();
+
+if (data.code !== 'Ok' || data.routes.length === 0) {
+throw new Error("找不到有效的駕駛路線。");
+}
+return data.routes[0];
+}
+
+/**
+* 繪製路線，並沿著線路取樣座標點
+* @returns {Array<object>} 沿線取樣點的經緯度陣列
+*/
+function drawRouteAndSamplePoints(route) {
+if (routeLayer) map.removeLayer(routeLayer);
+
+const geojson = route.geometry;
+const coordinates = geojson.coordinates; // [lon, lat] 格式的陣列
+
+// 將 OSRM 的 [lon, lat] 轉為 Leaflet 的 [lat, lon]
+const latLngs = coordinates.map(coord => [coord[1], coord[0]]);
+
+routeLayer = L.polyline(latLngs, {
+color: '#1d4ed8', // blue-700
+weight: 6,
+opacity: 0.8
+}).addTo(map);
+
+// 調整地圖視野以適應路線
+map.fitBounds(routeLayer.getBounds());
+
+// 沿線取樣點 (簡單的距離採樣)
+const sampledPoints = [];
+let lastSampledCoord = latLngs[0];
+sampledPoints.push({ lat: lastSampledCoord[0], lon: lastSampledCoord[1] });
+
+let accumulatedDistance = 0;
+
+for (let i = 1; i < latLngs.length; i++) {
+const currentCoord = latLngs[i];
+const segmentDistance = map.distance(lastSampledCoord, currentCoord);
+accumulatedDistance += segmentDistance;
+
+if (accumulatedDistance >= SAMPLE_INTERVAL_METERS) {
+sampledPoints.push({ lat: currentCoord[0], lon: currentCoord[1] });
+lastSampledCoord = currentCoord;
+accumulatedDistance = 0; // 重置累積距離
+}
+}
+
+document.getElementById('debugOutput').innerHTML = `
+<strong>路線資訊：</strong><br>
+總距離：約 ${(route.distance / 1000).toFixed(2)} 公里<br>
+預計時間：約 ${(route.duration / 60).toFixed(0)} 分鐘<br>
+檢查點數量：${sampledPoints.length} 個 (每 ${SAMPLE_INTERVAL_METERS} 米取樣)
+`;
+
+return sampledPoints;
+}
+
+// ============== 天氣檢查函數 ==============
+
+/**
+* 檢查所有取樣點的降雨情況
+* @param {Array<object>} points 經緯度點陣列
+* @returns {object} 降雨檢查結果
+*/
+async function checkRainForSampledPoints(points) {
+
+let rainPointsCount = 0;
+const checkPromises = points.map(point => checkSinglePointRain(point.lat, point.lon));
+const results = await Promise.all(checkPromises);
+
+const rainResults = results.filter(r => r.rainExpected);
+rainPointsCount = rainResults.length;
+
+// 移除舊的雨點標記
+map.eachLayer(layer => {
+if (layer instanceof L.CircleMarker && layer.options.color === 'red') {
+map.removeLayer(layer);
+}
+});
+
+if (rainPointsCount > 0) {
+// 找出最接近最大雨量的結果，用於展示
+const maxRainPoint = rainResults.sort((a, b) => b.immediateRain - a.immediateRain)[0];
+
+// 在地圖上標記降雨點
+rainResults.forEach(r => {
+const lat = r.location.lat;
+const lon = r.location.lon;
+// 使用圓形標記表示降雨點
+L.circleMarker([lat, lon], {
+radius: 8,
+color: 'red',
+fillColor: '#f03',
+fillOpacity: 0.7,
+}).addTo(map).bindPopup(`<strong>🌧️ 降雨提示</strong><br>預計雨量: ${r.immediateRain} mm/hr`);
+});
+
+return {
+hasRain: true,
+count: rainPointsCount,
+maxRain: maxRainPoint.immediateRain
+};
+
+} else {
+return { hasRain: false };
+}
+}
+
+/**
+* 呼叫 Worker API 檢查單一座標點的降雨情況
+*/
+async function checkSinglePointRain(lat, lon) {
+// 注意：這裡使用您提供的 Worker API
+const url = `${RAIN_API_URL}/?lat=${lat}&lon=${lon}`;
+const response = await fetch(url);
+
+if (!response.ok) {
+throw new Error("天氣 Worker 請求失敗。");
+}
+
+const data = await response.json();
+
+data.location = { lat, lon };
+return data;
+}
+
+// ============== 人流 POI 檢查函數 ==============
+
+/**
+* 檢查自定義人流點是否位於路線附近
+* @param {Array<object>} routePoints 路線取樣點
+* @returns {Array<object>} 路線附近的繁忙 POI
+*/
+function checkCustomPOIsNearRoute(routePoints) {
+const nearbyPOIs = new Set();
+const busyPOIs = [];
+
+// 移除舊的 POI 標記 (非降雨標記)
+poiMarkers.clearLayers();
+
+// 遍歷所有 POI
+for (const poi of CUSTOM_POIS) {
+let isNearby = false;
+
+// 檢查 POI 與路線上任一點的距離
+for (const routePoint of routePoints) {
+// 使用 Leaflet 內建方法計算距離 (米)
+const distance = map.distance([poi.lat, poi.lon], [routePoint.lat, routePoint.lon]);
+
+if (distance <= POI_CHECK_DISTANCE_METERS) {
+isNearby = true;
+break;
+}
+}
+
+if (isNearby) {
+if (poi.status >= 2) { // 狀態為 偏多 或 繁忙
+busyPOIs.push(poi);
+}
+
+// 無論是否繁忙，都在地圖上標記
+const statusInfo = POI_STATUS_MAP[poi.status];
+
+const customIcon = L.divIcon({
+className: 'custom-poi-marker',
+html: `<div class="bg-${statusInfo.color}-600 text-white text-lg rounded-full w-8 h-8 flex items-center justify-center shadow-lg border-2 border-white font-bold" style="background-color: ${statusInfo.color === 'red' ? '#dc2626' : statusInfo.color === 'orange' ? '#f97316' : '#10b981'};">${statusInfo.icon}</div>`,
+iconSize: [32, 32],
+iconAnchor: [16, 32],
+popupAnchor: [0, -32]
+});
+
+L.marker([poi.lat, poi.lon], { icon: customIcon })
+.addTo(poiMarkers)
+.bindPopup(`<strong>${poi.name}</strong><br>人流狀態: ${statusInfo.label}`);
+}
+}
+
+return busyPOIs;
+}
+
+// ============== 綜合警報函數 ==============
+
+/**
+* 根據天氣和人流結果更新警報框
+*/
+function updateCombinedAlert(rainStatus, busyPOIs) {
+let combinedMessage = ``;
+let alertType = 'safe';
+let rainText = "";
+let poiText = "";
+let speechText = "";
+
+// 1. 處理天氣警報
+if (rainStatus.hasRain) {
+rainText = `🔴 **天氣警報**：路線上有 ${rainStatus.count} 處預計有雨！<br>
+(最高雨量: ${rainStatus.maxRain} mm/hr)`;
+alertType = 'rain'; // 天氣警報優先
+speechText += "注意，路線上有降雨預報。";
+} else {
+rainText = `🟢 **天氣安全**：預計沿途沒有降雨。`;
+}
+
+// 2. 處理人流警報
+if (busyPOIs.length > 0) {
+const names = busyPOIs.map(p => p.name).join('、');
+poiText = `⚠️ **人流警報**：路線附近有 ${busyPOIs.length} 個繁忙/偏多地點：${names}。`;
+
+// 如果沒有下雨，則人流警報作為主要警報類型
+if (alertType !== 'rain') {
+alertType = 'busy';
+}
+speechText += `請留意路線附近 ${names} 的人流情況。`;
+
+} else {
+poiText = `✅ **人流安全**：路線附近沒有特別繁忙的地點。`;
+}
+
+// 3. 組合消息
+combinedMessage = `${rainText}<br><br>${poiText}`;
+
+// 4. 更新 UI
+setAlert(combinedMessage, alertType);
+
+// 5. 語音提示
+if (speechText.length > 0) {
+const finalSpeech = new SpeechSynthesisUtterance(speechText);
+finalSpeech.lang = "zh-HK";
+speechSynthesis.speak(finalSpeech);
+} else {
+// 如果兩者皆無警報
+const safeSpeech = new SpeechSynthesisUtterance("路線安全，沒有天氣或人流警報。");
+safeSpeech.lang = "zh-HK";
+speechSynthesis.speak(safeSpeech);
+}
+}
+</script>
+</body>
+</html>
