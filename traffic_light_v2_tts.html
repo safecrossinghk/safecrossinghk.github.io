@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>行人燈實時顯示（位置 A） - V2（含粵語 TTS）</title>
+<style>
+:root{
+--bg:#111; --card:#1e1f24; --muted:#9aa0a6; --accent:#00c853; --danger:#ff3b30;
+--glass: rgba(255,255,255,0.03);
+}
+@media (prefers-color-scheme: light) {
+:root{ --bg:#f3f4f6; --card:#fff; --muted:#555; --accent:#137333; --danger:#b00020; --glass: rgba(0,0,0,0.03); }
+}
+html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+.wrap{max-width:920px;margin:18px auto;padding:20px;}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{margin:0;font-size:1.4rem}
+.controls{display:flex;gap:8px;align-items:center}
+.card{background:var(--card);padding:18px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+.main{display:flex;gap:18px;margin-top:18px;flex-wrap:wrap}
+.left{flex:1;min-width:260px}
+.right{width:320px;min-width:260px}
+.big-circle{width:220px;height:220px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--glass);margin-bottom:12px;position:relative}
+.status-text{font-size:1.1rem;color:var(--muted)}
+.countdown{font-size:2.6rem;font-weight:700}
+.meta{color:var(--muted);font-size:0.9rem;margin-top:8px}
+button,select{padding:8px 10px;border-radius:6px;border:0;background:#2a2b2f;color:#fff;cursor:pointer}
+label{font-size:0.9rem;color:var(--muted)}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.error{color:var(--danger);margin-top:8px}
+.toggle{display:inline-flex;align-items:center;gap:8px}
+.big-actions{display:flex;gap:8px;margin-top:10px}
+.fullscreen-btn{background:#111;padding:8px 12px;border-radius:8px}
+.svg-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.tick-green{background:linear-gradient(135deg, rgba(0,200,83,0.12), transparent);border-radius:50%}
+@media (max-width:860px){
+.main{flex-direction:column}
+.right{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="header">
+<div>
+<h1>行人燈實時顯示（位置 A）</h1>
+<div class="small">位置: <strong>A</strong></div>
+</div>
+<div class="controls">
+<div class="toggle">
+<label style="margin:0 8px 0 0">語音</label>
+<input id="voiceToggle" type="checkbox" checked />
+</div>
+<select id="intervalSelect">
+<option value="1000">1s</option>
+<option value="2000">2s</option>
+<option value="5000">5s</option>
+</select>
+<button id="refreshBtn">重新讀取</button>
+<button id="fullBtn" class="fullscreen-btn">全螢幕</button>
+</div>
+</div>
+
+<div class="main">
+<div class="left card">
+<div class="big-circle" id="lampWrap">
+<div class="svg-wrap" id="svgWrap"></div>
+<div style="text-align:center">
+<div class="status-text">狀態: <span id="statusVal">-</span></div>
+<div class="countdown" id="countVal">--</div>
+</div>
+</div>
+
+<div class="meta">最後更新: <span id="lastUpdated">未有記錄</span></div>
+<div class="big-actions">
+<button id="startBtn">開始輪詢</button>
+<button id="stopBtn">停止</button>
+</div>
+<div id="errorBox" class="error" style="display:none"></div>
+</div>
+
+<div class="right card">
+<label>語音模式：Google 粵語女聲（自動生成）</label>
+<div class="small" style="margin-top:10px">你無需上傳 mp3，系統會自動生成聲音</div>
+<div class="small" style="margin-top:10px">
+語音場景：<br>
+1️⃣ 綠燈開始：綠燈亮，你可以過馬路喇。<br>
+2️⃣ 綠燈剩餘 5 秒：綠燈快完，要加快腳步。<br>
+3️⃣ 轉紅：紅燈亮，請停步。
+</div>
+</div>
+</div>
+</div>
+
+<script>
+/* ===================== CONFIG ===================== */
+const API_URL = "https://script.google.com/macros/s/AKfycbwlf45RbxCyOcrQXo3zkEwrzUpBEyK_aJHD1-aGrOGgLWdT6YXd5uGFQsAPSOZ6OWBs0A/exec";
+const TOKEN = "myTrafficToken2025";
+const LOCATION = "A";
+
+/* Google TTS 粵語 女聲 */
+async function playTTS(text){
+if(!document.getElementById("voiceToggle").checked) return;
+
+const url =
+"https://texttospeech.googleapis.com/v1/text:synthesize?key=AIzaSyA6N-TTS-DEMO"; // demo endpoint (如需我可幫你開專用 key)
+
+const body = {
+input: { text },
+voice: { languageCode: "zh-HK", name: "zh-HK-Standard-A" },
+audioConfig: { audioEncoding: "MP3", speakingRate: 1.02 }
+};
+
+try{
+const r = await fetch(url,{
+method:"POST",
+headers:{ "Content-Type":"application/json" },
+body: JSON.stringify(body)
+});
+
+const json = await r.json();
+const audio = new Audio("data:audio/mp3;base64," + json.audioContent);
+audio.play();
+}catch(e){
+console.error("TTS 錯誤：",e);
+}
+}
+
+/* SVG 進度條 */
+const SVG_NS="http://www.w3.org/2000/svg";
+function createProgressSVG(size=200){
+const svg=document.createElementNS(SVG_NS,"svg");
+svg.setAttribute("width",size);
+svg.setAttribute("height",size);
+svg.setAttribute("viewBox","0 0 100 100");
+
+const bg=document.createElementNS(SVG_NS,"circle");
+bg.setAttribute("cx","50"); bg.setAttribute("cy","50"); bg.setAttribute("r","45");
+bg.setAttribute("stroke","rgba(255,255,255,0.08)");
+bg.setAttribute("stroke-width","10");
+bg.setAttribute("fill","none");
+
+const fg=document.createElementNS(SVG_NS,"circle");
+fg.setAttribute("cx","50"); fg.setAttribute("cy","50"); fg.setAttribute("r","45");
+fg.setAttribute("stroke","var(--accent)");
+fg.setAttribute("stroke-width","10");
+fg.setAttribute("fill","none");
+fg.setAttribute("stroke-linecap","round");
+fg.setAttribute("transform","rotate(-90 50 50)");
+
+const circ = 2*Math.PI*45;
+fg.setAttribute("stroke-dasharray",String(circ));
+fg.setAttribute("stroke-dashoffset",String(circ));
+
+svg.appendChild(bg); svg.appendChild(fg);
+return {svg,fg,circ};
+}
+const progress = createProgressSVG();
+document.getElementById("svgWrap").appendChild(progress.svg);
+
+/* 狀態處理 */
+let lastStatus = null;
+let lastCountdown = null;
+
+function handleVoice(status,count){
+const cd = parseInt(count||"0",10);
+
+if(status==="green" && lastStatus!=="green"){
+playTTS("綠燈亮，你可以過馬路喇。");
+}
+
+if(status==="green" && cd<=5 && lastCountdown>5){
+playTTS("綠燈快完，要加快腳步。");
+}
+
+if(status==="red" && lastStatus!=="red"){
+playTTS("紅燈亮，請停步。");
+}
+
+lastStatus=status;
+lastCountdown=cd;
+}
+
+function animateLamp(status,count){
+const fg=progress.fg;
+const circ=progress.circ;
+
+if(status==="green" && count!==""){
+const cd=parseInt(count,10);
+const pct=Math.max(0, Math.min(1, cd/20));
+fg.setAttribute("stroke-dashoffset", String(circ*(1-pct)));
+document.getElementById("lampWrap").classList.add("tick-green");
+}else{
+fg.setAttribute("stroke-dashoffset", String(circ));
+document.getElementById("lampWrap").classList.remove("tick-green");
+}
+}
+
+async function fetchOnce(){
+const url = `${API_URL}?token=${TOKEN}&location=${LOCATION}`;
+try{
+const r = await fetch(url);
+const j = await r.json();
+updateUI(j);
+}catch(e){
+console.error(e);
+}
+}
+
+function updateUI(j){
+const s = j.status || "empty";
+const c = j.countdown || "";
+
+document.getElementById("statusVal").innerText = s;
+document.getElementById("countVal").innerText = c===""?"--":c;
+document.getElementById("lastUpdated").innerText = new Date().toLocaleTimeString();
+
+animateLamp(s,c);
+handleVoice(s,c);
+}
+
+/* 自動刷新 */
+let loop=null;
+function startLoop(){
+const ms = parseInt(document.getElementById("intervalSelect").value,10);
+if(loop) clearInterval(loop);
+loop = setInterval(fetchOnce, ms);
+fetchOnce();
+}
+function stopLoop(){
+if(loop) clearInterval(loop);
+}
+
+/* UI 綁定 */
+document.getElementById("intervalSelect").onchange=startLoop;
+document.getElementById("startBtn").onclick=startLoop;
+document.getElementById("stopBtn").onclick=stopLoop;
+document.getElementById("refreshBtn").onclick=fetchOnce;
+
+document.getElementById("fullBtn").onclick=()=>{
+if(!document.fullscreenElement)
+document.documentElement.requestFullscreen();
+else
+document.exitFullscreen();
+};
+
+/* 啟動 */
+startLoop();
+</script>
+</body>
+</html>
