@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Traffic Light OCR Live</title>
+<style>
+:root{
+--bg:#0f1720; --card:#0b1220; --ok:#28c76f; --warn:#ffb020; --bad:#ff4d4f; --muted:#98a0aa;
+--glass: rgba(255,255,255,0.04);
+font-family: "Helvetica Neue", Noto Sans, Arial, sans-serif;
+}
+html,body{height:100%;margin:0;background:linear-gradient(180deg,#071021,#0d1520);color:#fff}
+.wrap{max-width:900px;margin:18px auto;padding:20px}
+.card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 22px rgba(0,0,0,0.5)}
+h1{margin:0 0 10px;font-weight:600}
+.status-row{display:flex;align-items:center;gap:18px}
+.circle{
+width:140px;height:140px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+font-size:48px;font-weight:700;box-shadow:inset 0 -6px 18px rgba(0,0,0,0.6);
+transition:transform .12s ease, background-color .25s ease, box-shadow .25s ease;
+}
+.circle.pulse{animation:pulse 1s infinite}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+.info{flex:1}
+.info .line{font-size:14px;color:var(--muted);margin-bottom:6px}
+.big{font-size:34px;font-weight:700}
+.small{font-size:14px;color:var(--muted)}
+.blink{animation:blink .8s steps(2,start) infinite}
+@keyframes blink{50%{opacity:.15}}
+.controls{margin-top:14px;display:flex;gap:10px;align-items:center}
+button{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer}
+button.secondary{background:transparent;border:1px dashed rgba(255,255,255,0.06)}
+.log{margin-top:12px;font-size:13px;color:var(--muted)}
+footer{margin-top:18px;color:var(--muted);font-size:13px}
+.error{color:#ff8080;margin-top:10px}
+.okline{color:#9ff4c7}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>行人燈實時顯示（位置 A）</h1>
+
+<div class="status-row">
+<div id="circle" class="circle" style="background:var(--bad)">--</div>
+
+<div class="info">
+<div class="line">位置：<strong id="loc">A</strong></div>
+<div class="big" id="count">—</div>
+<div class="small" id="statustxt">狀態：未知</div>
+
+<div class="controls">
+<button id="btnStart">開始輪詢</button>
+<button id="btnStop" class="secondary">停止</button>
+<label style="margin-left:auto;font-size:13px;color:var(--muted)">
+速率：
+<select id="pollRate">
+<option value="1000">1s</option>
+<option value="1500">1.5s</option>
+<option value="2000">2s</option>
+<option value="3000">3s</option>
+</select>
+</label>
+</div>
+
+<div class="log" id="lastUpdated">未有資料</div>
+<div class="error" id="err"></div>
+</div>
+</div>
+
+<div class="log" id="raw"></div>
+<footer>
+本頁會向 Google Apps Script (web app) 請求最新值，並在狀態改變或倒數接近時以語音提示。若出現 CORS/權限錯誤，請參考下方排錯說明。
+</footer>
+</div>
+
+<div class="card" style="margin-top:12px">
+<h2>排錯 / 注意事項</h2>
+<ol style="color:var(--muted);font-size:13px">
+<li>Apps Script 必須允許公開存取 (Deploy → "Who has access" → "Anyone, even anonymous") 才可直接從瀏覽器 fetch。否則會被授權或 CORS 擋掉。</li>
+<li>若你不想公開，另一方法是用 Cloudflare Worker / 反向 proxy 轉發並加 CORS header。</li>
+<li>若前端顯示「CORS」或「401/403」，請檢查你的 Apps Script 發布設定（Execute as: Me，Who has access: Anyone）。</li>
+</ol>
+</div>
+</div>
+
+<script>
+/* --------- CONFIG - 可修改 --------- */
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwlf45RbxCyOcrQXo3zkEwrzUpBEyK_aJHD1-aGrOGgLWdT6YXd5uGFQsAPSOZ6OWBs0A/exec';
+const TOKEN = 'myTrafficToken2025'; // 你提供的 token
+const LOCATION = 'A'; // 位置 A
+/* ----------------------------------- */
+
+let timer = null;
+let lastStatus = null;
+let lastCount = null;
+let polling = false;
+
+const circle = document.getElementById('circle');
+const countEl = document.getElementById('count');
+const statusTxt = document.getElementById('statustxt');
+const lastUpdatedEl = document.getElementById('lastUpdated');
+const rawEl = document.getElementById('raw');
+const errEl = document.getElementById('err');
+const btnStart = document.getElementById('btnStart');
+const btnStop = document.getElementById('btnStop');
+const pollRate = document.getElementById('pollRate');
+const locEl = document.getElementById('loc');
+locEl.textContent = LOCATION;
+
+btnStart.addEventListener('click', ()=>startPoll());
+btnStop.addEventListener('click', ()=>stopPoll());
+
+function startPoll(){
+if(polling) return;
+polling = true;
+btnStart.disabled = true;
+btnStop.disabled = false;
+schedulePoll();
+}
+function stopPoll(){
+polling = false;
+btnStart.disabled = false;
+btnStop.disabled = true;
+if(timer) { clearTimeout(timer); timer = null; }
+lastUpdatedEl.textContent = '已停止輪詢';
+}
+
+function schedulePoll(){
+const rate = parseInt(pollRate.value,10);
+fetchOnce().finally(()=>{
+if(polling) timer = setTimeout(schedulePoll, rate);
+});
+}
+
+async function fetchOnce(){
+errEl.textContent = '';
+try{
+const url = `${SCRIPT_URL}?token=${encodeURIComponent(TOKEN)}&location=${encodeURIComponent(LOCATION)}&t=${Date.now()}`;
+const resp = await fetch(url, {method:'GET', cache:'no-store', mode:'cors'});
+if(!resp.ok){
+throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+}
+const data = await resp.json();
+rawEl.textContent = JSON.stringify(data);
+handleData(data);
+lastUpdatedEl.textContent = '最後更新: ' + new Date().toLocaleTimeString();
+}catch(err){
+console.error(err);
+errEl.textContent = '錯誤: ' + (err.message || err);
+rawEl.textContent = '';
+}
+}
+
+function handleData(d){
+// 預期格式：{ status: 'green'|'red'|..., countdown: '42' }
+const status = (d && d.status) ? String(d.status).toLowerCase() : null;
+const countdownRaw = (d && (d.countdown !== undefined && d.countdown !== null)) ? String(d.countdown).trim() : '';
+const countdown = countdownRaw === '' ? null : countdownRaw;
+
+// 更新顯示
+if(countdown !== null){
+countEl.textContent = countdown + ' 秒';
+} else {
+countEl.textContent = '—';
+}
+
+statusTxt.textContent = '狀態：' + (status || '未知');
+
+// 視覺效果
+if(status === 'green'){
+circle.style.background = 'linear-gradient(180deg,var(--ok),#11884c)';
+circle.classList.remove('blink');
+circle.textContent = '綠';
+} else if(status === 'red'){
+circle.style.background = 'linear-gradient(180deg,var(--bad),#b01b1b)';
+circle.classList.remove('blink');
+circle.textContent = '紅';
+} else {
+circle.style.background = 'linear-gradient(180deg, #777, #444)';
+circle.classList.remove('blink');
+circle.textContent = '--';
+}
+
+// 若倒數有且 <= 3，讓圈圈閃爍
+if(countdown !== null){
+const n = parseInt(countdown,10);
+if(!isNaN(n) && n <= 3 && status === 'green'){
+circle.classList.add('blink');
+// 當倒數接近時，每秒語音播報數字（只在變動時）
+if(lastCount !== countdown){
+speakCantonese(`${n} 秒`);
+}
+} else {
+circle.classList.remove('blink');
+}
+} else {
+circle.classList.remove('blink');
+}
+
+// 語音提示：狀態改變時播報（廣東話）
+if(status !== lastStatus){
+if(status === 'green'){
+speakCantonese('綠燈，可以過馬路');
+} else if(status === 'red'){
+speakCantonese('紅燈，唔好過馬路');
+} else {
+// unknown
+}
+}
+
+lastStatus = status;
+lastCount = countdown;
+}
+
+// 使用 Web Speech 合成（粵語）
+function speakCantonese(text){
+try{
+if(!('speechSynthesis' in window)) return;
+const u = new SpeechSynthesisUtterance(text);
+// 嘗試使用「粵語」語音；瀏覽器上若無會自動 fallback
+const voices = speechSynthesis.getVoices();
+// try find zh-HK or zh-Hant
+let v = voices.find(x => /zh.*hk/i.test(x.lang)) || voices.find(x => /yue|cantonese/i.test(x.name));
+if(!v) v = voices.find(x => /zh-HK|zh-Hant|zh/i.test(x.lang));
+if(v) u.voice = v;
+u.lang = v ? v.lang : 'zh-HK';
+u.rate = 1;
+window.speechSynthesis.cancel();
+window.speechSynthesis.speak(u);
+}catch(e){
+console.warn('TTS err', e);
+}
+}
+
+// auto-start
+startPoll();
+</script>
+</body>
+</html>
