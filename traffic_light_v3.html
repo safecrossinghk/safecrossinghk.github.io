@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>行人燈實時顯示（位置 A） - V3（含粵語 TTS + 行人動畫）</title>
+
+<style>
+/* ---------------------- Theme ---------------------- */
+:root {
+--bg: #111;
+--card: #1e1f24;
+--muted: #9aa0a6;
+--accent: #00c853;
+--danger: #ff3b30;
+--glass: rgba(255,255,255,0.03);
+}
+@media (prefers-color-scheme: light) {
+:root {
+--bg: #f3f4f6;
+--card: #fff;
+--muted: #555;
+--accent: #137333;
+--danger: #b00020;
+--glass: rgba(0,0,0,0.03);
+}
+}
+
+/* ---------------------- Layout ---------------------- */
+html,body { height:100%; margin:0; background:var(--bg); color:#fff;
+font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+
+.wrap { max-width:920px; margin:18px auto; padding:20px; }
+
+.header { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+h1 { margin:0; font-size:1.4rem; }
+
+.controls { display:flex; gap:8px; align-items:center; }
+
+.card { background:var(--card); padding:18px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+
+.main { display:flex; gap:18px; margin-top:18px; flex-wrap:wrap; }
+.left { flex:1; min-width:260px; }
+.right { width:320px; min-width:260px; }
+
+/* ---------------------- Big Lamp Circle ---------------------- */
+.big-circle {
+width:260px; height:260px;
+border-radius:50%;
+background:var(--glass);
+margin-bottom:12px;
+position:relative;
+display:flex; align-items:center; justify-content:center;
+}
+
+/* ---------------------- Count + Status ---------------------- */
+.status-text { font-size:1.1rem; color:var(--muted); text-align:center; }
+.countdown { font-size:2.6rem; font-weight:700; text-align:center; margin-top:6px; }
+
+/* ---------------------- Apple Watch WALKING Animation ---------------------- */
+.pedestrian-wrap {
+position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+width:160px; height:160px;
+}
+
+/* SVG for human figure */
+.ped {
+width:100%; height:100%;
+stroke-width:10;
+fill:none;
+stroke-linecap:round;
+stroke-linejoin:round;
+}
+
+/* Green walking */
+.walking { stroke:var(--accent); animation:walk 0.65s infinite ease-in-out; }
+
+/* Green blinking (last 5 sec) */
+.blink { animation:blink 0.4s infinite; }
+
+/* Red standing */
+.standing { stroke:var(--danger); }
+
+/* Walking animation */
+@keyframes walk {
+0% { transform:translateY(0px); }
+40% { transform:translateY(-5px); }
+100% { transform:translateY(0px); }
+}
+
+/* Blink animation */
+@keyframes blink {
+0%, 100% { opacity:1; }
+50% { opacity:0; }
+}
+
+/* ---------------------- Errors, Buttons ---------------------- */
+.meta { color:var(--muted); font-size:0.9rem; margin-top:8px; }
+.error { color:var(--danger); margin-top:8px; display:none; }
+
+button,select {
+padding:8px 10px; border-radius:6px; border:0;
+background:#2a2b2f; color:#fff; cursor:pointer;
+}
+
+.fullscreen-btn { background:#111; padding:8px 12px; border-radius:8px; }
+
+.big-actions { display:flex; gap:8px; margin-top:10px; }
+
+@media (max-width:860px){
+.main { flex-direction:column; }
+.right { width:100%; }
+}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+<div class="header">
+<div>
+<h1>行人燈實時顯示（位置 A）</h1>
+<div class="small">位置: <strong>A</strong></div>
+</div>
+<div class="controls">
+<label>語音</label><input id="voiceToggle" type="checkbox" checked />
+<select id="intervalSelect"><option value="1000">1s</option><option value="2000">2s</option><option value="5000">5s</option></select>
+<button id="refreshBtn">重新讀取</button>
+<button id="fullBtn" class="fullscreen-btn">全螢幕</button>
+</div>
+</div>
+
+<div class="main">
+<div class="left card">
+
+<div class="big-circle" id="lamp">
+<!-- 行人動畫區 -->
+<div class="pedestrian-wrap">
+<svg class="ped" id="pedSVG" viewBox="0 0 100 100">
+<!-- 頭 -->
+<circle cx="50" cy="22" r="8" />
+<!-- 身體 -->
+<line x1="50" y1="30" x2="50" y2="55" />
+<!-- 左手 -->
+<line x1="50" y1="38" x2="32" y2="52" />
+<!-- 右手 -->
+<line x1="50" y1="38" x2="68" y2="52" />
+<!-- 左腳 -->
+<line x1="50" y1="55" x2="35" y2="80" />
+<!-- 右腳 -->
+<line x1="50" y1="55" x2="65" y2="80" />
+</svg>
+</div>
+
+<div style="text-align:center;">
+<div class="status-text">狀態: <span id="statusVal">-</span></div>
+<div class="countdown" id="countVal">--</div>
+</div>
+</div>
+
+<div class="meta">最後更新：<span id="lastUpdated">未有記錄</span></div>
+
+<div class="big-actions">
+<button id="startBtn">開始輪詢</button>
+<button id="stopBtn">停止</button>
+</div>
+<div class="error" id="errorBox"></div>
+
+</div>
+
+<div class="right card">
+<h3>語音提示（Google 粵語 TTS）</h3>
+<p class="small">
+1️⃣ 綠燈開始 → 「綠燈亮，你可以過馬路喇。」<br>
+2️⃣ 倒數剩 5 秒 → 「綠燈快完，要加快腳步。」<br>
+3️⃣ 轉紅燈 → 「紅燈亮，請停步。」
+</p>
+</div>
+</div>
+</div>
+
+<script>
+/* ---------------------- CONFIG ---------------------- */
+const API_URL = "https://script.google.com/macros/s/AKfycbwlf45RbxCyOcrQXo3zkEwrzUpBEyK_aJHD1-aGrOGgLWdT6YXd5uGFQsAPSOZ6OWBs0A/exec";
+const TOKEN = "myTrafficToken2025";
+const LOCATION = "A";
+
+/* ---------------------- Google TTS 粵語 ---------------------- */
+async function speak(text){
+if(!document.getElementById("voiceToggle").checked) return;
+
+const url =
+"https://texttospeech.googleapis.com/v1/text:synthesize?key=AIzaSyA6N-TTS-DEMO";
+
+const body = {
+input:{text},
+voice:{languageCode:"zh-HK", name:"zh-HK-Standard-A"},
+audioConfig:{audioEncoding:"MP3", speakingRate:1.02}
+};
+
+try{
+const r = await fetch(url,{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(body)
+});
+const j = await r.json();
+const audio = new Audio("data:audio/mp3;base64,"+j.audioContent);
+audio.play();
+}catch(e){
+console.log("TTS 錯誤：",e);
+}
+}
+
+/* ---------------------- UI 更新 ---------------------- */
+let lastStatus=null;
+let lastCountdown=null;
+
+function applyPedestrian(status,count){
+const ped = document.getElementById("pedSVG");
+ped.classList.remove("walking","standing","blink");
+
+if(status==="green"){
+ped.classList.add("walking");
+if(parseInt(count)<=5) ped.classList.add("blink");
+} else if(status==="red"){
+ped.classList.add("standing");
+}
+}
+
+function handleVoice(status,count){
+const cd = parseInt(count||"0",10);
+
+if(status==="green" && lastStatus!=="green"){
+speak("綠燈亮，你可以過馬路喇。");
+}
+if(status==="green" && cd<=5 && lastCountdown>5){
+speak("綠燈快完，要加快腳步。");
+}
+if(status==="red" && lastStatus!=="red"){
+speak("紅燈亮，請停步。");
+}
+
+lastStatus=status;
+lastCountdown=cd;
+}
+
+function updateUI(j){
+const s = j.status || "empty";
+const c = j.countdown || "";
+
+document.getElementById("statusVal").innerText = s;
+document.getElementById("countVal").innerText = c===""?"--":c;
+document.getElementById("lastUpdated").innerText = new Date().toLocaleTimeString();
+
+applyPedestrian(s,c);
+handleVoice(s,c);
+}
+
+/* ---------------------- Fetch Loop ---------------------- */
+async function fetchOnce(){
+const url = `${API_URL}?token=${TOKEN}&location=${LOCATION}`;
+try{
+const r = await fetch(url,{cache:"no-store"});
+const j = await r.json();
+updateUI(j);
+document.getElementById("errorBox").style.display="none";
+}catch(e){
+document.getElementById("errorBox").style.display="block";
+document.getElementById("errorBox").innerText="讀取失敗：" + e;
+}
+}
+
+let loop=null;
+function startLoop(){
+const ms=parseInt(document.getElementById("intervalSelect").value,10);
+if(loop) clearInterval(loop);
+loop=setInterval(fetchOnce,ms);
+fetchOnce();
+}
+function stopLoop(){ if(loop) clearInterval(loop); }
+
+document.getElementById("startBtn").onclick=startLoop;
+document.getElementById("stopBtn").onclick=stopLoop;
+document.getElementById("refreshBtn").onclick=fetchOnce;
+
+document.getElementById("fullBtn").onclick=()=>{
+if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+else document.exitFullscreen();
+};
+
+/* 啟動 */
+startLoop();
+</script>
+
+</body>
+</html>
