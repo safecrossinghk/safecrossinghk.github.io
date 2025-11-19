@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>行人燈實時顯示（位置 A） - V2</title>
+<style>
+:root{
+--bg:#111; --card:#1e1f24; --muted:#9aa0a6; --accent:#00c853; --danger:#ff3b30;
+--glass: rgba(255,255,255,0.03);
+}
+@media (prefers-color-scheme: light) {
+:root{ --bg:#f3f4f6; --card:#fff; --muted:#555; --accent:#137333; --danger:#b00020; --glass: rgba(0,0,0,0.03); }
+}
+html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+.wrap{max-width:920px;margin:18px auto;padding:20px;}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{margin:0;font-size:1.4rem}
+.controls{display:flex;gap:8px;align-items:center}
+.card{background:var(--card);padding:18px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+.main{display:flex;gap:18px;margin-top:18px;flex-wrap:wrap}
+.left{flex:1;min-width:260px}
+.right{width:320px;min-width:260px}
+.big-circle{width:220px;height:220px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--glass);margin-bottom:12px;position:relative}
+.status-text{font-size:1.1rem;color:var(--muted)}
+.countdown{font-size:2.6rem;font-weight:700}
+.meta{color:var(--muted);font-size:0.9rem;margin-top:8px}
+button,select,input[type="file"]{padding:8px 10px;border-radius:6px;border:0;background:#2a2b2f;color:#fff;cursor:pointer}
+label{font-size:0.9rem;color:var(--muted);display:block;margin-bottom:6px}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.footer{color:var(--muted);font-size:0.85rem;margin-top:12px}
+/* svg circle progress */
+.svg-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.tick-green{background:linear-gradient(135deg, rgba(0,200,83,0.12), transparent);border-radius:50%}
+.small{font-size:0.9rem;color:var(--muted)}
+.error{color:var(--danger);margin-top:8px}
+.toggle{display:inline-flex;align-items:center;gap:8px}
+.big-actions{display:flex;gap:8px;margin-top:10px}
+/* mobile full screen */
+.fullscreen-btn{background:#111;padding:8px 12px;border-radius:8px}
+/* responsive */
+@media (max-width:860px){
+.main{flex-direction:column}
+.right{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="header">
+<div>
+<h1>行人燈實時顯示（位置 A）</h1>
+<div class="small">位置: <strong>A</strong></div>
+</div>
+<div class="controls">
+<div class="toggle">
+<label style="margin:0 8px 0 0">語音</label>
+<input id="voiceToggle" type="checkbox" checked />
+</div>
+<select id="intervalSelect" title="刷新頻率">
+<option value="1000">1s</option>
+<option value="2000">2s</option>
+<option value="5000">5s</option>
+</select>
+<button id="refreshBtn">重新讀取</button>
+<button id="fullBtn" class="fullscreen-btn">全螢幕</button>
+</div>
+</div>
+
+<div class="main">
+<div class="left card">
+<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+<div>
+<div class="big-circle" id="lampWrap">
+<div class="svg-wrap" id="svgWrap"></div>
+<div style="text-align:center">
+<div class="status-text" id="statusLabel">狀態: <span id="statusVal">-</span></div>
+<div class="countdown" id="countVal">--</div>
+</div>
+</div>
+</div>
+<div style="flex:1;min-width:180px">
+<div class="meta">最後更新: <span id="lastUpdated">未有記錄</span></div>
+<div id="notes" class="small">說明：系統會每秒向 Apps Script 請求資料，並依狀態改變做畫面與語音提示。</div>
+<div class="big-actions">
+<button id="startBtn">開始輪詢</button>
+<button id="stopBtn">停止</button>
+</div>
+<div id="errorBox" class="error" style="display:none"></div>
+</div>
+</div>
+
+<div class="footer">
+API URL 與 token 設於程式內 (下方說明)。如遇 CORS/授權錯誤請檢查 Apps Script 部署設定為 Anyone, even anonymous 或用 worker proxy。
+</div>
+</div>
+
+<div class="right card">
+<label>語音檔 (可上傳本地 mp3)：</label>
+<input id="voiceFile" type="file" accept="audio/*" />
+<div class="small" style="margin-top:8px">或輸入外部 URL：</div>
+<div class="row">
+<input id="voiceUrl" placeholder="https://..." style="flex:1" />
+<button id="setUrlBtn">設定</button>
+</div>
+
+<label style="margin-top:12px">狀態預覽：</label>
+<div class="small">綠燈倒數時顯示圓形進度；當 countdown 為空或 status empty 顯示紅燈。</div>
+<div style="margin-top:10px">
+<div class="small">目前 token:</div>
+<div style="word-break:break-all;margin-top:6px;color:var(--muted)" id="tokenBox"></div>
+</div>
+<div style="margin-top:12px">
+<label>測試用按鈕</label>
+<div class="row">
+<button id="simGreen">模擬綠燈 (10s)</button>
+<button id="simRed">模擬紅燈</button>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+
+<script>
+/* ===================== CONFIG (部署前請確認) ===================== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbwlf45RbxCyOcrQXo3zkEwrzUpBEyK_aJHD1-aGrOGgLWdT6YXd5uGFQsAPSOZ6OWBs0A/exec';
+const TOKEN = 'myTrafficToken2025';
+const LOCATION = 'A';
+/* ================================================================= */
+
+let intervalMs = 1000;
+let timerHandle = null;
+let lastState = {status:null, countdown:null};
+let audio = new Audio();
+let localFileObjUrl = null;
+const dom = {
+statusVal: document.getElementById('statusVal'),
+countVal: document.getElementById('countVal'),
+lastUpdated: document.getElementById('lastUpdated'),
+errorBox: document.getElementById('errorBox'),
+startBtn: document.getElementById('startBtn'),
+stopBtn: document.getElementById('stopBtn'),
+intervalSelect: document.getElementById('intervalSelect'),
+refreshBtn: document.getElementById('refreshBtn'),
+voiceToggle: document.getElementById('voiceToggle'),
+voiceFile: document.getElementById('voiceFile'),
+voiceUrl: document.getElementById('voiceUrl'),
+setUrlBtn: document.getElementById('setUrlBtn'),
+tokenBox: document.getElementById('tokenBox'),
+svgWrap: document.getElementById('svgWrap'),
+simGreen: document.getElementById('simGreen'),
+simRed: document.getElementById('simRed'),
+fullBtn: document.getElementById('fullBtn')
+};
+
+dom.tokenBox.innerText = TOKEN;
+
+/* --- SVG circular progress element (will animate by JS) --- */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function createProgressSVG(size=200){
+const svg = document.createElementNS(SVG_NS,'svg');
+svg.setAttribute('width',size);
+svg.setAttribute('height',size);
+svg.setAttribute('viewBox','0 0 100 100');
+const bg = document.createElementNS(SVG_NS,'circle');
+bg.setAttribute('cx','50'); bg.setAttribute('cy','50'); bg.setAttribute('r','45');
+bg.setAttribute('stroke','rgba(255,255,255,0.06)'); bg.setAttribute('stroke-width','10'); bg.setAttribute('fill','none');
+const fg = document.createElementNS(SVG_NS,'circle');
+fg.setAttribute('cx','50'); fg.setAttribute('cy','50'); fg.setAttribute('r','45');
+fg.setAttribute('stroke','var(--accent)'); fg.setAttribute('stroke-width','10'); fg.setAttribute('fill','none');
+fg.setAttribute('stroke-linecap','round');
+fg.setAttribute('transform','rotate(-90 50 50)');
+fg.style.transition = 'stroke-dashoffset 0.4s linear';
+// set dash
+const circumference = 2*Math.PI*45;
+fg.setAttribute('stroke-dasharray', String(circumference));
+fg.setAttribute('stroke-dashoffset', String(circumference));
+svg.appendChild(bg); svg.appendChild(fg);
+return {svg,fg,circumference};
+}
+const progress = createProgressSVG(200);
+dom.svgWrap.appendChild(progress.svg);
+
+/* fetch + update loop */
+async function fetchStatusOnce(){
+const url = `${API_URL}?token=${encodeURIComponent(TOKEN)}&location=${encodeURIComponent(LOCATION)}`;
+try{
+const r = await fetch(url, { method:'GET', cache:'no-store' });
+if(!r.ok){
+throw new Error(`HTTP ${r.status}`);
+}
+const json = await r.json();
+updateFromJson(json);
+dom.errorBox.style.display='none';
+}catch(err){
+console.error('fetch error',err);
+dom.errorBox.style.display='block';
+dom.errorBox.innerText = `讀取失敗：${err.message}`;
+// set display to empty
+updateFromJson({status:'empty', countdown:''});
+}
+}
+function updateFromJson(json){
+// expected { status: 'green'|'red'|'empty', countdown: '12' }
+const status = (json && json.status) ? String(json.status).toLowerCase() : 'empty';
+const countdown = (json && (json.countdown!=null)) ? String(json.countdown) : '';
+dom.statusVal.innerText = status;
+dom.countVal.innerText = (countdown==='') ? '--' : countdown;
+dom.lastUpdated.innerText = (new Date()).toLocaleTimeString();
+animateLamp(status, countdown);
+handleVoice(status,countdown);
+lastState = {status,countdown};
+}
+function animateLamp(status, countdown){
+const fg = progress.fg;
+const c = progress.circumference;
+if(status === 'green' && countdown !== ''){
+const total = Math.max(1, parseInt(countdown,10));
+// animate to full -> 0 (so we set offset accordingly)
+const percent = Math.max(0, Math.min(1, parseInt(countdown,10)/ (total || 1)));
+// Here we assume backend returns remaining; to display progress inverse the percent
+const offset = c * (1 - percent);
+fg.setAttribute('stroke-dashoffset', String(offset));
+dom.svgWrap.parentElement.classList.add('tick-green');
+} else {
+// set to empty stroke
+fg.setAttribute('stroke-dashoffset', String(c));
+dom.svgWrap.parentElement.classList.remove('tick-green');
+}
+}
+/* voice logic: play on transitions or thresholds */
+let lastVoicePlayed = {status:null, countdown:null};
+function handleVoice(status, countdown){
+if(!dom.voiceToggle.checked) return;
+// if voice file set
+if(!audio.src) return;
+// play on events:
+// - if status becomes green -> play "green start"
+if(lastState.status !== 'green' && status === 'green'){
+playVoice('green_start');
+}
+// - if status is green and countdown is number <=5 and last countdown >5 -> play warning
+const cd = parseInt(countdown||'0',10);
+const lastCd = parseInt(lastState.countdown||'0',10);
+if(status === 'green' && !isNaN(cd) && cd>0 && cd<=5 && lastCd>5){
+playVoice('green_warn');
+}
+// - if status becomes red -> play red
+if(lastState.status !== 'red' && status === 'red'){
+playVoice('red');
+}
+lastState.countdown = countdown; lastState.status = status;
+}
+function playVoice(kind){
+// kind is for semantic; we simply play the audio file once.
+try{
+audio.currentTime = 0;
+audio.play().catch(e=>console.warn('autoplay blocked',e));
+}catch(e){}
+}
+
+/* control loop */
+function startLoop(){
+if(timerHandle) clearInterval(timerHandle);
+timerHandle = setInterval(fetchStatusOnce, intervalMs);
+fetchStatusOnce();
+}
+function stopLoop(){
+if(timerHandle) { clearInterval(timerHandle); timerHandle=null; }
+}
+
+/* UI bindings */
+dom.intervalSelect.addEventListener('change', e=>{
+intervalMs = parseInt(e.target.value,10);
+if(timerHandle) startLoop();
+});
+dom.refreshBtn.addEventListener('click', ()=> fetchStatusOnce());
+dom.startBtn.addEventListener('click', ()=> startLoop());
+dom.stopBtn.addEventListener('click', ()=> stopLoop());
+
+dom.voiceFile.addEventListener('change', (ev)=>{
+if(ev.target.files && ev.target.files.length){
+const f = ev.target.files[0];
+if(localFileObjUrl) URL.revokeObjectURL(localFileObjUrl);
+localFileObjUrl = URL.createObjectURL(f);
+audio.src = localFileObjUrl;
+audio.load();
+}
+});
+dom.setUrlBtn.addEventListener('click', ()=>{
+const url = dom.voiceUrl.value.trim();
+if(url){
+audio.src = url;
+audio.load();
+alert('已設定外部語音 URL');
+}
+});
+
+/* simulate buttons */
+dom.simGreen.addEventListener('click', ()=>{
+updateFromJson({status:'green', countdown:'10'});
+});
+dom.simRed.addEventListener('click', ()=>{
+updateFromJson({status:'red', countdown:''});
+});
+
+/* full screen */
+dom.fullBtn.addEventListener('click', async ()=>{
+if(!document.fullscreenElement){
+await document.documentElement.requestFullscreen().catch(()=>{});
+} else {
+await document.exitFullscreen().catch(()=>{});
+}
+});
+
+/* start default */
+intervalMs = parseInt(dom.intervalSelect.value,10);
+startLoop();
+
+/* accessibility: stop audio when page hidden */
+document.addEventListener('visibilitychange', ()=>{
+if(document.hidden) audio.pause();
+});
+</script>
+</body>
+</html>
