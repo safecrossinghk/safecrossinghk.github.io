@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>路線天氣與人流警報</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Load Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Load Inter Font -->
+<style>
+body { font-family: 'Inter', sans-serif; }
+/* 自定義樣式 */
+#map {
+width: 100%;
+height: 60vh;
+border-radius: 12px;
+overflow: hidden;
+box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.rain-alert {
+animation: pulse-red 1s infinite alternate;
+}
+@keyframes pulse-red {
+from { background-color: #fca5a5; } /* red-300 */
+to { background-color: #ef4444; } /* red-500 */
+}
+.safe-alert {
+background-color: #d1fae5; /* green-100 */
+}
+.busy-alert {
+background-color: #fef3c7; /* yellow-100 */
+color: #b45309; /* yellow-800 */
+border: 2px solid #fbbf24; /* yellow-400 */
+}
+.loading-overlay {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: rgba(255, 255, 255, 0.7);
+display: flex;
+justify-content: center;
+align-items: center;
+font-size: 1.5rem;
+border-radius: 12px;
+z-index: 1000;
+}
+/* POI Marker Style */
+.custom-poi-marker {
+background: transparent;
+border: none;
+}
+</style>
+<!-- Load Leaflet CSS and JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body class="bg-gray-50 p-4 min-h-screen">
+
+<div class="max-w-4xl mx-auto">
+<h1 class="text-3xl font-extrabold text-center text-gray-800 mb-6 border-b pb-2">🧭 路線天氣與人流警報系統 (可拖動修正版)</h1>
+
+<div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+<div class="space-y-4 md:flex md:space-x-4 md:space-y-0">
+<div class="flex-1">
+<label for="startLocation" class="block text-sm font-medium text-gray-700 mb-1">起點 (A)</label>
+<input id="startLocation" type="text" placeholder="輸入起點，例如：尖沙咀站" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+</div>
+<div class="flex-1">
+<label for="endLocation" class="block text-sm font-medium text-gray-700 mb-1">終點 (B)</label>
+<input id="endLocation" type="text" placeholder="輸入終點，例如：海港城" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+</div>
+</div>
+<button onclick="geocodeAndFindRoute()" id="routeButton" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition duration-200 w-full">規劃路線並檢查警報</button>
+</div>
+
+<!-- 警報區域 -->
+<div id="alertContainer" class="hidden mb-6">
+<div id="alertBox" class="p-4 rounded-xl text-center font-semibold shadow-md transition duration-500 mb-2">
+<!-- Alert message inserted here -->
+</div>
+<!-- iOS 語音播放按鈕 -->
+<button id="speakBtn" onclick="playLastSpeech()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition">
+<span>🔊</span> 播放/重播語音提示 (iOS 專用)
+</button>
+</div>
+
+<div id="mapContainer" class="relative">
+<div id="map"></div>
+<div id="loading" class="loading-overlay hidden">
+<svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+</svg>
+正在規劃 Valhalla 行人路線...
+</div>
+</div>
+
+<div id="debugOutput" class="mt-6 p-4 bg-gray-100 rounded-lg text-sm text-gray-600 shadow-inner">
+<!-- Debug/info output -->
+<p><strong>💡 提示：</strong>如果起點或終點位置不準確，請直接<strong>拖動地圖上的藍色標記</strong>來修正，路線將會自動重新計算。</p>
+<div id="routeInfoContent" class="mt-2"></div>
+</div>
+</div>
+
+<script>
+// ============== 配置與全局變量 ==============
+let map;
+let routeLayer;
+let startMarker; // 全局變量：起點標記
+let endMarker; // 全局變量：終點標記
+
+const RAIN_API_URL = "https://crowdtest8r.ctakwah.workers.dev";
+const VALHALLA_API_URL = "https://valhalla1.openstreetmap.de/route";
+const NOMINATIM_API_URL = "https://nominatim.openstreetmap.org/search?format=json&q=";
+
+const SAMPLE_INTERVAL_METERS = 1000;
+const POI_CHECK_DISTANCE_METERS = 500;
+const RAIN_THRESHOLD = 0.01;
+let poiMarkers = L.layerGroup();
+let lastSpeechText = "";
+
+const CUSTOM_POIS = [
+{ name: "旺角站", lat: 22.318357, lon: 114.169542, status: 3 },
+{ name: "尖沙咀鐘樓", lat: 22.293424, lon: 114.171170, status: 3 },
+{ name: "中環碼頭", lat: 22.285810, lon: 114.156540, status: 2 },
+{ name: "香港科學館", lat: 22.3000, lon: 114.1754, status: 1 },
+{ name: "香港海洋公園", lat: 22.2476, lon: 114.1755, status: 2 },
+{ name: "沙田馬場", lat: 22.4048, lon: 114.2155, status: 3 },
+{ name: "香港國際機場", lat: 22.3089, lon: 113.9147, status: 3 },
+];
+
+const POI_STATUS_MAP = {
+3: { label: '🔴 非常繁忙', color: 'red', icon: '🚨' },
+2: { label: '🟡 人流偏多', color: 'orange', icon: '⚠️' },
+1: { label: '🟢 人流正常', color: 'green', icon: '🚶' }
+};
+
+window.onload = function() {
+initMap(22.302711, 114.177216);
+};
+
+document.getElementById("startLocation").addEventListener("keydown", function (e) {
+if (e.key === "Enter") document.getElementById("endLocation").focus();
+});
+document.getElementById("endLocation").addEventListener("keydown", function (e) {
+if (e.key === "Enter") geocodeAndFindRoute();
+});
+
+// ============== 地圖操作函數 ==============
+
+function initMap(lat, lon) {
+if (map) map.remove();
+map = L.map("map").setView([lat, lon], 13);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+maxZoom: 19,
+attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+poiMarkers.addTo(map);
+}
+
+function showLoading(show) {
+document.getElementById('loading').classList.toggle('hidden', !show);
+document.getElementById('routeButton').disabled = show;
+}
+
+function setAlert(message, type = 'safe') {
+const alertContainer = document.getElementById('alertContainer');
+const alertBox = document.getElementById('alertBox');
+
+alertContainer.classList.remove('hidden');
+alertBox.classList.remove('rain-alert', 'safe-alert', 'busy-alert', 'bg-red-100', 'bg-green-100', 'bg-yellow-100', 'text-red-800', 'text-green-800', 'text-yellow-800', 'border-red-400', 'border-green-400', 'border-yellow-400');
+alertBox.style.borderColor = 'initial';
+
+if (type === 'rain') {
+alertBox.classList.add('rain-alert', 'bg-red-100', 'text-red-800', 'border-red-400');
+} else if (type === 'busy') {
+alertBox.classList.add('busy-alert');
+} else if (type === 'safe') {
+alertBox.classList.add('safe-alert', 'bg-green-100', 'text-green-800', 'border-green-400');
+} else {
+alertBox.classList.add('bg-gray-100', 'text-gray-800');
+}
+alertBox.innerHTML = message;
+}
+
+function playLastSpeech() {
+if (lastSpeechText) {
+speechSynthesis.cancel();
+const utterance = new SpeechSynthesisUtterance(lastSpeechText);
+utterance.lang = "zh-HK";
+speechSynthesis.speak(utterance);
+}
+}
+
+// ============== 核心流程：地理編碼 + 標記設置 ==============
+
+// 1. 用戶點擊按鈕：先查詢座標，再設置標記
+async function geocodeAndFindRoute() {
+showLoading(true);
+setAlert("正在查詢位置...", 'info');
+poiMarkers.clearLayers();
+
+const startLoc = document.getElementById('startLocation').value.trim();
+const endLoc = document.getElementById('endLocation').value.trim();
+
+if (!startLoc || !endLoc) {
+setAlert("❗ 請輸入起點和終點。", 'info');
+showLoading(false);
+return;
+}
+
+try {
+const startCoords = await getCoordinates(startLoc);
+const endCoords = await getCoordinates(endLoc);
+
+if (!startCoords || !endCoords) {
+setAlert("❌ 無法找到起點或終點的精確座標，請嘗試更具體的名稱。", 'error');
+showLoading(false);
+return;
+}
+
+// 設置地圖視野
+map.setView([startCoords.lat, startCoords.lon], 15);
+
+// 設置或更新標記 (加入 draggable: true)
+setupMarkers(startCoords, endCoords);
+
+// 開始計算路線
+await calculateRouteFromMarkers();
+
+} catch (error) {
+console.error("錯誤:", error);
+setAlert(`❌ 處理失敗：${error.message}`, 'error');
+showLoading(false);
+}
+}
+
+// 設置可拖動標記
+function setupMarkers(startCoords, endCoords) {
+// 如果標記已存在，移除舊的
+if (startMarker) map.removeLayer(startMarker);
+if (endMarker) map.removeLayer(endMarker);
+
+// 創建新的可拖動標記
+startMarker = L.marker([startCoords.lat, startCoords.lon], { draggable: true }).addTo(map).bindPopup("起點 (可拖動修正)").openPopup();
+endMarker = L.marker([endCoords.lat, endCoords.lon], { draggable: true }).addTo(map).bindPopup("終點 (可拖動修正)");
+
+// 監聽拖動結束事件 -> 重新計算路線
+startMarker.on('dragend', function() {
+calculateRouteFromMarkers();
+});
+
+endMarker.on('dragend', function() {
+calculateRouteFromMarkers();
+});
+}
+
+// 2. 根據當前標記位置計算路線 (Valhalla + 天氣)
+async function calculateRouteFromMarkers() {
+if (!startMarker || !endMarker) return;
+
+showLoading(true);
+setAlert("正在根據標記位置重新規劃路線...", 'info');
+
+try {
+const startLatLng = startMarker.getLatLng();
+const endLatLng = endMarker.getLatLng();
+
+const startCoords = { lat: startLatLng.lat, lon: startLatLng.lng };
+const endCoords = { lat: endLatLng.lat, lon: endLatLng.lng };
+
+// [Valhalla] 獲取路線
+const routeData = await getValhallaRoute(startCoords, endCoords);
+
+// 繪製路線
+const sampledPoints = drawRouteAndSamplePoints(routeData);
+
+// 檢查天氣與人流
+const rainStatus = await checkRainForSampledPoints(sampledPoints);
+const busyPOIs = checkCustomPOIsNearRoute(sampledPoints);
+
+updateCombinedAlert(rainStatus, busyPOIs);
+
+} catch (error) {
+console.error("路線計算錯誤:", error);
+setAlert(`❌ 路線計算失敗：${error.message}`, 'error');
+} finally {
+showLoading(false);
+}
+}
+
+// ============== API 函數 ==============
+
+async function getCoordinates(query) {
+// 加上 "Hong Kong" 增加準確度
+const url = NOMINATIM_API_URL + encodeURIComponent(query + " Hong Kong");
+const response = await fetch(url);
+const data = await response.json();
+
+if (data && data.length > 0) {
+return {
+lat: parseFloat(data[0].lat),
+lon: parseFloat(data[0].lon)
+};
+}
+return null;
+}
+
+async function getValhallaRoute(start, end) {
+const requestBody = {
+locations: [
+{ lat: start.lat, lon: start.lon },
+{ lat: end.lat, lon: end.lon }
+],
+costing: "pedestrian", // 強制行人
+directions_options: {
+units: "km"
+}
+};
+
+const url = `${VALHALLA_API_URL}?json=${encodeURIComponent(JSON.stringify(requestBody))}`;
+
+const response = await fetch(url);
+if (!response.ok) {
+throw new Error(`導航服務錯誤 (Valhalla)`);
+}
+const data = await response.json();
+
+if (!data.trip || !data.trip.legs || data.trip.legs.length === 0) {
+throw new Error("找不到有效的步行路線。");
+}
+
+const leg = data.trip.legs[0];
+const coordinates = decodePolyline(leg.shape);
+
+return {
+coordinates: coordinates,
+distance: data.trip.summary.length * 1000,
+duration: data.trip.summary.time
+};
+}
+
+function decodePolyline(str, precision) {
+var index = 0, lat = 0, lng = 0, coordinates = [], shift = 0, result = 0, byte = null, latitude_change, longitude_change, factor = Math.pow(10, precision || 6);
+while (index < str.length) {
+byte = null; shift = 0; result = 0;
+do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+latitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+shift = result = 0;
+do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+longitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+lat += latitude_change; lng += longitude_change;
+coordinates.push([lat / factor, lng / factor]);
+}
+return coordinates;
+}
+
+function drawRouteAndSamplePoints(routeData) {
+if (routeLayer) map.removeLayer(routeLayer);
+
+const latLngs = routeData.coordinates;
+
+routeLayer = L.polyline(latLngs, {
+color: '#16a34a',
+weight: 6,
+opacity: 0.8,
+dashArray: '5, 10'
+}).addTo(map);
+
+map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+
+const sampledPoints = [];
+let lastSampledCoord = latLngs[0];
+sampledPoints.push({ lat: lastSampledCoord[0], lon: lastSampledCoord[1] });
+
+let accumulatedDistance = 0;
+
+for (let i = 1; i < latLngs.length; i++) {
+const currentCoord = latLngs[i];
+const segmentDistance = map.distance(lastSampledCoord, currentCoord);
+accumulatedDistance += segmentDistance;
+
+if (accumulatedDistance >= SAMPLE_INTERVAL_METERS) {
+sampledPoints.push({ lat: currentCoord[0], lon: currentCoord[1] });
+lastSampledCoord = currentCoord;
+accumulatedDistance = 0;
+}
+}
+
+document.getElementById('routeInfoContent').innerHTML = `
+總距離：約 ${(routeData.distance / 1000).toFixed(2)} 公里<br>
+預計步行時間：約 ${(routeData.duration / 60).toFixed(0)} 分鐘<br>
+天氣檢查點數量：${sampledPoints.length} 個 (每 1 公里取樣)`;
+
+return sampledPoints;
+}
+
+// ============== 天氣檢查函數 ==============
+
+async function checkRainForSampledPoints(points) {
+let rainPointsCount = 0;
+const checkPromises = points.map(point => checkSinglePointRain(point.lat, point.lon));
+const results = await Promise.all(checkPromises);
+
+const rainResults = results.filter(r => r.rainExpected);
+rainPointsCount = rainResults.length;
+
+map.eachLayer(layer => {
+if (layer instanceof L.CircleMarker && layer.options.color === 'red') {
+map.removeLayer(layer);
+}
+});
+
+if (rainPointsCount > 0) {
+const maxRainPoint = rainResults.sort((a, b) => b.immediateRain - a.immediateRain)[0];
+rainResults.forEach(r => {
+L.circleMarker([r.location.lat, r.location.lon], {
+radius: 8, color: 'red', fillColor: '#f03', fillOpacity: 0.7,
+}).addTo(map).bindPopup(`<strong>🌧️ 降雨提示</strong><br>預計雨量: ${r.immediateRain} mm/hr`);
+});
+
+return { hasRain: true, count: rainPointsCount, maxRain: maxRainPoint.immediateRain };
+} else {
+return { hasRain: false };
+}
+}
+
+async function checkSinglePointRain(lat, lon) {
+const url = `${RAIN_API_URL}/?lat=${lat}&lon=${lon}`;
+const response = await fetch(url);
+if (!response.ok) throw new Error("天氣 Worker 請求失敗。");
+const data = await response.json();
+data.location = { lat, lon };
+return data;
+}
+
+// ============== 人流 POI 檢查函數 ==============
+
+function checkCustomPOIsNearRoute(routePoints) {
+const nearbyPOIs = new Set();
+const busyPOIs = [];
+
+poiMarkers.clearLayers();
+
+for (const poi of CUSTOM_POIS) {
+let isNearby = false;
+for (const routePoint of routePoints) {
+const distance = map.distance([poi.lat, poi.lon], [routePoint.lat, routePoint.lon]);
+if (distance <= POI_CHECK_DISTANCE_METERS) {
+isNearby = true;
+break;
+}
+}
+
+if (isNearby) {
+if (poi.status >= 2) busyPOIs.push(poi);
+const statusInfo = POI_STATUS_MAP[poi.status];
+const customIcon = L.divIcon({
+className: 'custom-poi-marker',
+html: `<div class="bg-${statusInfo.color}-600 text-white text-lg rounded-full w-8 h-8 flex items-center justify-center shadow-lg border-2 border-white font-bold" style="background-color: ${statusInfo.color === 'red' ? '#dc2626' : statusInfo.color === 'orange' ? '#f97316' : '#10b981'};">${statusInfo.icon}</div>`,
+iconSize: [32, 32],
+iconAnchor: [16, 32],
+popupAnchor: [0, -32]
+});
+L.marker([poi.lat, poi.lon], { icon: customIcon }).addTo(poiMarkers).bindPopup(`<strong>${poi.name}</strong><br>人流狀態: ${statusInfo.label}`);
+}
+}
+return busyPOIs;
+}
+
+// ============== 綜合警報函數 ==============
+
+function updateCombinedAlert(rainStatus, busyPOIs) {
+let combinedMessage = ``;
+let alertType = 'safe';
+let rainText = "";
+let poiText = "";
+let speechText = "";
+
+if (rainStatus.hasRain) {
+rainText = `🔴 **天氣警報**：路線上有 ${rainStatus.count} 處預計有雨！<br>(最高雨量: ${rainStatus.maxRain} mm/hr)`;
+alertType = 'rain';
+speechText += "注意，路線上有降雨預報。";
+} else {
+rainText = `🟢 **天氣安全**：預計沿途沒有降雨。`;
+}
+
+if (busyPOIs.length > 0) {
+const names = busyPOIs.map(p => p.name).join('、');
+poiText = `⚠️ **人流警報**：路線附近有 ${busyPOIs.length} 個繁忙/偏多地點：${names}。`;
+if (alertType !== 'rain') alertType = 'busy';
+speechText += `請留意路線附近 ${names} 的人流情況。`;
+} else {
+poiText = `✅ **人流安全**：路線附近沒有特別繁忙的地點。`;
+}
+
+combinedMessage = `${rainText}<br><br>${poiText}`;
+setAlert(combinedMessage, alertType);
+
+lastSpeechText = speechText || "路線安全，沒有天氣或人流警報。";
+
+// 嘗試自動播放
+const finalSpeech = new SpeechSynthesisUtterance(lastSpeechText);
+finalSpeech.lang = "zh-HK";
+speechSynthesis.speak(finalSpeech);
+}
+</script>
+</body>
+</html>
