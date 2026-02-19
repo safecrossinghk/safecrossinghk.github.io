@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新春冷知識大比拼</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+
+body {
+font-family: 'Noto Sans TC', sans-serif;
+background-color: #8b0000;
+background-image: radial-gradient(#af0000 1px, transparent 1px);
+background-size: 20px 20px;
+min-height: 100vh;
+display: flex;
+align-items: center;
+justify-content: center;
+margin: 0;
+color: #333;
+}
+
+.glass-card {
+background: rgba(255, 255, 255, 0.95);
+backdrop-filter: blur(10px);
+border-radius: 2rem;
+box-shadow: 0 20px 50px rgba(0,0,0,0.3), 0 0 0 10px rgba(255, 215, 0, 0.3);
+border: 4px solid #ffd700;
+}
+
+.btn-option {
+transition: all 0.2s ease;
+border: 2px solid #e5e7eb;
+}
+
+.btn-option:hover:not(:disabled) {
+background-color: #fffbeb;
+border-color: #fbbf24;
+transform: translateY(-2px);
+}
+
+.correct {
+background-color: #10b981 !important;
+color: white !important;
+border-color: #059669 !important;
+}
+
+.wrong {
+background-color: #ef4444 !important;
+color: white !important;
+border-color: #dc2626 !important;
+}
+
+.timer-bar {
+transition: width 0.1s linear;
+}
+
+@keyframes bounce-subtle {
+0%, 100% { transform: translateY(0); }
+50% { transform: translateY(-5px); }
+}
+
+.animate-bounce-subtle {
+animation: bounce-subtle 2s infinite ease-in-out;
+}
+</style>
+</head>
+<body>
+
+<div id="game-container" class="w-full max-w-2xl px-4 py-8">
+<!-- 開始畫面 -->
+<div id="start-screen" class="glass-card p-8 text-center">
+<h1 class="text-4xl md:text-5xl font-bold text-red-700 mb-4">🧧 新春冷知識大比拼</h1>
+<p class="text-lg text-gray-600 mb-8">考考你對農曆新年的了解程度！<br>每題有 15 秒思考時間，準備好了嗎？</p>
+<button onclick="startGame()" class="bg-red-600 hover:bg-red-700 text-white text-xl font-bold py-4 px-12 rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95">
+開始挑戰 🧨
+</button>
+</div>
+
+<!-- 遊戲主體 -->
+<div id="quiz-screen" class="glass-card p-6 md:p-8 hidden">
+<div class="flex justify-between items-center mb-6">
+<div class="text-xl font-bold text-red-700">得分: <span id="score">0</span></div>
+<div class="text-gray-500 font-medium">第 <span id="question-num">1</span> / <span id="total-questions">10</span> 題</div>
+</div>
+
+<!-- 計時條 -->
+<div class="w-full bg-gray-200 h-3 rounded-full mb-8 overflow-hidden">
+<div id="timer-bar" class="timer-bar bg-yellow-500 h-full w-full"></div>
+</div>
+
+<div id="question-text" class="text-2xl font-bold text-gray-800 mb-8 text-center leading-relaxed">
+載入中...
+</div>
+
+<div id="options-container" class="grid grid-cols-1 gap-4">
+<!-- 選項會動態產生 -->
+</div>
+
+<div id="feedback" class="mt-6 text-center font-bold text-xl min-h-[1.5rem]"></div>
+</div>
+
+<!-- 結束畫面 -->
+<div id="result-screen" class="glass-card p-8 text-center hidden">
+<h2 class="text-3xl font-bold text-gray-800 mb-4">挑戰結束！</h2>
+<div id="final-score-container" class="mb-8">
+<span class="text-6xl font-black text-red-600" id="final-score">0</span>
+<p class="text-gray-500 mt-2 text-xl">總分</p>
+</div>
+<div id="evaluation" class="text-2xl font-bold text-yellow-600 mb-8"></div>
+<button onclick="resetGame()" class="bg-yellow-500 hover:bg-yellow-600 text-white text-xl font-bold py-4 px-12 rounded-full shadow-lg transition-transform hover:scale-105">
+再玩一次 🔄
+</button>
+</div>
+</div>
+
+<script>
+const questions = [
+{ q: "「壓歲錢」最初的用途是為了嚇跑哪一種妖怪？", a: ["夕", "祟 (Suì)", "年獸", "饕餮"], correct: 1 },
+{ q: "正月初一為什麼不能掃地？", a: ["會把財氣掃走", "這天掃帚會休息", "掃地會驚動地神", "會讓灰塵飛進紅包"], correct: 0 },
+{ q: "過年吃餃子，是因為餃子的形狀長得像什麼？", a: ["錢袋", "元寶", "耳朵", "月亮"], correct: 1 },
+{ q: "下列哪一個地方在過年時會吃「年糕」？", a: ["只有北方", "只有南方", "東南西北大部分地區都會", "只有皇宮"], correct: 2 },
+{ q: "「福」字倒貼的習俗，是取其什麼諧音？", a: ["福氣到了", "福氣掉了", "福氣翻倍", "福氣很大"], correct: 0 },
+{ q: "傳說中，年獸最害怕哪一種顏色？", a: ["金色", "黑色", "白色", "紅色"], correct: 3 },
+{ q: "大年初二通常是什麼日子？", a: ["回娘家", "接財神", "開工日", "祭灶節"], correct: 0 },
+{ q: "「爆竹聲中一歲除」，古人最初燒竹子是為了？", a: ["慶祝豐收", "煮飯", "驅趕瘟神與野獸", "照明"], correct: 2 },
+{ q: "廣東地區過年喜歡擺放「金桔」，象徵什麼？", a: ["大吉大利", "早生貴子", "年年有餘", "步步高升"], correct: 0 },
+{ q: "除夕夜守歲，主要是為了祈求誰長壽？", a: ["自己", "寵物", "父母長輩", "老師"], correct: 2 }
+];
+
+let currentQuestionIndex = 0;
+let score = 0;
+let timer;
+let timeLeft;
+const totalTime = 15; // 每題15秒
+
+function startGame() {
+document.getElementById('start-screen').classList.add('hidden');
+document.getElementById('quiz-screen').classList.remove('hidden');
+document.getElementById('total-questions').innerText = questions.length;
+score = 0;
+currentQuestionIndex = 0;
+updateScoreDisplay();
+showQuestion();
+}
+
+function showQuestion() {
+const question = questions[currentQuestionIndex];
+document.getElementById('question-num').innerText = currentQuestionIndex + 1;
+document.getElementById('question-text').innerText = question.q;
+document.getElementById('feedback').innerText = "";
+
+const container = document.getElementById('options-container');
+container.innerHTML = "";
+
+question.a.forEach((option, index) => {
+const btn = document.createElement('button');
+btn.className = "btn-option bg-white text-gray-700 py-4 px-6 rounded-xl text-lg font-medium text-left";
+btn.innerText = option;
+btn.onclick = () => selectOption(index);
+container.appendChild(btn);
+});
+
+startTimer();
+}
+
+function startTimer() {
+clearInterval(timer);
+timeLeft = totalTime;
+const bar = document.getElementById('timer-bar');
+bar.style.width = "100%";
+bar.classList.replace('bg-red-500', 'bg-yellow-500');
+
+timer = setInterval(() => {
+timeLeft -= 0.1;
+const percentage = (timeLeft / totalTime) * 100;
+bar.style.width = percentage + "%";
+
+if (percentage < 30) {
+bar.classList.replace('bg-yellow-500', 'bg-red-500');
+}
+
+if (timeLeft <= 0) {
+clearInterval(timer);
+autoWrong();
+}
+}, 100);
+}
+
+function selectOption(index) {
+clearInterval(timer);
+const question = questions[currentQuestionIndex];
+const buttons = document.querySelectorAll('.btn-option');
+
+// 停用所有按鈕
+buttons.forEach(btn => btn.disabled = true);
+
+if (index === question.correct) {
+buttons[index].classList.add('correct');
+score += 10;
+updateScoreDisplay();
+document.getElementById('feedback').innerText = "✅ 太棒了！答對囉！";
+document.getElementById('feedback').className = "mt-6 text-center font-bold text-xl text-green-600";
+} else {
+buttons[index].classList.add('wrong');
+buttons[question.correct].classList.add('correct');
+document.getElementById('feedback').innerText = "❌ 哎呀，答錯了！";
+document.getElementById('feedback').className = "mt-6 text-center font-bold text-xl text-red-600";
+}
+
+setTimeout(nextQuestion, 1500);
+}
+
+function autoWrong() {
+const question = questions[currentQuestionIndex];
+const buttons = document.querySelectorAll('.btn-option');
+buttons.forEach(btn => btn.disabled = true);
+buttons[question.correct].classList.add('correct');
+document.getElementById('feedback').innerText = "⏰ 時間到！加油喔！";
+document.getElementById('feedback').className = "mt-6 text-center font-bold text-xl text-orange-500";
+setTimeout(nextQuestion, 1500);
+}
+
+function nextQuestion() {
+currentQuestionIndex++;
+if (currentQuestionIndex < questions.length) {
+showQuestion();
+} else {
+showResults();
+}
+}
+
+function updateScoreDisplay() {
+document.getElementById('score').innerText = score;
+}
+
+function showResults() {
+document.getElementById('quiz-screen').classList.add('hidden');
+document.getElementById('result-screen').classList.remove('hidden');
+document.getElementById('final-score').innerText = score;
+
+let evalText = "";
+if (score === 100) evalText = "🏆 萬事如意！你是新春冷知識達人！";
+else if (score >= 70) evalText = "🧧 恭喜發財！你對過年習俗很了解喔！";
+else if (score >= 40) evalText = "🍊 大吉大利！繼續努力了解傳統文化吧！";
+else evalText = "🧨 歲歲平安！回家多跟長輩聊天領紅包學知識！";
+
+document.getElementById('evaluation').innerText = evalText;
+}
+
+function resetGame() {
+document.getElementById('result-screen').classList.add('hidden');
+startGame();
+}
+</script>
+</body>
+</html>
