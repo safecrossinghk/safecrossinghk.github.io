@@ -1,21 +1,76 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="theme-color" content="#f0f8ff">
 <title>🌧️ 香港降雨預報</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
 <style>
-body { font-family: "Helvetica Neue", sans-serif; margin: 0; padding: 0; background: #f0f8ff; color: #333; text-align: center; }
-h1 { font-size: 1.4em; margin: 1em 0 0.5em; }
-#map { height: 300px; margin: 0 10px; border-radius: 8px; border: 1px solid #ccc; }
-#ai-forecast { margin: 1em; padding: 1em; border: 2px solid #0077cc; border-radius: 8px; background: #fff; text-align: left; }
-#rain-alert { margin: 1em; font-size: 1.2em; font-weight: bold; line-height: 1.8em; white-space: pre-line; }
-#footer-text { margin: 1.5em; font-size: 0.9em; color: #555; line-height: 1.6em; }
-.promptBox { position: fixed; bottom: 20px; left: 10%; right: 10%; background: #fff3cd; color: #333; border: 1px solid #ffeeba; padding: 15px; border-radius: 10px; font-size: 0.95em; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 9999; }
-.promptBox button { margin-top: 10px; padding: 6px 12px; background: #0077cc; color: white; border: none; border-radius: 5px; }
+body {
+font-family: "Helvetica Neue", sans-serif;
+margin: 0;
+padding: 0;
+background: #f0f8ff;
+color: #333;
+text-align: center;
+}
+h1 {
+font-size: 1.4em;
+margin: 1em 0 0.5em;
+}
+#map {
+height: 300px;
+margin: 0 10px;
+border-radius: 8px;
+border: 1px solid #ccc;
+}
+#ai-forecast {
+margin: 1em;
+padding: 1em;
+border: 2px solid #0077cc;
+border-radius: 8px;
+background: #fff;
+text-align: left;
+}
+#rain-alert {
+margin: 1em;
+font-size: 1.2em;
+font-weight: bold;
+line-height: 1.8em;
+white-space: pre-line;
+}
+#footer-text {
+margin: 1.5em;
+font-size: 0.9em;
+color: #555;
+line-height: 1.6em;
+}
+.promptBox {
+position: fixed;
+bottom: 20px;
+left: 10%;
+right: 10%;
+background: #fff3cd;
+color: #333;
+border: 1px solid #ffeeba;
+padding: 15px;
+border-radius: 10px;
+font-size: 0.95em;
+box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+z-index: 9999;
+}
+.promptBox button {
+margin-top: 10px;
+padding: 6px 12px;
+background: #0077cc;
+color: white;
+border: none;
+border-radius: 5px;
+}
 </style>
+
 <!-- 🔔 PWA 設定 -->
 <link rel="manifest" href="/manifest.json">
 <meta name="apple-mobile-web-app-capable" content="no">
@@ -23,116 +78,28 @@ h1 { font-size: 1.4em; margin: 1em 0 0.5em; }
 <meta name="apple-mobile-web-app-title" content="香港降雨預報">
 
 <!-- 🔔 OneSignal SDK -->
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" async></script>
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
 <script>
-// ===================================================
-// 📍【修改】Worker URL 變數（用於註冊和測試推播）
-// ===================================================
-const workerUrl = 'https://crowdtest8r.ctakwah.workers.dev/';
-
-window.OneSignalDeferred = window.OneSignalDeferred || [];
-OneSignalDeferred.push(async function(OneSignal) {
-// ✅ 初始化 OneSignal
-await OneSignal.init({
-appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // 你的 App ID
-safari_web_id: "🔑 換成你的 Safari Web ID", // 請替換
-notifyButton: { enable: true },
-allowLocalhostAsSecureOrigin: true
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98", // ✅ 換成你的 App ID
+safari_web_id: "🔑 換成你的 Safari Web ID"
 });
-
-console.log("✅ OneSignal 已初始化");
-
-// ✅ 監聽訂閱變化
-OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
-if (event.to.isSubscribed) {
-const playerId = await OneSignal.User.PushSubscription.id;
-if (playerId) {
-localStorage.setItem("playerId", playerId);
-console.log("✅ Player ID 已儲存：", playerId);
-// 📍【修改】獲取到 ID 後，立即嘗試註冊到 Worker
-attemptRegisterToWorker();
-} else {
-console.warn("⚠️ 無法取得 Player ID（可能 SDK 尚未完成註冊）");
-}
-} else {
-console.warn("❌ 尚未訂閱通知");
-// 📍【修改】用戶取消訂閱，清除 playerId
-localStorage.removeItem("playerId");
-}
 });
-
-// ✅ 初始化後立即嘗試取得 Player ID
-try {
-const currentId = await OneSignal.User.PushSubscription.id;
-if (currentId) {
-localStorage.setItem("playerId", currentId);
-console.log("✅ 現有 Player ID：", currentId);
-// 📍【修改】獲取到 ID 後，立即嘗試註冊到 Worker
-attemptRegisterToWorker();
-} else {
-console.log("ℹ️ 尚未訂閱或 Player ID 尚未產生");
-}
-} catch (err) {
-console.error("❌ 取得 Player ID 時發生錯誤：", err);
-}
-});
-
-// ===================================================
-// 📍【新增】核心註冊函數
-// ===================================================
-/**
-* 嘗試將 Player ID 和位置註冊到 Cloudflare Worker
-* 檢查 localStorage 中是否同時存在 playerId, userLat, userLon
-* 如果三者都存在，就發送 POST 請求到 /registerLocation
-*/
-async function attemptRegisterToWorker() {
-const playerId = localStorage.getItem("playerId");
-const lat = localStorage.getItem("userLat");
-const lon = localStorage.getItem("userLon");
-
-// 必須同時擁有三項資料
-if (!playerId || !lat || !lon) {
-console.log("ℹ️ 註冊資料不完整，等待中...", { playerId: !!playerId, lat: !!lat, lon: !!lon });
-return; // 缺少任何一項資料，都暫不註冊
-}
-
-console.log(`✅ 註冊資料齊全，正在發送到 Worker...`, { playerId, lat, lon });
-
-try {
-const response = await fetch(workerUrl + "registerLocation", {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-playerId: playerId,
-lat: parseFloat(lat), // 確保為數字
-lon: parseFloat(lon) // 確保為數字
-})
-});
-
-const result = await response.json();
-
-if (response.ok && result.success) {
-console.log("🎉 成功！Worker 已更新您的 Player ID 和位置。", result);
-// 你可以取消下面這行的註解，來測試 /sendPush 端點
-// sendPush();
-} else {
-console.error("❌ Worker 註冊失敗：", result.error || JSON.stringify(result));
-}
-} catch (err) {
-console.error("❌ 呼叫 /registerLocation 時發生網路錯誤：", err);
-}
-}
 </script>
 </head>
 
 <body>
 <h1>🌂 香港降雨預報</h1>
 <div id="map"></div>
+
 <!-- AI 超前預測 -->
 <div id="ai-forecast">
 <strong>🧠 AI 超前預測</strong>
 <div id="rainMsg">⏳ 正在載入...</div>
 </div>
+
 <div id="rain-alert">⏳ 正在讀取預報資料...</div>
 
 <!-- 全裝置共用提示框 -->
@@ -142,6 +109,7 @@ console.error("❌ 呼叫 /registerLocation 時發生網路錯誤：", err);
 <button id="subscribeBtn">訂閱通知</button>
 <button id="closeCustomBtn">稍後再說</button>
 </div>
+
 <!-- iOS 專屬提示框 -->
 <div id="iosPrompt" class="promptBox" style="display:none;">
 📱 如果你用 iPhone / iPad：<br>
@@ -152,16 +120,26 @@ console.error("❌ 呼叫 /registerLocation 時發生網路錯誤：", err);
 
 <!-- 文末三句 -->
 <div id="footer-text">
-<p style="text-align: left; margin-bottom: 1.5em;">本網站提供香港未來最多三小時內定點的降雨預報，用戶可即時得知身處地點的降雨情況。</p>
-<p style="text-align: left; margin-bottom: 1.5em;">資料來源：香港天文台 / Tomorrow.io (AI 超前預測)</p>
-<p style="text-align: left; margin-bottom: 1.5em;">- 用戶請先允許定位服務</p>
-<p style="text-align: left; margin-bottom: 1.5em;">- 預報在某些情況可能會出現誤差</p>
-<p style="text-align: left; margin-bottom: 1.5em;">網站功能將不斷更新，敬請留意</p>
+<p style="text-align: left; margin-bottom: 1.5em;">
+本網站提供香港未來最多三小時內定點的降雨預測，用戶可即時得知身處地點的降雨情況。
+</p>
+<p style="text-align: left; margin-bottom: 1.5em;">
+資料來源：香港天文台 / Tomorrow.io (AI 超前預測)
+</p>
+<p style="text-align: left; margin-bottom: 1.5em;">
+- 用戶請先允許定位服務
+</p>
+<p style="text-align: left; margin-bottom: 1.5em;">
+- 預報在某些情況可能會出現誤差
+</p>
+<p style="text-align: left; margin-bottom: 1.5em;">
+網站功能將不斷更新，敬請留意
+</p>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-// const workerUrl = '...'; // 已移到 <head> 中
+const workerUrl = 'https://crowdtest8.ctakwah.workers.dev/';
 const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
 
 const map = L.map('map').setView([22.3, 114.2], 11);
@@ -170,7 +148,7 @@ attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
 let marker;
-let rainStatus = 0;
+let rainStatus = 0; // 0 = 無雨，1 = 已推送過
 
 function setMarker(lat, lon) {
 if (marker) map.removeLayer(marker);
@@ -186,11 +164,11 @@ const alertDiv = document.getElementById('rain-alert');
 console.log("API 回傳資料：", data);
 
 if (data && typeof data.immediateRain === "number") {
-if (data.immediateRain >= 0.01) {
+if (data.immediateRain > 0.5) {
 alertDiv.innerText = `⚠️ 即時預報：你所在的位置將會有雨`;
 if (rainStatus === 0) {
 speak("⚠️ 你所在的位置將會有雨");
-// sendPush(); // 註：這裡的 sendPush 是前端觸發的，不是自動推播
+sendPush();
 rainStatus = 1;
 }
 } else {
@@ -200,7 +178,8 @@ rainStatus = 0;
 } else {
 alertDiv.innerText = "⚠️ 系統繁忙，請稍後再試";
 }
-}).catch(err => {
+})
+.catch(err => {
 console.error("讀取預報錯誤", err);
 document.getElementById('rain-alert').innerText = "⚠️ 系統繁忙，請稍後再試";
 });
@@ -251,7 +230,8 @@ break;
 }
 }
 document.getElementById("rainMsg").innerText = msg;
-}).catch(() => document.getElementById("rainMsg").innerText = "⚠️ 系統繁忙，請稍後再試");
+})
+.catch(() => document.getElementById("rainMsg").innerText = "⚠️ 系統繁忙，請稍後再試");
 }
 
 function speak(text) {
@@ -260,25 +240,28 @@ msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
 }
 
-// ✅ 推播（經 Worker）
+// 真正推播 (REST API)
 function sendPush() {
-const playerId = localStorage.getItem("playerId") || "";
-if (!playerId) {
-console.warn("⚠️ 缺少 Player ID，無法發送測試推播");
-return;
-}
-fetch(workerUrl + "sendPush", {
+const REST_API_KEY = "os_v2_app_rabedtomivecbnpmuerwwdr6tciiske3mk5ez3mancrg7qmdy275ruzqq3c623gckamggtnnaqow5hyvghfdfbhhcbq2llehcl6jwki"; // ⚠️ 換成 OneSignal 的 REST API Key
+
+fetch("https://onesignal.com/api/v1/notifications", {
 method: "POST",
-headers: { "Content-Type": "application/json" },
+headers: {
+"Content-Type": "application/json; charset=utf-8",
+"Authorization": "Basic " + REST_API_KEY
+},
 body: JSON.stringify({
-title: "⚠️ 降雨提示 (測試)",
-message: "你所在的位置將會有雨",
-playerId: playerId,
-url: location.href
+app_id: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+included_segments: ["Subscribed Users"],
+headings: { "en": "⚠️ 降雨提示" },
+contents: { "en": "你所在的位置將會有雨" },
+url: "https://safecrossinghk.github.io",
+large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
 })
-}).then(res => res.json())
-.then(response => console.log("✅ Worker 已觸發推播", response))
-.catch(err => console.error("❌ Worker 推播失敗", err));
+})
+.then(res => res.json())
+.then(response => console.log("✅ 推播已送出", response))
+.catch(err => console.error("❌ 推播失敗", err));
 }
 
 // 定位初始化
@@ -286,47 +269,32 @@ function initLocation() {
 if (!navigator.geolocation) {
 alert("此瀏覽器不支援定位功能");
 const fallbackLat = 22.3, fallbackLon = 114.2;
-
-// 📍【修改】儲存預設位置並嘗試註冊
-localStorage.setItem("userLat", fallbackLat);
-localStorage.setItem("userLon", fallbackLon);
-attemptRegisterToWorker();
-
 map.setView([fallbackLat, fallbackLon], 11);
 setMarker(fallbackLat, fallbackLon);
 fetchForecast(fallbackLat, fallbackLon);
 fetchTomorrowAI(fallbackLat, fallbackLon);
 return;
 }
-
-navigator.geolocation.getCurrentPosition(pos => {
+navigator.geolocation.getCurrentPosition(
+pos => {
 const lat = pos.coords.latitude;
 const lon = pos.coords.longitude;
 console.log("✅ 取得定位：", lat, lon);
-
-// 📍【修改】儲存位置並嘗試註冊
-localStorage.setItem("userLat", lat.toString());
-localStorage.setItem("userLon", lon.toString());
-attemptRegisterToWorker();
-
 map.setView([lat, lon], 13);
 setMarker(lat, lon);
 fetchForecast(lat, lon);
 fetchTomorrowAI(lat, lon);
-}, err => {
+},
+err => {
 console.warn("⚠️ 定位失敗，使用預設位置");
 const fallbackLat = 22.3, fallbackLon = 114.2;
-
-// 📍【修改】儲存預設位置並嘗試註冊
-localStorage.setItem("userLat", fallbackLat.toString());
-localStorage.setItem("userLon", fallbackLon.toString());
-attemptRegisterToWorker();
-
 map.setView([fallbackLat, fallbackLon], 11);
 setMarker(fallbackLat, fallbackLon);
 fetchForecast(fallbackLat, fallbackLon);
 fetchTomorrowAI(fallbackLat, fallbackLon);
-}, { enableHighAccuracy: true });
+},
+{ enableHighAccuracy: true }
+);
 }
 
 // iOS 提示框只顯示一次
@@ -350,10 +318,10 @@ document.getElementById("customPrompt").style.display = "block";
 
 document.getElementById("subscribeBtn").onclick = function() {
 OneSignal.push(function() {
-OneSignal.showNativePrompt(); // 🔔 系統級訂閱提示
+OneSignal.showNativePrompt(); // 🔔 觸發 OneSignal 系統級提示框
 });
 document.getElementById("customPrompt").style.display = "none";
-localStorage.setItem("subscribedToRainAlert", "1");
+localStorage.setItem("subscribedToRainAlert", "1"); // ✅ 記錄已訂閱
 };
 
 document.getElementById("closeCustomBtn").onclick = function() {
@@ -361,7 +329,6 @@ document.getElementById("customPrompt").style.display = "none";
 };
 }
 
-// 啟動程序
 initLocation();
 showIosPromptOnce();
 showCustomPrompt();
