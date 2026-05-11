@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>極速外送模擬器</title>
+<style>
+body { text-align: center; background: #eee; font-family: sans-serif; }
+canvas { background: #fff; border: 2px solid #333; display: block; margin: 10px auto; }
+#ui { font-size: 20px; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="ui">
+時間: <span id="time">60</span>s | 得分: <span id="score">0</span><br>
+目標: <span id="target">載入中...</span>
+</div>
+<canvas id="gameCanvas" width="400" height="400"></canvas>
+<p>使用方向鍵或 WASD 移動藍色方塊</p>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const locations = ["深水埗麥當勞", "荔枝角大廈", "長沙灣廣場", "美孚新邨"];
+
+let player = { x: 200, y: 200, size: 20, score: 0 };
+let goal = { x: 50, y: 50, isRestaurant: true, name: "" };
+let timeLeft = 60;
+let keys = {};
+
+function initGoal() {
+goal.x = Math.random() * (canvas.width - 20);
+goal.y = Math.random() * (canvas.height - 20);
+goal.name = locations[Math.floor(Math.random() * locations.length)];
+document.getElementById('target').innerText = (goal.isRestaurant ? "前往餐廳: " : "送到目的地: ") + goal.name;
+}
+
+window.addEventListener('keydown', e => keys[e.key] = true);
+window.addEventListener('keyup', e => keys[e.key] = false);
+
+function update() {
+if (timeLeft <= 0) return;
+if (keys['ArrowUp'] || keys['w']) player.y -= 3;
+if (keys['ArrowDown'] || keys['s']) player.y += 3;
+if (keys['ArrowLeft'] || keys['a']) player.x -= 3;
+if (keys['ArrowRight'] || keys['d']) player.x += 3;
+
+let dx = player.x - goal.x;
+let dy = player.y - goal.y;
+if (Math.sqrt(dx*dx + dy*dy) < 20) {
+if (!goal.isRestaurant) player.score += 100;
+goal.isRestaurant = !goal.isRestaurant;
+initGoal();
+}
+}
+
+function draw() {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+ctx.fillStyle = 'blue'; ctx.fillRect(player.x, player.y, player.size, player.size);
+ctx.fillStyle = goal.isRestaurant ? 'red' : 'green';
+ctx.beginPath(); ctx.arc(goal.x, goal.y, 10, 0, Math.PI*2); ctx.fill();
+}
+
+setInterval(() => { if(timeLeft > 0) timeLeft--; document.getElementById('time').innerText = timeLeft; }, 1000);
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+initGoal(); loop();
+</script>
+</body>
+</html>
