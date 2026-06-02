@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0f1e" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>香港降雨預報 3D</title>
+<link rel="manifest" href="manifest.json" />
+
+<!-- Three.js r128 via CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- OneSignal SDK -->
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+
+<style>
+  :root {
+    --bg:        #0a0f1e;
+    --panel:     rgba(10,20,45,0.82);
+    --border:    rgba(80,160,255,0.25);
+    --accent:    #38bdf8;
+    --accent2:   #f472b6;
+    --warn:      #fb923c;
+    --text:      #e2e8f0;
+    --muted:     #94a3b8;
+    --radius:    14px;
+    --blur:      blur(18px);
+    --font:      'SF Pro Display', 'PingFang HK', 'Noto Sans HK', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── 3D Canvas layer ── */
+  #map3d {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+  #map3d canvas { display: block; width: 100% !important; height: 100% !important; }
+
+  /* ── UI overlay ── */
+  #ui-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 16px);
+    gap: 10px;
+  }
+
+  /* header bar */
+  #header {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+  }
+  #header .logo {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  #header h1 { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; }
+  #header .subtitle { font-size: 11px; color: var(--muted); }
+  #location-badge {
+    margin-left: auto;
+    font-size: 11px; color: var(--accent);
+    background: rgba(56,189,248,0.1);
+    border: 1px solid rgba(56,189,248,0.3);
+    border-radius: 20px;
+    padding: 3px 10px;
+    white-space: nowrap;
+  }
+
+  /* status row */
+  #status-row {
+    pointer-events: auto;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .stat-card {
+    flex: 1; min-width: 90px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+  .stat-card .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat-card .value { font-size: 20px; font-weight: 800; margin-top: 2px; }
+  .stat-card .unit  { font-size: 10px; color: var(--muted); }
+  .rain-color   { color: var(--accent); }
+  .temp-color   { color: #fbbf24; }
+  .wind-color   { color: #a78bfa; }
+  .humid-color  { color: #34d399; }
+
+  /* HKO warning signal */
+  #signal-bar {
+    pointer-events: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-radius: var(--radius);
+    padding: 8px 14px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px;
+    display: none;
+  }
+  #signal-bar .sig-icon { font-size: 20px; }
+  #signal-bar .sig-text { flex: 1; }
+  #signal-bar.active { display: flex; border-color: rgba(251,146,60,0.5); }
+
+  /* AI panel */
+  #ai-panel {
+    pointer-events: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    flex: 1;
+    overflow-y: auto;
+    max-height: 220px;
+  }
+  #ai-panel .ai-title {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700;
+    color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+  #ai-panel .ai-title .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+  #ai-forecast { font-size: 13px; line-height: 1.65; color: var(--text); }
+  #ai-forecast .hour-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  #ai-forecast .hour-row:last-child { border-bottom: none; }
+  #ai-forecast .hour-time { width: 38px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #ai-forecast .hour-bar-wrap { flex: 1; height: 6px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
+  #ai-forecast .hour-bar { height: 100%; border-radius: 3px; transition: width .8s ease; }
+  #ai-forecast .hour-val { width: 40px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
+
+  /* bottom row */
+  #bottom-row {
+    pointer-events: auto;
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    flex: 1;
+    background: rgba(56,189,248,0.12);
+    border: 1px solid rgba(56,189,248,0.35);
+    color: var(--accent);
+    border-radius: 10px;
+    padding: 9px 6px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    transition: background .2s, transform .15s;
+    text-align: center;
+  }
+  .btn:active { transform: scale(.96); background: rgba(56,189,248,0.22); }
+  .btn-warn {
+    background: rgba(251,146,60,0.12);
+    border-color: rgba(251,146,60,0.35);
+    color: var(--warn);
+  }
+
+  /* PWA install prompt */
+  #pwa-prompt {
+    pointer-events: auto;
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom,0px) + 80px);
+    left: 50%; transform: translateX(-50%);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    max-width: 340px; width: calc(100% - 32px);
+    z-index: 100;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+  #pwa-prompt.show { display: flex; }
+  #pwa-prompt .pwa-icon { font-size: 28px; }
+  #pwa-prompt .pwa-text { flex: 1; font-size: 13px; line-height: 1.5; }
+  #pwa-prompt .pwa-text strong { color: var(--accent); display: block; margin-bottom: 2px; }
+  #pwa-prompt-close { font-size: 18px; color: var(--muted); cursor: pointer; padding: 4px; }
+
+  /* iOS install prompt */
+  #ios-prompt {
+    pointer-events: auto;
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom,0px) + 80px);
+    left: 50%; transform: translateX(-50%);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 340px; width: calc(100% - 32px);
+    z-index: 100;
+    font-size: 13px; line-height: 1.6;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+  #ios-prompt.show { display: flex; }
+  #ios-prompt .ios-close { align-self: flex-end; color: var(--muted); cursor: pointer; font-size: 18px; }
+
+  /* loading overlay */
+  #loading {
+    position: fixed; inset: 0; z-index: 999;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px;
+    transition: opacity .6s ease;
+  }
+  #loading.fade { opacity: 0; pointer-events: none; }
+  #loading .load-logo { font-size: 48px; }
+  #loading .load-title { font-size: 20px; font-weight: 800; }
+  #loading .load-sub { font-size: 13px; color: var(--muted); }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(56,189,248,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* rain signal indicator (bottom-right corner) */
+  #rain-indicator {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom,0px) + 16px);
+    right: 16px;
+    z-index: 20;
+    pointer-events: none;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  #rain-intensity-label {
+    font-size: 10px; color: var(--accent);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 20px; padding: 2px 8px;
+    backdrop-filter: var(--blur);
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading">
+  <div class="load-logo">🌧️</div>
+  <div class="load-title">香港降雨預報 3D</div>
+  <div class="load-sub">正在載入城市場景⋯</div>
+  <div class="spinner"></div>
+</div>
+
+<!-- 3D Map container -->
+<div id="map3d"></div>
+
+<!-- UI overlay -->
+<div id="ui-layer">
+
+  <!-- Header -->
+  <div id="header">
+    <div class="logo">🌧</div>
+    <div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <h1>香港降雨預報</h1>
+        <span style="font-size:9px;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:800;letter-spacing:.06em;">3D</span>
+      </div>
+      <div class="subtitle">HKO × Tomorrow.io × Three.js</div>
+    </div>
+    <div id="location-badge">📍 定位中...</div>
+  </div>
+
+  <!-- Stats row -->
+  <div id="status-row">
+    <div class="stat-card">
+      <div class="label">雨量</div>
+      <div class="value rain-color" id="stat-rain">–</div>
+      <div class="unit">mm/hr</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">氣溫</div>
+      <div class="value temp-color" id="stat-temp">–</div>
+      <div class="unit">°C</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">風速</div>
+      <div class="value wind-color" id="stat-wind">–</div>
+      <div class="unit">km/h</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">濕度</div>
+      <div class="value humid-color" id="stat-humid">–</div>
+      <div class="unit">%</div>
+    </div>
+  </div>
+
+  <!-- HKO signal bar -->
+  <div id="signal-bar">
+    <div class="sig-icon" id="signal-icon">⚠️</div>
+    <div class="sig-text" id="signal-text">天文台警告</div>
+  </div>
+
+  <!-- AI forecast panel -->
+  <div id="ai-panel">
+    <div class="ai-title">
+      <div class="dot"></div>
+      AI 超前預測（未來 6 小時）
+    </div>
+    <div id="ai-forecast">
+      <div style="color:var(--muted);font-size:12px;">正在獲取預測數據⋯</div>
+    </div>
+  </div>
+
+  <!-- Bottom buttons -->
+  <div id="bottom-row">
+    <button class="btn" onclick="speak()">🔊 語音播報</button>
+    <button class="btn btn-warn" onclick="sendPush()">📲 推播通知</button>
+    <button class="btn" onclick="refreshAll()">🔄 刷新</button>
+  </div>
+
+</div>
+
+<!-- Rain intensity label (bottom-right) -->
+<div id="rain-indicator">
+  <div id="rain-intensity-label" style="display:none">雨量: <span id="rain-intensity-val">0</span> mm/hr</div>
+</div>
+
+<!-- PWA Install Prompt -->
+<div id="pwa-prompt">
+  <div class="pwa-icon">📲</div>
+  <div class="pwa-text">
+    <strong>安裝為 App</strong>
+    加到主畫面，享受離線降雨預報
+  </div>
+  <button class="btn" onclick="installPWA()" style="flex:0;padding:7px 12px;font-size:11px;">安裝</button>
+  <span id="pwa-prompt-close" onclick="closePwaPrompt()">✕</span>
+</div>
+
+<!-- iOS Install Prompt -->
+<div id="ios-prompt">
+  <span class="ios-close" onclick="document.getElementById('ios-prompt').classList.remove('show')">✕</span>
+  <strong style="color:var(--accent)">📲 安裝到 iPhone</strong>
+  <span>點擊底部 <strong>分享</strong> 按鈕 → 選擇「<strong>加入主畫面</strong>」</span>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — 請替換以下 API Keys
+   ============================================================ */
+const TOMORROW_API_KEY  = 'Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh';   // Tomorrow.io
+const ONESIGNAL_APP_ID  = '880241cd-cc45-4820-b5ec-a1236b0e3e98';  // OneSignal
+const HKO_BASE          = 'https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc';
+
+/* ============================================================
+   THREE.JS 3D 城市場景
+   ============================================================ */
+let scene, camera, renderer, clock;
+let rainParticles, rainGeometry, rainMaterial;
+let rainIntensity   = 0;   // mm/hr  (由 Tomorrow.io 更新)
+let userMarker      = null;
+let camTargetLat    = 22.3193;
+let camTargetLon    = 114.1694;
+const HK_CENTER_LAT = 22.3193;
+const HK_CENTER_LON = 114.1694;
+const SCALE         = 8000; // 1 地理度 ≈ SCALE 個 Three.js 單位
+
+function latlonToXZ(lat, lon) {
+  const x = (lon - HK_CENTER_LON) * SCALE;
+  const z = -(lat - HK_CENTER_LAT) * SCALE;
+  return { x, z };
+}
+
+function initThree() {
+  const container = document.getElementById('map3d');
+
+  // Scene
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0f1e);
+  scene.fog = new THREE.FogExp2(0x0a0f1e, 0.003);
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.5, 3000);
+  camera.position.set(0, 180, 280);
+  camera.lookAt(0, 0, 0);
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+
+  clock = new THREE.Clock();
+
+  // Lights
+  const ambient = new THREE.AmbientLight(0x223355, 1.2);
+  scene.add(ambient);
+
+  const dirLight = new THREE.DirectionalLight(0x88bbff, 1.6);
+  dirLight.position.set(200, 400, 200);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(2048, 2048);
+  scene.add(dirLight);
+
+  const pointLight = new THREE.PointLight(0x38bdf8, 2.5, 600);
+  pointLight.position.set(0, 250, 0);
+  scene.add(pointLight);
+
+  // Ground plane
+  const groundGeo  = new THREE.PlaneGeometry(2000, 2000, 60, 60);
+  const groundMat  = new THREE.MeshLambertMaterial({ color: 0x0d1a2e, wireframe: false });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Grid overlay on ground
+  const gridHelper = new THREE.GridHelper(2000, 80, 0x1a3a5c, 0x112233);
+  gridHelper.position.y = 0.2;
+  scene.add(gridHelper);
+
+  // Generate city blocks (Hong Kong style)
+  generateCityBlocks();
+
+  // Roads
+  generateRoads();
+
+  // Rain system (empty on start)
+  createRainSystem(0);
+
+  // Resize handler
+  window.addEventListener('resize', () => {
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  });
+
+  // Touch/mouse orbit (simple drag)
+  addOrbitControls(container);
+
+  // Animation loop
+  animate();
+}
+
+/* --- City block generation --------------------------------- */
+function generateCityBlocks() {
+  const buildingMats = [
+    new THREE.MeshLambertMaterial({ color: 0x1a2d4a }),
+    new THREE.MeshLambertMaterial({ color: 0x152238 }),
+    new THREE.MeshLambertMaterial({ color: 0x1f3354 }),
+    new THREE.MeshLambertMaterial({ color: 0x243660 }),
+    new THREE.MeshLambertMaterial({ color: 0x0e1c33 }),
+  ];
+  const windowMat = new THREE.MeshLambertMaterial({ color: 0xffd88a, emissive: 0xffd88a, emissiveIntensity: 0.3 });
+
+  // Dense urban core (Kowloon / HK Island style)
+  const clusters = [
+    { cx:0,   cz:0,   count:60, maxW:18, maxH:140, minH:40 },
+    { cx:-90, cz:-50, count:30, maxW:22, maxH:80,  minH:20 },
+    { cx: 90, cz:-50, count:30, maxW:22, maxH:80,  minH:20 },
+    { cx: 30, cz: 80, count:25, maxW:20, maxH:60,  minH:15 },
+    { cx:-60, cz: 90, count:20, maxW:20, maxH:50,  minH:10 },
+    { cx:120, cz: 60, count:20, maxW:16, maxH:60,  minH:12 },
+    { cx:-120,cz: 60, count:20, maxW:16, maxH:60,  minH:12 },
+  ];
+
+  clusters.forEach(cl => {
+    for (let i = 0; i < cl.count; i++) {
+      const w   = 4 + Math.random() * cl.maxW;
+      const d   = 4 + Math.random() * cl.maxW;
+      const h   = cl.minH + Math.random() * (cl.maxH - cl.minH);
+      const bx  = cl.cx + (Math.random() - 0.5) * 160;
+      const bz  = cl.cz + (Math.random() - 0.5) * 160;
+      const geo = new THREE.BoxGeometry(w, h, d);
+      const mat = buildingMats[Math.floor(Math.random() * buildingMats.length)];
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(bx, h / 2, bz);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+
+      // Roof glow (antenna / rooftop)
+      if (h > 70 && Math.random() > 0.5) {
+        const topGeo  = new THREE.BoxGeometry(w * 0.3, 6, d * 0.3);
+        const topMesh = new THREE.Mesh(topGeo, windowMat);
+        topMesh.position.set(bx, h + 3, bz);
+        scene.add(topMesh);
+      }
+
+      // Window rows (simple emissive quads)
+      if (h > 25) {
+        const floors = Math.floor(h / 8);
+        const colW   = Math.max(2, Math.floor(w / 3));
+        for (let f = 1; f < floors; f++) {
+          for (let c = 0; c < colW; c++) {
+            if (Math.random() > 0.35) {
+              const wGeo  = new THREE.PlaneGeometry(1.2, 1.8);
+              const wMesh = new THREE.Mesh(wGeo, windowMat);
+              wMesh.position.set(
+                bx - w / 2 + (c / colW) * w + w / (colW * 2),
+                f * 8 - h / 2,
+                bz + d / 2 + 0.05
+              );
+              scene.add(wMesh);
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function generateRoads() {
+  const roadMat = new THREE.MeshLambertMaterial({ color: 0x0c1929 });
+  // Main arteries
+  const roads = [
+    { x:0,    z:0,   w:8,   d:600 },   // Nathan Rd style N-S
+    { x:0,    z:0,   w:600, d:8   },   // E-W cross
+    { x:60,   z:0,   w:5,   d:600 },
+    { x:-60,  z:0,   w:5,   d:600 },
+    { x:0,    z:60,  w:600, d:5   },
+    { x:0,    z:-60, w:600, d:5   },
+    { x:120,  z:0,   w:4,   d:600 },
+    { x:-120, z:0,   w:4,   d:600 },
+  ];
+  roads.forEach(r => {
+    const geo  = new THREE.BoxGeometry(r.w, 0.3, r.d);
+    const mesh = new THREE.Mesh(geo, roadMat);
+    mesh.position.set(r.x, 0.15, r.z);
+    scene.add(mesh);
+  });
+}
+
+/* --- Rain particle system ---------------------------------- */
+const MAX_RAIN_DROPS = 18000;
+
+function createRainSystem(intensity) {
+  if (rainParticles) {
+    scene.remove(rainParticles);
+    rainGeometry.dispose();
+    rainMaterial.dispose();
+  }
+  const count = Math.floor((intensity / 150) * MAX_RAIN_DROPS);
+  if (count < 10) return;
+
+  rainGeometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count);    // stored in userData
+
+  for (let i = 0; i < count; i++) {
+    positions[i * 3]     = (Math.random() - 0.5) * 1200;
+    positions[i * 3 + 1] = Math.random() * 400 + 50;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 1200;
+    velocities[i] = 60 + Math.random() * 80;
+  }
+  rainGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  rainGeometry.userData = { velocities };
+
+  rainMaterial = new THREE.PointsMaterial({
+    color: 0x88ccff,
+    size: 0.8,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+
+  rainParticles = new THREE.Points(rainGeometry, rainMaterial);
+  scene.add(rainParticles);
+}
+
+function updateRain(delta) {
+  if (!rainParticles) return;
+  const pos = rainGeometry.attributes.position.array;
+  const vel = rainGeometry.userData.velocities;
+  const count = vel.length;
+
+  for (let i = 0; i < count; i++) {
+    pos[i * 3 + 1] -= vel[i] * delta;
+    if (pos[i * 3 + 1] < 0) {
+      pos[i * 3]     = (Math.random() - 0.5) * 1200;
+      pos[i * 3 + 1] = 380 + Math.random() * 80;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 1200;
+    }
+    // slight wind drift
+    pos[i * 3] += 4 * delta;
+  }
+  rainGeometry.attributes.position.needsUpdate = true;
+}
+
+/* --- User location marker ---------------------------------- */
+function placeUserMarker(lat, lon) {
+  if (userMarker) scene.remove(userMarker);
+  const { x, z } = latlonToXZ(lat, lon);
+  const geo  = new THREE.CylinderGeometry(0, 4, 14, 6);
+  const mat  = new THREE.MeshLambertMaterial({ color: 0xf472b6, emissive: 0xf472b6, emissiveIntensity: 0.8 });
+  userMarker = new THREE.Mesh(geo, mat);
+  userMarker.position.set(x, 7, z);
+  scene.add(userMarker);
+
+  // Move camera toward user
+  const targetX = x;
+  const targetZ = z;
+  gsapCameraTo(targetX, targetZ);
+}
+
+/* Simple camera pan (no GSAP dependency) */
+let camAnimActive = false, camAnimTarget = { x: 0, z: 0 }, camAnimProgress = 0;
+function gsapCameraTo(tx, tz) {
+  camAnimTarget = { x: tx, z: tz };
+  camAnimProgress = 0;
+  camAnimActive = true;
+}
+
+/* --- Orbit controls (minimal drag) ------------------------ */
+function addOrbitControls(el) {
+  let dragging = false, lastX = 0, lastY = 0;
+  let theta = 0, phi = 60;
+  let radius = 320;
+
+  function updateCameraPos() {
+    const t = THREE.MathUtils.degToRad(theta);
+    const p = THREE.MathUtils.degToRad(phi);
+    camera.position.x = radius * Math.sin(t) * Math.sin(p) + (camAnimActive ? camAnimTarget.x * .5 : 0);
+    camera.position.y = radius * Math.cos(p);
+    camera.position.z = radius * Math.cos(t) * Math.sin(p) + (camAnimActive ? camAnimTarget.z * .5 : 0);
+    camera.lookAt(0, 30, 0);
+  }
+
+  el.addEventListener('mousedown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX; const dy = e.clientY - lastY;
+    theta -= dx * 0.3; phi = Math.max(10, Math.min(85, phi + dy * 0.3));
+    lastX = e.clientX; lastY = e.clientY;
+    updateCameraPos();
+  });
+  window.addEventListener('mouseup', () => dragging = false);
+
+  el.addEventListener('touchstart', e => { dragging = true; lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; }, { passive: true });
+  window.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const dx = e.touches[0].clientX - lastX; const dy = e.touches[0].clientY - lastY;
+    theta -= dx * 0.3; phi = Math.max(10, Math.min(85, phi + dy * 0.3));
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+    updateCameraPos();
+  }, { passive: true });
+  window.addEventListener('touchend', () => dragging = false);
+
+  el.addEventListener('wheel', e => {
+    radius = Math.max(80, Math.min(700, radius + e.deltaY * 0.5));
+    updateCameraPos();
+  }, { passive: true });
+
+  updateCameraPos();
+}
+
+/* --- Animation loop --------------------------------------- */
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+
+  updateRain(delta);
+
+  // gentle auto-rotate user marker
+  if (userMarker) userMarker.rotation.y += delta * 1.2;
+
+  renderer.render(scene, camera);
+}
+
+/* ============================================================
+   ORIGINAL APP LOGIC
+   ============================================================ */
+let userLat = null, userLon = null;
+let lastSpeechText = '';
+let currentCondition = '–';
+let deferredPrompt = null;
+
+/* PWA install */
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('pwa-prompt').classList.add('show');
+});
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => { deferredPrompt = null; closePwaPrompt(); });
+}
+function closePwaPrompt() {
+  document.getElementById('pwa-prompt').classList.remove('show');
+}
+
+/* iOS prompt */
+function checkIOSInstall() {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone;
+  if (isIOS && !isStandalone) {
+    setTimeout(() => document.getElementById('ios-prompt').classList.add('show'), 3000);
+  }
+}
+
+/* ── OneSignal ── */
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(() => {
+  OneSignal.init({
+    appId: ONESIGNAL_APP_ID,
+    notifyButton: { enable: false },
+    allowLocalhostAsSecureOrigin: true,
+  });
+});
+
+/* ── GPS location ── */
+function initLocation() {
+  if (!navigator.geolocation) {
+    document.getElementById('location-badge').textContent = '📍 不支援定位';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+      document.getElementById('location-badge').textContent =
+        `📍 ${userLat.toFixed(4)}, ${userLon.toFixed(4)}`;
+      placeUserMarker(userLat, userLon);
+      fetchForecast();
+      fetchTomorrowAI();
+    },
+    err => {
+      console.warn('GPS error:', err);
+      document.getElementById('location-badge').textContent = '📍 定位失敗';
+      // Use HK centre as fallback
+      userLat = HK_CENTER_LAT; userLon = HK_CENTER_LON;
+      fetchForecast();
+      fetchTomorrowAI();
+    },
+    { enableHighAccuracy: true, timeout: 12000 }
+  );
+}
+
+/* ── HKO forecast ── */
+async function fetchForecast() {
+  try {
+    const [warningsRes, nineRes] = await Promise.all([
+      fetch(`${HKO_BASE}/warnsum.php?lang=tc`),
+      fetch(`${HKO_BASE}/rhrread.php?lang=tc`),
+    ]);
+    const warnings = await warningsRes.json();
+    const nine = await nineRes.json();
+
+    // Warnings
+    const sigBar = document.getElementById('signal-bar');
+    const warningKeys = Object.keys(warnings);
+    if (warningKeys.length > 0) {
+      const first = warnings[warningKeys[0]];
+      document.getElementById('signal-icon').textContent = '⚠️';
+      document.getElementById('signal-text').textContent = first.name || '天文台警告生效中';
+      sigBar.classList.add('active');
+    } else {
+      sigBar.classList.remove('active');
+    }
+
+    // Rainfall from HKO (current)
+    if (nine && nine.rainfall) {
+      const maxRain = nine.rainfall.data.reduce((m, d) => Math.max(m, parseFloat(d.max) || 0), 0);
+      document.getElementById('stat-rain').textContent = maxRain.toFixed(1);
+      updateRainScene(maxRain);
+    }
+    if (nine && nine.temperature) {
+      const temps = nine.temperature.data;
+      if (temps.length) document.getElementById('stat-temp').textContent = temps[0].value;
+    }
+  } catch (e) {
+    console.error('HKO fetch error:', e);
+  }
+}
+
+/* ── Tomorrow.io AI forecast ── */
+async function fetchTomorrowAI() {
+  if (!userLat || !userLon) return;
+  const lat = userLat, lon = userLon;
+  const url = `https://api.tomorrow.io/v4/timelines?location=${lat},${lon}` +
+    `&fields=rainIntensity,temperature,windSpeed,humidity` +
+    `&timesteps=1h&units=metric&apikey=${TOMORROW_API_KEY}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Tomorrow.io ${res.status}`);
+    const data = await res.json();
+    const intervals = data.data.timelines[0].intervals;
+
+    // current
+    const cur = intervals[0].values;
+    document.getElementById('stat-rain').textContent  = cur.rainIntensity.toFixed(1);
+    document.getElementById('stat-temp').textContent  = cur.temperature.toFixed(1);
+    document.getElementById('stat-wind').textContent  = (cur.windSpeed * 3.6).toFixed(0);
+    document.getElementById('stat-humid').textContent = cur.humidity.toFixed(0);
+
+    updateRainScene(cur.rainIntensity);
+    buildAIPanel(intervals.slice(0, 6));
+
+    // speech condition
+    if      (cur.rainIntensity > 30) currentCondition = '暴雨';
+    else if (cur.rainIntensity > 10) currentCondition = '大雨';
+    else if (cur.rainIntensity > 2)  currentCondition = '中雨';
+    else if (cur.rainIntensity > 0)  currentCondition = '小雨';
+    else                              currentCondition = '無雨';
+  } catch (e) {
+    console.error('Tomorrow.io error:', e);
+    document.getElementById('ai-forecast').innerHTML =
+      `<div style="color:var(--warn);font-size:12px;">⚠️ 無法取得 Tomorrow.io 數據（請檢查 API Key）</div>`;
+  }
+}
+
+function buildAIPanel(intervals) {
+  const maxRain = intervals.reduce((m, iv) => Math.max(m, iv.values.rainIntensity), 0.01);
+  const html = intervals.map(iv => {
+    const t    = new Date(iv.startTime);
+    const hhmm = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+    const ri   = iv.values.rainIntensity;
+    const pct  = Math.min(100, (ri / Math.max(maxRain, 1)) * 100);
+    const col  = ri > 20 ? '#f43f5e' : ri > 8 ? '#fb923c' : ri > 1 ? '#38bdf8' : '#334155';
+    return `<div class="hour-row">
+      <span class="hour-time">${hhmm}</span>
+      <div class="hour-bar-wrap"><div class="hour-bar" style="width:${pct}%;background:${col}"></div></div>
+      <span class="hour-val" style="color:${col}">${ri.toFixed(1)}<span style="font-size:9px;color:var(--muted)"> mm</span></span>
+    </div>`;
+  }).join('');
+  document.getElementById('ai-forecast').innerHTML = html;
+}
+
+/* ── Update Three.js rain ── */
+function updateRainScene(intensityMmHr) {
+  rainIntensity = intensityMmHr;
+  const label = document.getElementById('rain-intensity-label');
+  const val   = document.getElementById('rain-intensity-val');
+  if (intensityMmHr > 0) {
+    label.style.display = 'block';
+    val.textContent = intensityMmHr.toFixed(1);
+  } else {
+    label.style.display = 'none';
+  }
+  createRainSystem(intensityMmHr);
+}
+
+/* ── Voice speech ── */
+function speak() {
+  if (!('speechSynthesis' in window)) { alert('此裝置不支援語音播報'); return; }
+  const text = userLat
+    ? `香港降雨預報。當前位置：緯度 ${userLat.toFixed(2)}，經度 ${userLon.toFixed(2)}。目前狀況：${currentCondition}。雨量強度：${document.getElementById('stat-rain').textContent} 毫米每小時。氣溫：${document.getElementById('stat-temp').textContent} 攝氏度。`
+    : '正在獲取定位，請稍候。';
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'zh-HK';
+  utt.rate = 0.92;
+  lastSpeechText = text;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utt);
+}
+
+/* ── Push notification ── */
+function sendPush() {
+  OneSignal.push(() => {
+    OneSignal.isPushNotificationsEnabled(enabled => {
+      if (enabled) {
+        OneSignal.sendSelfNotification(
+          '🌧 香港降雨預報',
+          `當前：${currentCondition}，雨量 ${document.getElementById('stat-rain').textContent} mm/hr`,
+          window.location.href,
+          'https://data.weather.gov.hk/images/wxicon/pic50.png',
+          {}
+        );
+        alert('📲 推播已送出！');
+      } else {
+        OneSignal.registerForPushNotifications();
+      }
+    });
+  });
+}
+
+/* ── Refresh all ── */
+function refreshAll() {
+  document.getElementById('ai-forecast').innerHTML =
+    '<div style="color:var(--muted);font-size:12px;">重新獲取數據⋯</div>';
+  fetchForecast();
+  fetchTomorrowAI();
+}
+
+/* ── HKO warning worker (every 5 min) ── */
+function startHKOWorker() {
+  const code = `
+    setInterval(() => {
+      fetch('https://data.weather.gov.hk/weatherAPI/opendata/warnsum.php?lang=tc')
+        .then(r => r.json())
+        .then(d => postMessage({ type:'warnings', data:d }))
+        .catch(() => {});
+    }, 300000);
+  `;
+  try {
+    const blob   = new Blob([code], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+    worker.onmessage = e => {
+      if (e.data.type === 'warnings') {
+        const keys = Object.keys(e.data.data);
+        const sigBar = document.getElementById('signal-bar');
+        if (keys.length) {
+          document.getElementById('signal-text').textContent =
+            e.data.data[keys[0]].name || '天文台警告生效中';
+          sigBar.classList.add('active');
+        } else {
+          sigBar.classList.remove('active');
+        }
+      }
+    };
+  } catch(e) { console.warn('Worker not supported:', e); }
+}
+
+/* ── Bootstrap ── */
+window.addEventListener('load', () => {
+  initThree();
+
+  // Hide loading after scene is ready
+  setTimeout(() => {
+    const ld = document.getElementById('loading');
+    ld.classList.add('fade');
+    setTimeout(() => ld.style.display = 'none', 700);
+  }, 1200);
+
+  initLocation();
+  checkIOSInstall();
+  startHKOWorker();
+
+  // Refresh every 10 minutes
+  setInterval(refreshAll, 600000);
+});
+</script>
+</body>
+</html>
