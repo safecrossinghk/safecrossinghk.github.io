@@ -10,7 +10,7 @@
 body {
 font-family: "Helvetica Neue", sans-serif;
 margin: 0; padding: 0;
-background: #1a1a1a; color: #fff;
+background: #111116; color: #fff;
 overflow: hidden;
 }
 #map3d {
@@ -20,16 +20,16 @@ width: 100vw; height: 100vh; z-index: 1;
 .ui-container {
 position: absolute; top: 20px; left: 20px; right: 20px;
 z-index: 10; max-width: 400px;
-background: rgba(255, 255, 255, 0.1);
+background: rgba(20, 20, 25, 0.6);
 backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-border: 1px solid rgba(255, 255, 255, 0.2);
+border: 1px solid rgba(255, 255, 255, 0.15);
 border-radius: 12px; padding: 15px;
-box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+box-shadow: 0 4px 30px rgba(0, 0, 0, 0.7);
 }
-h1 { font-size: 1.2em; margin: 0 0 10px 0; display: flex; align-items: center; gap: 5px; }
+h1 { font-size: 1.1em; margin: 0 0 10px 0; display: flex; align-items: center; gap: 5px; }
 #ai-forecast, #rain-alert, #model-status, #hotspot-status {
 margin-top: 8px; padding: 8px; border-radius: 6px;
-background: rgba(0, 0, 0, 0.3); font-size: 0.95em; text-align: left;
+background: rgba(0, 0, 0, 0.4); font-size: 0.9em; text-align: left;
 }
 #model-status { border-left: 4px solid #00ffcc; }
 #hotspot-status { border-left: 4px solid #ff5500; }
@@ -105,7 +105,7 @@ const workerUrl = 'https://crowdtest8.ctakwah.workers.dev/';
 const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
 let rainStatus = 0;
 let aiRainPushed = false;
-let isExtremeHot = false; // 紀錄全港是否正處於酷熱天氣警告
+let isExtremeHot = false;
 
 // ==================== 2. THREE.JS 3D 地圖場景建構 ====================
 let scene, camera, renderer, controls;
@@ -113,9 +113,8 @@ let userDome;
 let rainParticles, rainGeometry;
 let rainCount = 2000;
 let currentRainIntensity = 0;
-let sunLight; // 將太陽光提昇為全域變數以供即時操控
+let sunLight, ambientLight;
 
-// 🎯 核心更換：坐標中心全面遷移至「荔枝角戰區」（長沙灣廣場原點中心）
 const ORIGIN_LAT = 22.3372;
 const ORIGIN_LON = 114.1480;
 const SCALE = 100000;
@@ -124,19 +123,18 @@ function init3DSpace() {
 const container = document.getElementById('map3d');
 
 scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111116); // 帶一點極限黑深藍
-scene.fog = new THREE.FogExp2(0x111116, 0.003);
+scene.background = new THREE.Color(0x1a1a24); // 稍微提亮夜空底色，防止死黑
+scene.fog = new THREE.FogExp2(0x1a1a24, 0.002);
 
-camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
-camera.position.set(0, 180, 280);
+camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 3000);
+camera.position.set(0, 250, 350); // 拉高相機視角，防止埋進大樓裡
 
 renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 
-// 🚀 核心升級：啟動渲染器的硬體級 PCF 柔和陰影渲染地圖
+// 啟動柔和陰影渲染
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
 container.appendChild(renderer.domElement);
 
 controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -144,58 +142,59 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
-// 光源設定 - 環境漫反射光
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+// 💡 關鍵修正 1：大幅調高環境光（AmbientLight）強度，保證沒太陽時大樓也是亮灰色
+ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
 scene.add(ambientLight);
 
-// 🚀 核心升級：架設高精度「可投影動態太陽光」
-sunLight = new THREE.DirectionalLight(0xfff5ea, 1.2); // 偏黃暖色高仿真陽光
+// 💡 關鍵修正 2：架設高亮平行太陽光
+sunLight = new THREE.DirectionalLight(0xfffaed, 1.8);
 sunLight.castShadow = true;
 
-// 調整陰影地圖分辨率（2048既保持大廈陰影清晰，亦兼顧手機開工時的流暢度）
+// 擴大陰影覆蓋範圍，精準包裹全荔枝角
 sunLight.shadow.mapSize.width = 2048;
 sunLight.shadow.mapSize.height = 2048;
-
-// 設定陰影相機視野矩形邊界，必須完美覆蓋整個模型區間
-const d = 600;
+const d = 800;
 sunLight.shadow.camera.left = -d;
 sunLight.shadow.camera.right = d;
 sunLight.shadow.camera.top = d;
 sunLight.shadow.camera.bottom = -d;
 sunLight.shadow.camera.near = 10;
-sunLight.shadow.camera.far = 1000;
-sunLight.shadow.bias = -0.0005; // 消除陰影邊緣的漏光微碎邊
-
+sunLight.shadow.camera.far = 1500;
+sunLight.shadow.bias = -0.001;
 scene.add(sunLight);
 
-// 後備輔助微光
-const dirLight2 = new THREE.DirectionalLight(0x3366ff, 0.3);
-dirLight2.position.set(-200, 300, -200);
+// 補光燈
+const dirLight2 = new THREE.DirectionalLight(0x5588ff, 0.4);
+dirLight2.position.set(-300, 400, -300);
 scene.add(dirLight2);
 
-const gridHelper = new THREE.GridHelper(2000, 100, 0x333333, 0x222222);
-gridHelper.position.y = -0.5;
+// 基準網格線
+const gridHelper = new THREE.GridHelper(2000, 80, 0x444455, 0x222233);
+gridHelper.position.y = -0.2;
 scene.add(gridHelper);
 
-// 🚀 核心升級：建立無形但專門用來「接收大廈黑色投影」的地板層
-const floorGeo = new THREE.PlaneGeometry(2000, 2000);
-const floorMat = new THREE.MeshStandardMaterial({ color: 0x111116, roughness: 0.8 });
+// 接收陰影的無形大地板
+const floorGeo = new THREE.PlaneGeometry(3000, 3000);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x22222a, roughness: 0.8 });
 const floor = new THREE.Mesh(floorGeo, floorMat);
 floor.rotation.x = -Math.PI / 2;
-floor.position.y = -0.6;
+floor.position.y = -0.5;
 floor.receiveShadow = true;
 scene.add(floor);
 
-// 🚀 載入實體荔枝角 3D 模型
+// 載入 3D 模型
 loadRealHongKongModel();
 
-// 動態獲取並渲染 Tasker 的 K-Walk 取餐熱點柱
+// 渲染熱點柱
 fetchAndRenderHotspots();
 
 initRainSystem();
 
 window.addEventListener('resize', onWindowResize);
 animate();
+
+// 初始化一次陰影位置
+updateSunPosition(840);
 }
 
 function latLngTo3D(lat, lon) {
@@ -214,12 +213,12 @@ function (gltf) {
 const model = gltf.scene;
 model.traverse((child) => {
 if (child.isMesh) {
-// 🚀 核心升級：賦予荔枝角所有工廈/商廈物體遮擋陽光與接收別樓陰影的物理特性
 child.castShadow = true;
 child.receiveShadow = true;
+// 💡 關鍵修正 3：將大廈色調稍微調亮一點，增強漫反射
 child.material = new THREE.MeshStandardMaterial({
-color: 0x3a4245, // 採用深碳灰白模，與黑色陰影拉開對比
-roughness: 0.6,
+color: 0x666b6e,
+roughness: 0.5,
 metalness: 0.1
 });
 }
@@ -242,10 +241,8 @@ statusEl.style.color = "#ff4d4d";
 );
 }
 
-// 🚀 向 Worker 動態請求 Tasker 上傳的熱點數據
 function fetchAndRenderHotspots() {
 const msgEl = document.getElementById('hotspotMsg');
-
 fetch(`${workerUrl}get-hotspots`)
 .then(res => res.json())
 .then(data => {
@@ -257,7 +254,6 @@ throw new Error("Worker 暫無數據");
 }
 })
 .catch(err => {
-console.log("Worker 數據未就緒，啟動本地 K-Walk 後備熱點檔案");
 const fallbackData = [
 { name: "長沙灣廣場熱點", lat: 22.3375, lon: 114.1485, count: 35 },
 { name: "D2 Place 一期熱點", lat: 22.3368, lon: 114.1475, count: 22 },
@@ -270,37 +266,33 @@ msgEl.style.color = "#ffaa00";
 });
 }
 
-// ⚙️ 將熱點數據轉化為 3D 自發光戰術能量柱
 function build3DColumns(hotspots) {
 hotspots.forEach(spot => {
 const coords = latLngTo3D(spot.lat, spot.lon);
 const height = spot.count * 1.5;
-
-const geometry = new THREE.CylinderGeometry(3, 3, height, 16);
+const geometry = new THREE.CylinderGeometry(4, 4, height, 16);
 const material = new THREE.MeshStandardMaterial({
 color: spot.count > 20 ? 0xff3300 : 0x00ff66,
 transparent: true,
-opacity: 0.65,
-emissive: spot.count > 20 ? 0x991100 : 0x009933
+opacity: 0.7,
+emissive: spot.count > 20 ? 0xaa1100 : 0x00aa33
 });
-
 const columnMesh = new THREE.Mesh(geometry, material);
 columnMesh.position.set(coords.x, height / 2, coords.z);
 scene.add(columnMesh);
 });
 }
 
-// 下雨與定位邏輯保持優化狀態
 function initRainSystem() {
 rainGeometry = new THREE.BufferGeometry();
 const positions = new Float32Array(rainCount * 3);
 for(let i = 0; i < rainCount * 3; i += 3) {
-positions[i] = Math.random() * 1200 - 600;
-positions[i+1] = Math.random() * 300;
-positions[i+2] = Math.random() * 1200 - 600;
+positions[i] = Math.random() * 1600 - 800;
+positions[i+1] = Math.random() * 400;
+positions[i+2] = Math.random() * 1600 - 800;
 }
 rainGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-const rainMaterial = new THREE.PointsMaterial({ color: 0x7cd2ff, size: 0.8, transparent: true, opacity: 0.5 });
+const rainMaterial = new THREE.PointsMaterial({ color: 0x8be0ff, size: 1.0, transparent: true, opacity: 0.6 });
 rainParticles = new THREE.Points(rainGeometry, rainMaterial);
 scene.add(rainParticles);
 }
@@ -310,7 +302,7 @@ requestAnimationFrame(animate);
 controls.update();
 if (rainParticles && currentRainIntensity > 0) {
 const positions = rainGeometry.attributes.position.array;
-const speed = 2.0 + (currentRainIntensity * 0.3);
+const speed = 2.5 + (currentRainIntensity * 0.3);
 for (let i = 1; i < positions.length; i += 3) {
 positions[i] -= speed;
 if (positions[i] < 0) positions[i] = Math.random() * 250 + 150;
@@ -332,33 +324,22 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 function setMarker3D(lat, lon, hasRain) {
 const coords = latLngTo3D(lat, lon);
 if (userDome) scene.remove(userDome);
-const geom = new THREE.SphereGeometry(12, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-const mat = new THREE.MeshStandardMaterial({ color: hasRain ? 0xff3333 : 0x00ffcc, transparent: true, opacity: 0.3, wireframe: true });
+const geom = new THREE.SphereGeometry(14, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+const mat = new THREE.MeshStandardMaterial({ color: hasRain ? 0xff2222 : 0x00ffcc, transparent: true, opacity: 0.4, wireframe: true });
 userDome = new THREE.Mesh(geom, mat);
 userDome.position.set(coords.x, 2, coords.z);
 scene.add(userDome);
 controls.target.set(coords.x, 5, coords.z);
 }
 
-// 🚀 核心優化：徹底剷除直接 fetch 天文台引致的 CORS 阻截錯誤。
-// 全面委託後端 Cloudflare Worker 安全代理獲取深水埗區降雨及酷熱警告
 function fetchForecast(lat, lon) {
 const alertDiv = document.getElementById('rain-alert');
-
 fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
 .then(res => res.json())
 .then(data => {
 let hasRainHere = false;
-
-// 同步檢測後端封裝的天文台酷熱天氣警告標記
-if (data && data.isWMS !== undefined) {
-isExtremeHot = data.isWMS;
-}
-
-// 降雨判定邏輯
-if (data && (data.immediateRain > 0.5 || data.hasRain)) {
-hasRainHere = true;
-}
+if (data && data.isWMS !== undefined) { isExtremeHot = data.isWMS; }
+if (data && (data.immediateRain > 0.5 || data.hasRain)) { hasRainHere = true; }
 
 if (hasRainHere) {
 alertDiv.innerText = `⚠️ 戰區預報：荔枝角周邊正錄得降雨`;
@@ -371,13 +352,10 @@ alertDiv.style.color = "#00ffcc";
 setMarker3D(lat, lon, false);
 rainStatus = 0;
 }
-
-// 天氣警告狀態獲取後，重新校準一次目前時間軸對應的陽光黑影效果
 const currentSliderVal = document.getElementById('timeSlider').value;
 updateSunPosition(parseInt(currentSliderVal));
 })
 .catch(() => {
-// 極限降級守護：倘若連線不穩，至少維持地圖常態與騎士定位防護罩不癱瘓
 alertDiv.innerText = `☁️ 沙盤安全運行中 (維持基準定位防護)`;
 alertDiv.style.color = "#ffff00";
 setMarker3D(lat, lon, false);
@@ -409,54 +387,52 @@ document.getElementById("rainMsg").innerText = msg;
 .catch(() => { document.getElementById("rainMsg").innerText = "⚠️ AI 氣象雲連線中..."; });
 }
 
-// 🚀 核心新增：解析滑桿分鐘數，並利用 SunCalc 計算太陽高度角及動態控制 Three.js 陰影
+// 💡 關鍵修正 4：重構光影隨時間軸滑動的邏輯
 function updateSunPosition(minutes) {
 const hours = Math.floor(minutes / 60);
 const mins = minutes % 60;
 
-// 顯示格式化時間
 document.getElementById('timeDisplay').innerText =
 `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
 
 const today = new Date();
 today.setHours(hours, mins, 0, 0);
 
-// 計算荔枝角中心點的天文太陽方位
 const sunPos = SunCalc.getPosition(today, ORIGIN_LAT, ORIGIN_LON);
 const sunAltitudeDegree = Math.round(sunPos.altitude * (180 / Math.PI));
+const isSunShining = sunAltitudeDegree > 15; // 只要大於15度就允許亮燈
 
-// 判定條件：朝九晚五且陽光大於 25° 視為「陽光充沛」
-const isSunShining = sunAltitudeDegree > 25;
-
-// 🚨 智慧型開關切換邏輯 🚨
-// 倘若「酷熱天氣警告生效」或者是「目前時間段陽光猛烈」，立即強制開燈投射大廈黑影
 if (isExtremeHot || isSunShining) {
-document.getElementById('sunStatus').innerText = isExtremeHot ? "🥵 酷熱警告生效中！亮起暴曬地圖" : `☀️ 陽光充沛 (高度: ${sunAltitudeDegree}° / 啟動遮蔭偵測)`;
+document.getElementById('sunStatus').innerText = isExtremeHot ? "🥵 酷熱警告生效！強制開啟避曬大師" : `☀️ 陽光充沛 (高度: ${sunAltitudeDegree}°)`;
 
-sunLight.intensity = 1.3;
-renderer.shadowMap.enabled = true; // 開啟投影引擎
-
-// 烈日暴曬下，自動把雨量粒子隱形
+// 烈日模式：環境光稍微收斂，加強平行光和陰影對比
+ambientLight.intensity = 0.8;
+sunLight.intensity = 2.0;
+renderer.shadowMap.enabled = true;
 if (rainParticles) rainParticles.visible = false;
 } else {
-// 反之轉化為柔和漫發散模式（陰天、雨天、或夜晚），幫手機省電
-document.getElementById('sunStatus').innerText = "☁️ 轉為常態/陰雨模式 (關閉暴曬陰影)";
-sunLight.intensity = 0.4;
-renderer.shadowMap.enabled = false; // 關閉陰影計算
+// 陰雨、夜間模式：拉高環境漫反射，關閉高運算量的陰影，防止畫面黑掉
+document.getElementById('sunStatus').innerText = "☁️ 轉為常態/陰雨模式 (大氣漫反射)";
+ambientLight.intensity = 1.6;
+sunLight.intensity = 0.2;
+renderer.shadowMap.enabled = false;
 }
 
-// 動態平移 3D 世界中的平行光源坐標以擺動陰影
+// 平滑計算光照方位
 if (sunPos.altitude > 0) {
-const radius = 400;
+const radius = 500;
 const h = radius * Math.sin(sunPos.altitude);
 const r_cos = radius * Math.cos(sunPos.altitude);
 const x = r_cos * Math.sin(sunPos.azimuth);
 const z = r_cos * Math.cos(sunPos.azimuth);
 sunLight.position.set(x, h, z);
+sunLight.updateMatrixWorld();
+} else {
+// 太陽落山後，把平行光移到正上方當微弱月光
+sunLight.position.set(0, 500, 0);
 }
 }
 
-// 🚀 核心新增：監聽底部避曬滑桿的即時滑動
 document.getElementById('timeSlider').addEventListener('input', (e) => {
 updateSunPosition(parseInt(e.target.value));
 });
@@ -467,7 +443,7 @@ function sendPushAI(message) { /* 保持原樣 */ }
 
 function initLocation() {
 if (!navigator.geolocation) {
-const fbLat = 22.3372, fbLon = 114.1480; // 預設降級為荔枝角
+const fbLat = 22.3372, fbLon = 114.1480;
 fetchForecast(fbLat, fbLon); fetchTomorrowAI(fbLat, fbLon); return;
 }
 navigator.geolocation.getCurrentPosition(
@@ -497,7 +473,6 @@ initLocation();
 showIosPromptOnce();
 showCustomPrompt();
 
-// 💡 每隔 10 分鐘自動在背景刷新一次定位與天氣資料，常保作戰數據最新
 setInterval(() => {
 initLocation();
 }, 600000);
