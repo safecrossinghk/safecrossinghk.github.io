@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#f0f8ff">
+<title>🌧️ 香港 3D 降雨戰術預報</title>
+
+<style>
+body {
+font-family: "Helvetica Neue", sans-serif;
+margin: 0; padding: 0;
+background: #1a1a1a; color: #fff;
+overflow: hidden;
+}
+/* 3D Canvas 容器滿版 */
+#map3d {
+position: absolute; top: 0; left: 0;
+width: 100vw; height: 100vh; z-index: 1;
+}
+/* 2D UI 面板疊加在 3D 地圖正上方（磨砂玻璃風格） */
+.ui-container {
+position: absolute; top: 20px; left: 20px; right: 20px;
+z-index: 10; max-width: 400px;
+background: rgba(255, 255, 255, 0.1);
+backdrop-filter: blur(10px);
+-webkit-backdrop-filter: blur(10px);
+border: 1px solid rgba(255, 255, 255, 0.2);
+border-radius: 12px; padding: 15px;
+box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+h1 { font-size: 1.2em; margin: 0 0 10px 0; display: flex; align-items: center; gap: 5px; }
+#ai-forecast, #rain-alert {
+margin-top: 8px; padding: 8px; border-radius: 6px;
+background: rgba(0, 0, 0, 0.3); font-size: 0.95em; text-align: left;
+}
+.promptBox {
+position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+width: 80%; max-width: 350px; background: #fff3cd; color: #333;
+padding: 15px; border-radius: 10px; font-size: 0.9em; z-index: 9999;
+}
+.promptBox button {
+margin-top: 10px; padding: 6px 12px; background: #0077cc; color: white; border: none; border-radius: 5px; cursor: pointer;
+}
+</style>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="no">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="香港降雨預報">
+
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<script>
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "🔑 換成你的 Safari Web ID"
+});
+});
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+
+<body>
+
+<div id="map3d"></div>
+
+<div class="ui-container">
+<h1>🌂 K-Walk 3D 天氣大腦</h1>
+<div id="ai-forecast">
+<strong>🧠 AI 超前預測：</strong> <span id="rainMsg">⏳ 正在載入...</span>
+</div>
+<div id="rain-alert">⏳ 正在讀取預報資料...</div>
+</div>
+
+<div id="customPrompt" class="promptBox" style="display:none;">
+📢 歡迎使用《香港降雨預報》<br>👉 你可以訂閱通知，即時收到降雨提示。<br>
+<button id="subscribeBtn">訂閱通知</button>
+<button id="closeCustomBtn">稍後再說</button>
+</div>
+
+<div id="iosPrompt" class="promptBox" style="display:none;">
+📱 如果用 iPhone / iPad：<br>請先按 Safari 底部的 <b>分享</b> 按鈕 <br>➜ 再揀 <b>加入主畫面</b> 才可收到推播通知。<br>
+<button id="iosCloseBtn">知道了</button>
+</div>
+
+<script>
+// ==================== 1. 全域變數與 API 設定 ====================
+const workerUrl = 'https://crowdtest8.ctakwah.workers.dev/';
+const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
+let rainStatus = 0;
+let aiRainPushed = false;
+
+// ==================== 2. THREE.JS 3D 地圖場景建構 ====================
+let scene, camera, renderer, controls;
+let userDome; // 用戶定位點 3D 防護罩
+let rainParticles, rainGeometry; // 3D 雨滴粒子系統
+let rainCount = 1500; // 雨滴基礎數量
+let currentRainIntensity = 0; // 當前實時雨量速度連動
+
+const ORIGIN_LAT = 22.3195; // 以旺角中心作為 3D 場景中心點 (0, 0, 0)
+const ORIGIN_LON = 114.1694;
+const SCALE = 100000; // 經緯度放大到 3D 空間的比例尺
+
+function init3DSpace() {
+const container = document.getElementById('map3d');
+
+scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a1a);
+scene.fog = new THREE.FogExp2(0x1a1a1a, 0.005);
+
+camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+camera.position.set(0, 50, 100);
+
+renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+container.appendChild(renderer.domElement);
+
+controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI / 2 - 0.05; // 防止穿透地面
+
+// 光源設定
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(100, 300, 100);
+scene.add(dirLight);
+
+// 渲染基礎模擬灰色城市大廈與街道網絡
+generateMockCity();
+// 初始化動態粒子雨結構
+initRainSystem();
+
+window.addEventListener('resize', onWindowResize);
+animate();
+}
+
+// 將 GPS 經緯度精準轉換為 3D 空間的 (X, Z) 軸座標
+function latLngTo3D(lat, lon) {
+const x = (lon - ORIGIN_LON) * SCALE;
+const z = (ORIGIN_LAT - lat) * SCALE; // WebGL Z軸朝南為正
+return { x: x, z: z };
+}
+
+// 模擬城市幾何體（代替真實 OSM 數據，確保輕量化快速加載）
+function generateMockCity() {
+const gridHelper = new THREE.GridHelper(1000, 100, 0x444444, 0x222222);
+scene.add(gridHelper);
+
+// 隨機蓋一些灰色大廈白模
+const boxGeom = new THREE.BoxGeometry(1, 1, 1);
+const mat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.7 });
+
+for(let i=0; i<150; i++) {
+const mesh = new THREE.Mesh(boxGeom, mat);
+const w = Math.random() * 15 + 5;
+const h = Math.random() * 60 + 10;
+const d = Math.random() * 15 + 5;
+mesh.scale.set(w, h, d);
+
+// 圍繞旺角中心隨機擺放
+const radius = Math.random() * 400 + 20;
+const angle = Math.random() * Math.PI * 2;
+mesh.position.set(Math.cos(angle)*radius, h/2, Math.sin(angle)*radius);
+scene.add(mesh);
+}
+}
+
+// 初始化 3D 粒子下雨特效
+function initRainSystem() {
+rainGeometry = new THREE.BufferGeometry();
+const positions = new Float32Array(rainCount * 3);
+
+for(let i = 0; i < rainCount * 3; i += 3) {
+positions[i] = Math.random() * 600 - 300; // X 軸範圍
+positions[i+1] = Math.random() * 200; // Y 軸高度範圍
+positions[i+2] = Math.random() * 600 - 300; // Z 軸範圍
+}
+
+rainGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+const rainMaterial = new THREE.PointsMaterial({
+color: 0xaaaaee,
+size: 0.6,
+transparent: true,
+opacity: 0.6
+});
+
+rainParticles = new THREE.Points(rainGeometry, rainMaterial);
+scene.add(rainParticles);
+}
+
+// 動態 3D 渲染循環
+function animate() {
+requestAnimationFrame(animate);
+controls.update();
+
+// 雨滴下落動畫核心邏輯
+if (rainParticles && currentRainIntensity > 0) {
+const positions = rainGeometry.attributes.position.array;
+const speed = 1.5 + (currentRainIntensity * 0.2); // 雨量越大，下落越快
+
+for (let i = 1; i < positions.length; i += 3) {
+positions[i] -= speed; // Y 軸向下掉
+if (positions[i] < 0) {
+positions[i] = Math.random() * 200 + 100; // 掉到地面後重置回天空
+}
+}
+rainGeometry.attributes.position.needsUpdate = true;
+rainParticles.visible = true;
+} else {
+if(rainParticles) rainParticles.visible = false;
+}
+
+renderer.render(scene, camera);
+}
+
+function onWindowResize() {
+camera.aspect = window.innerWidth / window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// ==================== 3. 天氣 API 與 互動邏輯層 ====================
+
+function setMarker3D(lat, lon, hasRain) {
+const coords = latLngTo3D(lat, lon);
+
+// 如果防護罩已存在，先移除
+if (userDome) scene.remove(userDome);
+
+// 建立用戶定位點「3D 雷達穹頂」
+const geom = new THREE.SphereGeometry(6, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+const mat = new THREE.MeshStandardMaterial({
+color: hasRain ? 0xff3333 : 0x00ffcc, // 有雨變深紅，無雨呈青綠色
+transparent: true,
+opacity: 0.4,
+wireframe: true // 線框模式更具科技感
+});
+
+userDome = new THREE.Mesh(geom, mat);
+userDome.position.set(coords.x, 0, coords.z);
+scene.add(userDome);
+
+// 相機平滑對焦到用戶定位點
+controls.target.set(coords.x, 0, coords.z);
+}
+
+// 天文台即時預報
+function fetchForecast(lat, lon) {
+fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
+.then(res => res.json())
+.then(data => {
+const alertDiv = document.getElementById('rain-alert');
+console.log("天文台 API 回傳：", data);
+
+if (data && typeof data.immediateRain === "number") {
+if (data.immediateRain > 0.5) {
+alertDiv.innerText = `⚠️ 即時預報：你所在的位置將會有雨`;
+alertDiv.style.color = "#ff6b6b";
+setMarker3D(lat, lon, true);
+
+if (rainStatus === 0) {
+speak("⚠️ 你所在的位置將會有雨");
+sendPush();
+rainStatus = 1;
+}
+} else {
+alertDiv.innerText = `☁️ 你所在的位置暫時無雨`;
+alertDiv.style.color = "#00ffcc";
+setMarker3D(lat, lon, false);
+rainStatus = 0;
+}
+} else {
+alertDiv.innerText = "⚠️ 系統繁忙，請稍後再試";
+}
+})
+.catch(err => {
+console.error(err);
+document.getElementById('rain-alert').innerText = "⚠️ 系統繁忙，請稍後再試";
+});
+}
+
+// Tomorrow.io AI 預報（連動 3D 粒子雨量）
+function fetchTomorrowAI(lat, lon) {
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&timesteps=1h&apikey=${TOMORROW_API_KEY}`)
+.then(res => res.json())
+.then(data => {
+console.log("Tomorrow.io 回傳：", data);
+if (!data.timelines || !data.timelines.hourly) {
+document.getElementById("rainMsg").innerText = "⚠️ AI 預報暫時不可用";
+return;
+}
+
+const hours = data.timelines.hourly.slice(0, 3);
+let msg = "☀️ 未來三小時暫時無明顯降雨";
+let foundRain = false;
+currentRainIntensity = 0; // 預設關閉 3D 雨滴
+
+for (let i = 0; i < hours.length; i++) {
+const rain = hours[i].values.rainIntensity || 0;
+if (rain >= 1) {
+foundRain = true;
+currentRainIntensity = rain; // 設定 3D 降雨粒子速度與開關
+
+if (i === 0) msg = "🌧 一小時內可能有雨";
+else if (i === 1) msg = "🌧 兩小時內可能有雨";
+else msg = "🌧 三小時內可能有雨";
+
+if (!aiRainPushed) {
+speak(msg);
+sendPushAI(msg);
+aiRainPushed = true;
+}
+break;
+}
+}
+
+if (!foundRain) {
+aiRainPushed = false;
+}
+document.getElementById("rainMsg").innerText = msg;
+})
+.catch(err => {
+console.error(err);
+document.getElementById("rainMsg").innerText = "⚠️ AI 預報讀取失敗";
+});
+}
+
+// 語音播放與推播邏輯
+function speak(text) {
+const msg = new SpeechSynthesisUtterance(text);
+msg.lang = 'zh-HK';
+speechSynthesis.speak(msg);
+}
+
+function sendPush() {
+const REST_API_KEY = "⚠️ 換成你的 REST API KEY";
+fetch("https://onesignal.com/api/v1/notifications", {
+method: "POST",
+headers: { "Content-Type": "application/json; charset=utf-8", "Authorization": "Basic " + REST_API_KEY },
+body: JSON.stringify({
+app_id: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+included_segments: ["Subscribed Users"],
+headings: { "en": "⚠️ 降雨提示" },
+contents: { "en": "你所在的位置將會有雨" },
+url: "https://safecrossinghk.github.io",
+large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
+})
+}).then(res => res.json()).then(res => console.log("推播已送出", res)).catch(err => console.error(err));
+}
+
+function sendPushAI(message) {
+const REST_API_KEY = "⚠️ 換成你的 REST API KEY";
+fetch("https://onesignal.com/api/v1/notifications", {
+method: "POST",
+headers: { "Content-Type": "application/json; charset=utf-8", "Authorization": "Basic " + REST_API_KEY },
+body: JSON.stringify({
+app_id: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+included_segments: ["Subscribed Users"],
+headings: { "en": "🌧️ AI 降雨專屬預測" },
+contents: { "en": message },
+url: "https://safecrossinghk.github.io",
+large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
+})
+}).then(res => res.json()).then(res => console.log("AI 推播成功", res)).catch(err => console.error(err));
+}
+
+// 定位初始化
+function initLocation() {
+if (!navigator.geolocation) {
+const fbLat = 22.3195, fbLon = 114.1694;
+fetchForecast(fbLat, fbLon);
+fetchTomorrowAI(fbLat, fbLon);
+return;
+}
+
+navigator.geolocation.getCurrentPosition(
+pos => {
+const lat = pos.coords.latitude;
+const lon = pos.coords.longitude;
+fetchForecast(lat, lon);
+fetchTomorrowAI(lat, lon);
+},
+err => {
+const fbLat = 22.3195, fbLon = 114.1694;
+fetchForecast(fbLat, fbLon);
+fetchTomorrowAI(fbLat, fbLon);
+},
+{ enableHighAccuracy: true }
+);
+}
+
+// 提示框彈窗邏輯
+function showIosPromptOnce() {
+if (/iPhone|iPad|iPod/i.test(navigator.userAgent) && !localStorage.getItem("iosPromptShown")) {
+document.getElementById("iosPrompt").style.display = "block";
+document.getElementById("iosCloseBtn").onclick = () => {
+document.getElementById("iosPrompt").style.display = "none";
+localStorage.setItem("iosPromptShown", "1");
+};
+}
+}
+
+function showCustomPrompt() {
+if (localStorage.getItem("subscribedToRainAlert")) return;
+document.getElementById("customPrompt").style.display = "block";
+document.getElementById("subscribeBtn").onclick = () => {
+OneSignal.push(() => { OneSignal.showNativePrompt(); });
+document.getElementById("customPrompt").style.display = "none";
+localStorage.setItem("subscribedToRainAlert", "1");
+};
+document.getElementById("closeCustomBtn").onclick = () => {
+document.getElementById("customPrompt").style.display = "none";
+};
+}
+
+// ==================== 4. 啟動總開關 ====================
+init3DSpace();
+initLocation();
+showIosPromptOnce();
+showCustomPrompt();
+
+</script>
+</body>
+</html>
