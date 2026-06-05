@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#f0f8ff">
+<title>🌧️ K-Walk 3D 荔枝角戰術預報沙盤</title>
+
+<style>
+body {
+font-family: "Helvetica Neue", sans-serif;
+margin: 0; padding: 0;
+background: #1a1a1a; color: #fff;
+overflow: hidden;
+}
+#map3d {
+position: absolute; top: 0; left: 0;
+width: 100vw; height: 100vh; z-index: 1;
+}
+.ui-container {
+position: absolute; top: 20px; left: 20px; right: 20px;
+z-index: 10; max-width: 400px;
+background: rgba(255, 255, 255, 0.1);
+backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+border: 1px solid rgba(255, 255, 255, 0.2);
+border-radius: 12px; padding: 15px;
+box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+h1 { font-size: 1.2em; margin: 0 0 10px 0; display: flex; align-items: center; gap: 5px; }
+#ai-forecast, #rain-alert, #model-status, #hotspot-status {
+margin-top: 8px; padding: 8px; border-radius: 6px;
+background: rgba(0, 0, 0, 0.3); font-size: 0.95em; text-align: left;
+}
+#model-status { border-left: 4px solid #00ffcc; }
+#hotspot-status { border-left: 4px solid #ff5500; }
+.promptBox {
+position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+width: 80%; max-width: 350px; background: #fff3cd; color: #333;
+padding: 15px; border-radius: 10px; font-size: 0.9em; z-index: 9999;
+}
+.promptBox button {
+margin-top: 10px; padding: 6px 12px; background: #0077cc; color: white; border: none; border-radius: 5px; cursor: pointer;
+}
+</style>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="no">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="香港降雨預報">
+
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
+<script>
+window.OneSignal = window.OneSignal || [];
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "🔑 換成你的 Safari Web ID"
+});
+});
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+
+<body>
+
+<div id="map3d"></div>
+
+<div class="ui-container">
+<h1>🌂 K-Walk 3D 戰術大腦 (荔枝角)</h1>
+<div id="model-status">🏙️ 3D 戰術地圖：<span id="loadMsg">正在加載荔枝角街景模型...</span></div>
+<div id="hotspot-status">🔥 K-Walk 熱點：<span id="hotspotMsg">正在同步 Tasker 取餐數據...</span></div>
+<div id="ai-forecast">
+<strong>🧠 AI 超前預測：</strong> <span id="rainMsg">⏳ 正在載入...</span>
+</div>
+<div id="rain-alert">⏳ 正在讀取預報資料...</div>
+</div>
+
+<div id="customPrompt" class="promptBox" style="display:none;">
+📢 歡迎使用《香港降雨預報》<br>👉 你可以訂閱通知，即時收到降雨提示。<br>
+<button id="subscribeBtn">訂閱通知</button>
+<button id="closeCustomBtn">稍後再說</button>
+</div>
+
+<div id="iosPrompt" class="promptBox" style="display:none;">
+📱 如果用 iPhone / iPad：<br>請先按 Safari 底部的 <b>分享</b> 按鈕 <br>➜ 再揀 <b>加入主畫面</b> 才可收到推播通知。<br>
+<button id="iosCloseBtn">知道了</button>
+</div>
+
+<script>
+// ==================== 1. 全域變數與 API 設定 ====================
+const workerUrl = 'https://crowdtest8.ctakwah.workers.dev/';
+const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
+let rainStatus = 0;
+let aiRainPushed = false;
+
+// ==================== 2. THREE.JS 3D 地圖場景建構 ====================
+let scene, camera, renderer, controls;
+let userDome;
+let rainParticles, rainGeometry;
+let rainCount = 2000;
+let currentRainIntensity = 0;
+
+// 🎯 核心更換：坐標中心全面遷移至「荔枝角戰區」（長沙灣廣場原點中心）
+const ORIGIN_LAT = 22.3372;
+const ORIGIN_LON = 114.1480;
+const SCALE = 100000;
+
+function init3DSpace() {
+const container = document.getElementById('map3d');
+
+scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111116); // 帶一點極限黑深藍
+scene.fog = new THREE.FogExp2(0x111116, 0.003);
+
+camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+camera.position.set(0, 180, 280);
+
+renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+container.appendChild(renderer.domElement);
+
+controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+// 光源設定
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight1.position.set(200, 500, 200);
+scene.add(dirLight1);
+const dirLight2 = new THREE.DirectionalLight(0x3366ff, 0.4);
+dirLight2.position.set(-200, 300, -200);
+scene.add(dirLight2);
+
+const gridHelper = new THREE.GridHelper(2000, 100, 0x333333, 0x222222);
+gridHelper.position.y = -0.5;
+scene.add(gridHelper);
+
+// 🚀 載入實體荔枝角 3D 模型 (確保你去 map3D 工具網頁框選的是荔枝角工業區，並同樣取名 hongkong.glb)
+loadRealHongKongModel();
+
+// 動態獲取並渲染 Tasker 的 K-Walk 取餐熱點柱
+fetchAndRenderHotspots();
+
+initRainSystem();
+
+window.addEventListener('resize', onWindowResize);
+animate();
+}
+
+function latLngTo3D(lat, lon) {
+const x = (lon - ORIGIN_LON) * SCALE;
+const z = (ORIGIN_LAT - lat) * SCALE;
+return { x: x, z: z };
+}
+
+function loadRealHongKongModel() {
+const loader = new THREE.GLTFLoader();
+const statusEl = document.getElementById('loadMsg');
+
+loader.load(
+'hongkong.glb',
+function (gltf) {
+const model = gltf.scene;
+model.traverse((child) => {
+if (child.isMesh) {
+child.material = new THREE.MeshStandardMaterial({
+color: 0x263238, // 工業區採用深碳灰白模，視覺更硬核
+roughness: 0.5,
+metalness: 0.2
+});
+}
+});
+model.scale.set(1, 1, 1);
+model.position.set(0, 0, 0);
+scene.add(model);
+statusEl.innerText = "✅ 1:1 荔枝角戰區街景就緒";
+statusEl.style.color = "#00ffcc";
+},
+function (xhr) {
+if (xhr.total > 0) {
+statusEl.innerText = `正在讀取荔枝角模型: ${Math.round((xhr.loaded / xhr.total) * 100)}%`;
+}
+},
+function (error) {
+statusEl.innerText = "❌ 找不到荔枝角 glb，已切換回後備網格";
+statusEl.style.color = "#ff4d4d";
+}
+);
+}
+
+// 🚀 核心改動：向 Worker 動態請求 Tasker 上傳的熱點數據
+function fetchAndRenderHotspots() {
+const msgEl = document.getElementById('hotspotMsg');
+
+// 向你的 Cloudflare Worker 發起連線（此處路由可依實際調整）
+fetch(`${workerUrl}get-hotspots`)
+.then(res => res.json())
+.then(data => {
+if (data && data.length > 0) {
+build3DColumns(data);
+msgEl.innerText = `已同步 ${data.length} 個實時爆單點`;
+} else {
+throw new Error("Worker 暫無數據");
+}
+})
+.catch(err => {
+console.log("Worker 數據未就緒，啟動本地 K-Walk 後備熱點檔案");
+// 本地靜態後備數據庫（長沙灣廣場、D2 Place、億利等核心外送熱點）
+const fallbackData = [
+{ name: "長沙灣廣場熱點", lat: 22.3375, lon: 114.1485, count: 35 },
+{ name: "D2 Place 一期熱點", lat: 22.3368, lon: 114.1475, count: 22 },
+{ name: "億利工業大廈熱點", lat: 22.3362, lon: 114.1490, count: 18 },
+{ name: "宇晴匯商場熱點", lat: 22.3345, lon: 114.1462, count: 9 }
+];
+build3DColumns(fallbackData);
+msgEl.innerText = `本地歷史熱點已加載 (離線模式)`;
+msgEl.style.color = "#ffaa00";
+});
+}
+
+// ⚙️ 將熱點數據轉化為 3D 自發光戰術能量柱
+function build3DColumns(hotspots) {
+hotspots.forEach(spot => {
+const coords = latLngTo3D(spot.lat, spot.lon);
+// 根據取餐量（count）動態決定立體光柱高度
+const height = spot.count * 1.5;
+
+// 建立圓柱體 (頂半徑, 底半徑, 高度, 側邊數)
+const geometry = new THREE.CylinderGeometry(3, 3, height, 16);
+
+// 自發光半透明戰術材質
+const material = new THREE.MeshStandardMaterial({
+color: spot.count > 20 ? 0xff3300 : 0x00ff66, // 爆單紅 / 普通綠
+transparent: true,
+opacity: 0.65,
+emissive: spot.count > 20 ? 0x991100 : 0x009933 // 實現夜間發光
+});
+
+const columnMesh = new THREE.Mesh(geometry, material);
+// 確保圓柱底部貼緊路面 (Y 軸需要等於高度的一半)
+columnMesh.position.set(coords.x, height / 2, coords.z);
+
+scene.add(columnMesh);
+});
+}
+
+// 下雨與定位邏輯保持優化狀態
+function initRainSystem() {
+rainGeometry = new THREE.BufferGeometry();
+const positions = new Float32Array(rainCount * 3);
+for(let i = 0; i < rainCount * 3; i += 3) {
+positions[i] = Math.random() * 1200 - 600;
+positions[i+1] = Math.random() * 300;
+positions[i+2] = Math.random() * 1200 - 600;
+}
+rainGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+const rainMaterial = new THREE.PointsMaterial({ color: 0x7cd2ff, size: 0.8, transparent: true, opacity: 0.5 });
+rainParticles = new THREE.Points(rainGeometry, rainMaterial);
+scene.add(rainParticles);
+}
+
+function animate() {
+requestAnimationFrame(animate);
+controls.update();
+if (rainParticles && currentRainIntensity > 0) {
+const positions = rainGeometry.attributes.position.array;
+const speed = 2.0 + (currentRainIntensity * 0.3);
+for (let i = 1; i < positions.length; i += 3) {
+positions[i] -= speed;
+if (positions[i] < 0) positions[i] = Math.random() * 250 + 150;
+}
+rainGeometry.attributes.position.needsUpdate = true;
+rainParticles.visible = true;
+} else {
+if(rainParticles) rainParticles.visible = false;
+}
+renderer.render(scene, camera);
+}
+
+function onWindowResize() {
+camera.aspect = window.innerWidth / window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function setMarker3D(lat, lon, hasRain) {
+const coords = latLngTo3D(lat, lon);
+if (userDome) scene.remove(userDome);
+const geom = new THREE.SphereGeometry(12, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+const mat = new THREE.MeshStandardMaterial({ color: hasRain ? 0xff3333 : 0x00ffcc, transparent: true, opacity: 0.3, wireframe: true });
+userDome = new THREE.Mesh(geom, mat);
+userDome.position.set(coords.x, 2, coords.z);
+scene.add(userDome);
+controls.target.set(coords.x, 5, coords.z);
+}
+
+function fetchForecast(lat, lon) {
+const hkoUrl = 'https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc';
+fetch(hkoUrl)
+.then(res => res.json())
+.then(data => {
+const alertDiv = document.getElementById('rain-alert');
+let hasRainHere = false;
+if (data && data.rainfall && data.rainfall.data) {
+// 戰區切換：降雨偵測改為鎖定「深水埗/荔枝角」分區
+const sspRain = data.rainfall.data.find(item => item.place === "深水埗");
+if (sspRain && sspRain.max > 0) hasRainHere = true;
+}
+if (hasRainHere) {
+alertDiv.innerText = `⚠️ 天文台警報：荔枝角戰區正錄得降雨`;
+alertDiv.style.color = "#ff6b6b";
+setMarker3D(lat, lon, true);
+if (rainStatus === 0) { speak("⚠️ 荔枝角戰區注意，當前位置即將有雨"); sendPush(); rainStatus = 1; }
+} else {
+alertDiv.innerText = `☁️ 實時路況：荔枝角上空暫無降雨`;
+alertDiv.style.color = "#00ffcc";
+setMarker3D(lat, lon, false);
+rainStatus = 0;
+}
+})
+.catch(() => {
+// 降級備用
+fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
+.then(res => res.json())
+.then(data => {
+const alertDiv = document.getElementById('rain-alert');
+if (data && data.immediateRain > 0.5) { alertDiv.innerText = `⚠️ 備用預報：周邊有雨`; alertDiv.style.color = "#ff6b6b"; setMarker3D(lat, lon, true); }
+else { alertDiv.innerText = `☁️ 備用預報：暫時無雨`; setMarker3D(lat, lon, false); }
+}).catch(() => { document.getElementById('rain-alert').innerText = "⚠️ 正在連線衛星氣象雷達..."; setMarker3D(lat, lon, false); });
+});
+}
+
+function fetchTomorrowAI(lat, lon) {
+fetch(`https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&timesteps=1h&apikey=${TOMORROW_API_KEY}`)
+.then(res => res.json())
+.then(data => {
+if (!data.timelines || !data.timelines.hourly) { document.getElementById("rainMsg").innerText = "⚠️ AI 預報暫時不可用"; return; }
+const hours = data.timelines.hourly.slice(0, 3);
+let msg = "☀️ 未來三小時暫時無明顯降雨";
+let foundRain = false; currentRainIntensity = 0;
+for (let i = 0; i < hours.length; i++) {
+const rain = hours[i].values.rainIntensity || 0;
+if (rain >= 1) {
+foundRain = true; currentRainIntensity = rain;
+if (i === 0) msg = "🌧 🤖 AI 精準預測：一小時內開火落雨";
+else if (i === 1) msg = "🌧 🤖 AI 精準預測：兩小時內局部有雨";
+else msg = "🌧 🤖 AI 精準預測：三小時內烏雲逼近";
+if (!aiRainPushed) { speak(msg); sendPushAI(msg); aiRainPushed = true; }
+break;
+}
+}
+if (!foundRain) aiRainPushed = false;
+document.getElementById("rainMsg").innerText = msg;
+})
+.catch(() => { document.getElementById("rainMsg").innerText = "⚠️ AI 氣象雲連線中..."; });
+}
