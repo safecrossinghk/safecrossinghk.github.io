@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>📊 K-Walk 3D 取餐熱點戰術大腦</title>
+<style>
+body {
+margin: 0; padding: 0; overflow: hidden;
+background-color: #1a1a1a; font-family: "Helvetica Neue", sans-serif;
+}
+/* 3D 渲染畫布滿版 */
+#map3d {
+position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1;
+}
+/* 2D 磨砂玻璃風 UI 面板 */
+.ui-panel {
+position: absolute; top: 20px; left: 20px; z-index: 10;
+width: 320px; padding: 20px; border-radius: 12px;
+background: rgba(255, 255, 255, 0.1);
+backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+border: 1px solid rgba(255, 255, 255, 0.2);
+box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+color: #fff; pointer-events: auto;
+}
+h1 { font-size: 1.3em; margin: 0 0 15px 0; color: #00ffcc; letter-spacing: 1px; }
+.status-item { margin-bottom: 10px; font-size: 0.95em; line-height: 1.5em; }
+.status-label { color: #aaa; }
+.info-card {
+margin-top: 15px; padding: 10px; border-radius: 6px;
+background: rgba(0, 0, 0, 0.4); border-left: 4px solid #00ffcc;
+display: none; /* 預設隱藏，點擊 3D 柱體後顯示 */
+}
+.legend {
+margin-top: 15px; font-size: 0.85em; display: flex; flex-direction: column; gap: 5px;
+}
+.legend-item { display: flex; align-items: center; gap: 8px; }
+.dot { width: 12px; height: 12px; border-radius: 3px; }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+<div id="map3d"></div>
+
+<div class="ui-panel">
+<h1>🤖 K-Walk 3D 戰術後台</h1>
+<div class="status-item">
+<span class="status-label">系統狀態：</span><span style="color: #00ff00;">● 線上運作中</span>
+</div>
+<div class="status-item">
+<span class="status-label">當前基準點：</span><span>九龍旺角中心一帶</span>
+</div>
+
+<div id="infoCard" class="info-card">
+<div style="font-weight: bold; margin-bottom: 5px;" id="cardName">商圈名稱</div>
+<div class="status-item"><span class="status-label">預計等餐：</span><span id="cardTime" style="font-weight: bold;">--</span></div>
+<div class="status-item"><span class="status-label">即時單量：</span><span id="cardCount">--</span></div>
+</div>
+
+<div class="legend">
+<div style="color: #aaa; margin-bottom: 2px;">【等餐時間圖例 (高度)】</div>
+<div class="legend-item"><div class="dot" style="background: #ff3333;"></div> 嚴重卡關 (≥ 30分鐘)</div>
+<div class="legend-item"><div class="dot" style="background: #ffa500;"></div> 稍有延誤 (15-30分鐘)</div>
+<div class="legend-item"><div class="dot" style="background: #00ff66;"></div> 取餐極速 (< 15分鐘)</div>
+<div style="color: #aaa; margin-top: 5px; font-size: 0.95em;">※ 圓柱體【粗細】代表訂單密集度</div>
+</div>
+</div>
+
+<script>
+// ==================== 1. 核心設定與 K-Walk 數據源 ====================
+let scene, camera, renderer, controls;
+let raycaster, mouse; // 用於處理滑鼠點擊偵測
+let hotspotMeshes = []; // 存放所有 3D 柱體以供點擊互動
+
+const ORIGIN_LAT = 22.3195; // 旺角中心 GPS 作為 3D 場景中心 (0,0,0)
+const ORIGIN_LON = 114.1694;
+const SCALE = 100000; // 經緯度放大到 3D 空間的比例尺
+
+// 模擬 K-Walk 核心物流熱點數據
+const kWalkHotspots = [
+{ name: "旺角中心 (低層高密商場)", lat: 22.3195, lng: 114.1694, waitTime: 35, orderCount: 45 },
+{ name: "朗豪坊 (垂直超高層商場)", lat: 22.3191, lng: 114.1685, waitTime: 12, orderCount: 85 },
+{ name: "新世紀廣場 MOKO", lat: 22.3221, lng: 114.1712, waitTime: 22, orderCount: 60 },
+{ name: "大角咀櫻桃街附近住宅區", lat: 22.3182, lng: 114.1636, waitTime: 8, orderCount: 20 }
+];
+
+// ==================== 2. THREE.JS 3D 場景初始化 ====================
+function init3D() {
+const container = document.getElementById('map3d');
+
+scene = new THREE.Scene();
+scene.background = new THREE.Color(0x141414);
+scene.fog = new THREE.FogExp2(0x141414, 0.006); // 加上迷霧效果增強層次感
+
+camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+camera.position.set(0, 60, 90);
+
+renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+container.appendChild(renderer.domElement);
+
+// 控制器設定
+controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI / 2 - 0.05; // 限制視角不穿透地面
+
+// 光源
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(100, 200, 50);
+scene.add(dirLight);
+
+// 點擊偵測器初始化
+raycaster = new THREE.Raycaster();
+mouse = new THREE.Vector2();
+
+// 建立基礎地底與大廈環境
+createEnvironment();
+// 渲染 K-Walk 數據柱
+render3DHotspots();
+
+// 事件監聽
+window.addEventListener('resize', onWindowResize);
+window.addEventListener('click', onDocumentClick);
+
+animate();
+}
+
+// 經緯度轉 3D 空間 (X, Z) 軸函數
+function latLngTo3D(lat, lon) {
+const x = (lon - ORIGIN_LON) * SCALE;
+const z = (ORIGIN_LAT - lat) * SCALE;
+return { x: x, z: z };
+}
+
+// 生成模擬城市網格與灰色大廈
+function createEnvironment() {
+const gridHelper = new THREE.GridHelper(1000, 80, 0x333333, 0x222222);
+scene.add(gridHelper);
+
+// 生成隨機灰色建築物（代表真實城市背景）
+const boxGeom = new THREE.BoxGeometry(1, 1, 1);
+const buildingMat = new THREE.MeshStandardMaterial({ color: 0x2e2e2e, roughness: 0.8 });
+
+for (let i = 0; i < 120; i++) {
+const building = new THREE.Mesh(boxGeom, buildingMat);
+const w = Math.random() * 12 + 6;
+const h = Math.random() * 50 + 15;
+const d = Math.random() * 12 + 6;
+building.scale.set(w, h, d);
+
+const radius = Math.random() * 350 + 30;
+const angle = Math.random() * Math.PI * 2;
+building.position.set(Math.cos(angle) * radius, h / 2, Math.sin(angle) * radius);
+scene.add(building);
+}
+}
+
+// ==================== 3. K-WALK 數據立體渲染邏輯 ====================
+function render3DHotspots() {
+kWalkHotspots.forEach(data => {
+const coords = latLngTo3D(data.lat, data.lng);
+
+// 核心映射：1.高度由等餐時間決定 2.粗細由訂單量決定
+const height = data.waitTime * 1.2; // 放大高度比例方便觀察
+const radius = data.orderCount * 0.08 + 2; // 防止太細，加上基礎值
+
+// 建立圓柱體幾何體
+const geometry = new THREE.CylinderGeometry(radius, radius, height, 32);
+
+// 顏色判定：發光紅、發光橙、發光綠
+let colorHex = 0x00ff66; // 預設綠色
+if (data.waitTime >= 30) {
+colorHex = 0xff3333; // 紅
+} else if (data.waitTime >= 15) {
+colorHex = 0xffa500; // 橙
+}
+
+// 使用帶有自發光（emissive）的半透明材質，科技感拉滿
+const material = new THREE.MeshStandardMaterial({
+color: colorHex,
+emissive: colorHex,
+emissiveIntensity: 0.3,
+transparent: true,
+opacity: 0.85,
+roughness: 0.3
+});
+
+const mesh = new THREE.Mesh(geometry, material);
+
+// 將圓柱體的底部精準貼在地面 (Y = 0)
+mesh.position.set(coords.x, height / 2, coords.z);
+
+// 將原始數據綁定到 3D 物件內，方便後續點擊時讀取
+mesh.userData = data;
+
+scene.add(mesh);
+hotspotMeshes.push(mesh); // 塞進陣列以供 Raycaster 監控
+});
+}
+
+// ==================== 4. 互動與動畫循環 ====================
+function onDocumentClick(event) {
+// 計算滑鼠在螢幕上的標準化設備座標
+mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+raycaster.setFromCamera(mouse, camera);
+const intersects = raycaster.intersectObjects(hotspotMeshes);
+
+// 重置所有柱子的發光強度
+hotspotMeshes.forEach(mesh => {
+mesh.material.emissiveIntensity = 0.3;
+});
+
+if (intersects.length > 0) {
+const clickedMesh = intersects[0].object;
+const data = clickedMesh.userData;
+
+// 讓點擊的數據柱加倍發光高亮
+clickedMesh.material.emissiveIntensity = 1.5;
+
+// 更新 2D 磨砂玻璃面板內的資料
+document.getElementById('cardName').innerText = data.name;
+document.getElementById('cardTime').innerText = data.waitTime + " 分鐘";
+document.getElementById('cardCount').innerText = data.orderCount + " 單";
+
+// 根據等餐時間動態修改文字顏色
+const timeColor = data.waitTime >= 30 ? "#ff3333" : (data.waitTime >= 15 ? "#ffa500" : "#00ff66");
+document.getElementById('cardTime').style.color = timeColor;
+
+document.getElementById('infoCard').style.display = "block";
+
+// 鏡頭平滑對焦到該熱點
+controls.target.set(clickedMesh.position.x, 0, clickedMesh.position.z);
+} else {
+// 點擊空白處隱藏資訊卡
+document.getElementById('infoCard').style.display = "none";
+}
+}
+
+function animate() {
+requestAnimationFrame(animate);
+controls.update();
+renderer.render(scene, camera);
+}
+
+function onWindowResize() {
+camera.aspect = window.innerWidth / window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// 啟動 3D 空間
+init3D();
+</script>
+</body>
+</html>
