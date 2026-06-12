@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>📍 荔枝角食店人流地圖</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+margin: 0;
+padding: 1em;
+background: #f4f4f4;
+}
+h2 { text-align: center; }
+select {
+width: 100%;
+padding: 1em;
+margin-bottom: 1em;
+font-size: 1.1em;
+border: none;
+background-color: #007bff;
+color: white;
+border-radius: 5px;
+}
+#result {
+background: white;
+padding: 1em;
+border-radius: 5px;
+margin-top: 1em;
+box-shadow: 0 0 3px rgba(0,0,0,0.1);
+font-size: 1.1em;
+}
+iframe {
+width: 100%;
+height: 55vh;
+border: none;
+border-radius: 10px;
+margin-top: 1em;
+}
+.busy { color: red; font-weight: bold; }
+.normal { color: green; font-weight: bold; }
+#weather {
+font-size: 1em;
+margin-bottom: 1em;
+text-align: center;
+}
+</style>
+</head>
+<body>
+
+<h2>📍 荔枝角食店人流地圖</h2>
+<div id="weather">⛅ 正在確認您的位置並載入天氣資訊...</div>
+
+<select id="locationSelect" onchange="onLocationChange(this.value)">
+<option value="">請選擇地點查詢</option>
+<option value="必勝客(宇晴匯)">必勝客(宇晴匯)</option>
+<option value="麥當勞 (宇晴軒)">麥當勞 (宇晴軒)</option>
+<option value="元氣壽司 (泓景匯)">元氣壽司 (泓景匯)</option>
+<option value="譚仔三哥米線（荔枝角D2）">譚仔三哥米線（荔枝角D2）</option>
+<option value="Thai-ger(荔枝角)">Thai-ger(荔枝角)</option>
+<option value="黑布小巷[荔枝角店]">黑布小巷[荔枝角店]</option>
+<option value="馬德里">馬德里</option>
+<option value="吉野家長沙灣廣場">吉野家長沙灣廣場</option>
+<option value="阿木台灣麵（茘枝角）">阿木台灣麵（茘枝角）</option>
+<option value="肯德基（長沙灣廣場）">肯德基（長沙灣廣場）</option>
+<option value="一冰廳（茘枝角）">一冰廳（茘枝角）</option>
+<option value="迎麵">迎麵</option>
+<option value="李圓圓（荔枝角）">李圓圓（荔枝角）</option>
+<option value="星巴克（長沙灣廣場）">星巴克（長沙灣廣場）</option>
+<option value="星巴克（昇悅居）">星巴克（昇悅居）</option>
+</select>
+
+<div id="result">🔍 請選擇上方地點以查詢。</div>
+<iframe id="wazeMap" src=""></iframe>
+
+<script>
+// ⚠️ 請在此處填入你在 Tomorrow.io 申請的 API Key
+const TOMORROW_API_KEY = 'YOUR_TOMORROW_IO_API_KEY';
+
+const wazeUrls = {
+"荔枝角站出口 A": "https://embed.waze.com/iframe?zoom=17&lat=22.338611&lon=114.149444&pin=1",
+"D2 Place": "https://embed.waze.com/iframe?zoom=17&lat=22.338336&lon=114.149792&pin=1",
+"長沙灣廣場": "https://embed.waze.com/iframe?zoom=17&lat=22.337858&lon=114.152069&pin=1",
+"D2 Place Two": "https://embed.waze.com/iframe?zoom=17&lat=22.338877&lon=114.149200&pin=1",
+"泓景匯": "https://embed.waze.com/iframe?zoom=17&lat=22.336136&lon=114.155181&pin=1"
+};
+
+async function fetchWithRetry(query, retries = 3, delay = 800) {
+for (let i = 0; i < retries; i++) {
+try {
+const res = await fetch("https://tiny-disk-0d7b.ctakwah.workers.dev/?query=" + encodeURIComponent(query));
+if (!res.ok) throw new Error("HTTP error " + res.status);
+const data = await res.json();
+if (!data.success) throw new Error(data.message || "未知錯誤");
+return data;
+} catch (err) {
+if (i === retries - 1) throw err;
+await new Promise(resolve => setTimeout(resolve, delay));
+}
+}
+}
+
+async function queryLocation(name) {
+document.getElementById("result").textContent = "⏳ 正在查詢中...";
+document.getElementById("wazeMap").src = wazeUrls[name];
+
+try {
+const data = await fetchWithRetry(name);
+let percentage = null;
+if (Array.isArray(data.popular_times)) {
+const live = data.popular_times.find(d => d.day === "live");
+if (live && typeof live.percentage === "number") {
+percentage = live.percentage;
+}
+}
+
+if (percentage === null) {
+document.getElementById("result").textContent = "⚠️ 無法取得即時人流資料。";
+return;
+}
+
+let label = "🟢 偏少";
+if (percentage >= 80) label = "🔴 非常繁忙";
+else if (percentage >= 20) label = "🟡 正常";
+
+document.getElementById("result").innerHTML =
+`📌 地點：${name}<br>👥 現時人流：<span class="${percentage >= 70 ? 'busy' : 'normal'}">${label}（約 ${percentage}%）</span>`;
+
+const msg = new SpeechSynthesisUtterance(`${name} 現時人流：${label}`);
+msg.lang = "zh-HK";
+speechSynthesis.speak(msg);
+
+} catch (e) {
+console.error(e);
+document.getElementById("result").textContent = "❌ 查詢失敗，請稍後再試。";
+}
+}
+
+function onLocationChange(value) {
+if (value) queryLocation(value);
+}
+
+// 核心修改：使用地理定位獲取經緯度，並讀取 Tomorrow.io 數據
+function loadWeather() {
+if (navigator.geolocation) {
+navigator.geolocation.getCurrentPosition(
+(position) => {
+// 成功獲取使用者目前位置的經緯度
+const lat = position.coords.latitude;
+const lon = position.coords.longitude;
+fetchTomorrowWeather(lat, lon);
+},
+(error) => {
+console.warn("無法獲取使用者位置，將載入預設荔枝角位置的天氣:", error);
+// 降級處理：使用者拒絕或無法定位時，使用預設荔枝角經緯度 (22.3372, 114.1398)
+fetchTomorrowWeather(22.3372, 114.1398);
+}
+);
+} else {
+console.warn("瀏覽器不支援地理位置定位，載入預設位置。");
+fetchTomorrowWeather(22.3372, 114.1398);
+}
+}
+
+// 呼叫 Tomorrow.io Realtime 天氣 API 的異步函數
+async function fetchTomorrowWeather(lat, lon) {
+const url = `https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lon}&units=metric&apikey=${TOMORROW_API_KEY}`;
+
+try {
+const response = await fetch(url, {
+method: 'GET',
+headers: { 'Accept': 'application/json' }
+});
+
+if (!response.ok) throw new Error("Tomorrow.io API 請求錯誤: " + response.status);
+const data = await response.json();
+
+// 提取溫度與濕度並四捨五入成整數
+const temp = Math.round(data.data.values.temperature);
+const humidity = Math.round(data.data.values.humidity);
+
+// 將網頁原本的天氣欄位替換為新數據（保留原 UI 樣式與雲朵圖示）
+document.getElementById("weather").innerHTML = `☁️ 溫度 ${temp}°C ｜ 濕度 ${humidity}%`;
+
+} catch (e) {
+console.error(e);
+document.getElementById("weather").textContent = "⚠️ 無法載入 Tomorrow.io 天氣資料。";
+}
+}
+
+// 初始化天氣載入
+loadWeather();
+</script>
+
+</body>
+</html>
