@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港實時溫度 3D 電視級戰情室</title>
+<style>
+body {
+margin: 0;
+overflow: hidden;
+background-color: #0a0a16;
+font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+/* 頂部科幻風面板 */
+#info-panel {
+position: absolute;
+top: 20px;
+left: 20px;
+color: #ffffff;
+background: rgba(10, 10, 26, 0.85);
+padding: 20px;
+border-radius: 12px;
+border: 1px solid rgba(0, 170, 255, 0.3);
+box-shadow: 0 0 20px rgba(0, 170, 255, 0.2);
+z-index: 10;
+pointer-events: none;
+}
+#info-panel h2 { margin: 0 0 10px 0; font-size: 20px; letter-spacing: 2px; color: #00aaff; }
+#info-panel p { margin: 5px 0; font-size: 14px; color: #a0a0c0; }
+.highlight { color: #ffffff; font-weight: bold; }
+
+/* 底部時間軸 */
+#time-axis {
+position: absolute;
+bottom: 30px;
+left: 50%;
+transform: translateX(-50%);
+color: #00ffff;
+background: rgba(5, 5, 15, 0.9);
+padding: 12px 40px;
+border-radius: 30px;
+border: 1px solid #00ffff;
+box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+z-index: 10;
+font-size: 16px;
+letter-spacing: 1px;
+text-align: center;
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+<div id="info-panel">
+<h2>HK WEATHER 3D LIVE</h2>
+<p>系統狀態：<span id="status" style="color: #00ffcc; font-weight: bold;">天文台 API 連線中</span></p>
+<p>電影運鏡：<span class="highlight" id="focus-area">全港概覽巡航</span></p>
+<p>更新頻率：<span class="highlight">每 60 秒自動同步</span></p>
+</div>
+<div id="time-axis">🛰️ 香港天文台 HKO 實時數據串流中</div>
+
+<script>
+// 1. 初始化 3D 電影感場景
+const scene = new THREE.Scene();
+// 設定深藍色科幻迷霧，遮擋邊緣，營造空間深度
+scene.background = new THREE.Color(0x0a0a16);
+scene.fog = new THREE.FogExp2(0x0a0a16, 0.0035);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+
+// 允許用戶用滑鼠/手指手動旋轉、縮放鏡頭
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI / 2 - 0.05; // 限制視角不穿透地平線
+
+// 設定初始高空俯瞰鏡頭
+camera.position.set(0, 180, 250);
+controls.target.set(0, 0, 0);
+
+// 2. 建立網格地形底盤 (全息科技感地圖)
+const terrainGeo = new THREE.PlaneGeometry(600, 600, 40, 40);
+const terrainMat = new THREE.MeshBasicMaterial({
+color: 0x112244,
+wireframe: true, // 線條化，製造科幻戰情室網格感
+transparent: true,
+opacity: 0.4
+});
+const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+terrain.rotation.x = -Math.PI / 2;
+scene.add(terrain);
+
+// 燈光設置
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+// 3. 香港主要觀測站 3D 空間座標對應表
+const locationCoords = {
+"尖沙咀": { x: 0, z: 10 },
+"香港天文台": { x: 5, z: 0 },
+"跑馬地": { x: 15, z: 35 },
+"黃大仙": { x: 25, z: -25 },
+"屯門": { x: -120, z: -10 },
+"大埔": { x: 40, z: -90 },
+"石崗": { x: -30, z: -60 },
+"沙田": { x: 30, z: -30 },
+"將軍澳": { x: 80, z: 15 },
+"長洲": { x: -100, z: 110 },
+"赤鱲角": { x: -140, z: 40 },
+"流浮山": { x: -110, z: -50 },
+"坪洲": { x: -70, z: 40 }
+};
+
+const HKO_API_URL = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc";
+let weatherData = [];
+let temperatureMarkers = [];
+
+// 4. 非同步抓取天文台數據
+async function fetchHKWeatherData() {
+try {
+const response = await fetch(HKO_API_URL);
+const data = await response.json();
+weatherData = data.temperature.data;
+document.getElementById("status").innerText = "連線正常 (Live)";
+document.getElementById("status").style.color = "#00ffcc";
+update3DMarkers();
+} catch (error) {
+console.error("API 連線失敗，啟用本地模擬數據:", error);
+document.getElementById("status").innerText = "API 斷線 (啟用備用數據)";
+document.getElementById("status").style.color = "#ff3333";
+
+// 模擬數據
+weatherData = [
+{ place: "尖沙咀", value: 28 }, { place: "跑馬地", value: 29 },
+{ place: "屯門", value: 33 }, { place: "大埔", value: 25 },
+{ place: "沙田", value: 31 }, { place: "赤鱲角", value: 30 }
+];
+update3DMarkers();
+}
+}
+
+// 5. 動態渲染電影感發光溫度光柱
+function update3DMarkers() {
+// 清除舊有的 3D 物件
+temperatureMarkers.forEach(m => scene.remove(m));
+temperatureMarkers = [];
+
+weatherData.forEach(item => {
+const pos = locationCoords[item.place];
+if (!pos) return; // 略過無座標定義的偏遠小島
+
+const temp = item.value;
+
+// 【色彩美學】：根據溫度在藍色（低溫）與紅色（高溫）之間做平滑漸變
+const coldColor = new THREE.Color(0x00aaff);
+const hotColor = new THREE.Color(0xff3300);
+const progress = Math.min(Math.max((temp - 10) / 25, 0), 1); // 對應 10°C - 35°C
+const finalColor = new THREE.Color().lerpColors(coldColor, hotColor, progress);
+
+// 建立溫度半透明光柱
+const height = temp * 2.5; // 讓高度變化更戲劇化
+const geometry = new THREE.CylinderGeometry(1.5, 2.5, height, 16);
+const material = new THREE.MeshStandardMaterial({
+color: finalColor,
+emissive: finalColor,
+emissiveIntensity: 0.6, // 讓它自發光，產生科幻霓虹感
+transparent: true,
+opacity: 0.75,
+roughness: 0.2
+});
+const marker = new THREE.Mesh(geometry, material);
+
+// 設置定位（底座貼齊地面）
+marker.position.set(pos.x, height / 2, pos.z);
+scene.add(marker);
+temperatureMarkers.push(marker);
+});
+}
+
+// 6. 自動化 3D 電視節目運鏡系統
+let angle = 0;
+function animateCamera() {
+// 只有在手動沒有拖拽畫面時，才會執行自動運鏡
+if (!controls.state == -1) return;
+
+angle += 0.0015; // 旋轉速度
+// 無人機高空環繞算法
+camera.position.x = Math.sin(angle) * 260;
+camera.position.z = Math.cos(angle) * 260;
+camera.position.y = 140 + Math.sin(angle * 2.5) * 40; // 鏡頭自動起伏
+}
+
+// 7. 每影格動態循環渲染
+function animate() {
+requestAnimationFrame(animate);
+
+animateCamera();
+controls.update();
+
+// 讓所有溫度柱產生微弱的「呼吸燈」與「自轉」特效
+temperatureMarkers.forEach((m, index) => {
+m.rotation.y += 0.01;
+// 錯開每根光柱的呼吸頻率
+m.material.emissiveIntensity = 0.4 + Math.sin(Date.now() * 0.003 + index) * 0.2;
+});
+
+renderer.render(scene, camera);
+}
+
+// 啟動運作
+fetchHKWeatherData();
+setInterval(fetchHKWeatherData, 60000); // 每分鐘自動敲 API 獲取最新天氣
+animate();
+
+// 響應式視窗調整
+window.addEventListener('resize', () => {
+camera.aspect = window.innerWidth / window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
