@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港實時溫度 3D 電影級戰情室 V2</title>
+<style>
+body {
+margin: 0;
+overflow: hidden;
+background-color: #03030c;
+font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+/* 頂部科幻風面板 */
+#info-panel {
+position: absolute;
+top: 20px;
+left: 20px;
+color: #ffffff;
+background: rgba(6, 6, 20, 0.85);
+padding: 20px;
+border-radius: 8px;
+border: 1px solid rgba(0, 255, 255, 0.3);
+box-shadow: 0 0 20px rgba(0, 255, 255, 0.15);
+z-index: 10;
+pointer-events: none;
+}
+#info-panel h2 { margin: 0 0 10px 0; font-size: 18px; letter-spacing: 2px; color: #00ffff; text-shadow: 0 0 10px rgba(0,255,255,0.5); }
+#info-panel p { margin: 5px 0; font-size: 13px; color: #8a8ab0; }
+.highlight { color: #00ffff; font-weight: bold; }
+
+/* 底部時間軸 */
+#time-axis {
+position: absolute;
+bottom: 25px;
+left: 50%;
+transform: translateX(-50%);
+color: #ffffff;
+background: rgba(3, 3, 10, 0.9);
+padding: 10px 35px;
+border-radius: 4px;
+border: 1px solid rgba(0, 255, 255, 0.5);
+box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+z-index: 10;
+font-size: 14px;
+letter-spacing: 1px;
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+</head>
+<body>
+
+<div id="info-panel">
+<h2>HK WEATHER 3D CINEMA</h2>
+<p>系統狀態：<span id="status" style="color: #00ffcc; font-weight: bold;">後製特效渲染中</span></p>
+<p>電影運鏡：<span class="highlight" id="focus-area">無人機高空巡航</span></p>
+<p>更新頻率：<span class="highlight">每 60 秒自動同步</span></p>
+</div>
+<div id="time-axis">🛸 實時輝光（Glow）與大氣散射效果已啟動</div>
+
+<script>
+// 1. 初始化 3D 電影感場景
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020208);
+scene.fog = new THREE.FogExp2(0x020208, 0.004);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ReinhardToneMapping; // 啟用色調映射以獲得更好的發光效果
+renderer.toneMappingExposure = 1.5;
+document.body.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+camera.position.set(0, 160, 220);
+controls.target.set(0, 0, 0);
+
+// 2. 【視覺升級】建立更精緻的科幻動態雷達底盤
+const gridHelper = new THREE.GridHelper(400, 40, 0x00ffff, 0x112244);
+gridHelper.position.y = -0.1;
+scene.add(gridHelper);
+
+const ringGeo = new THREE.RingGeometry(210, 212, 64);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide, transparent: true, opacity: 0.3 });
+const radarRing = new THREE.Mesh(ringGeo, ringMat);
+radarRing.rotation.x = Math.PI / 2;
+scene.add(radarRing);
+
+// 3. 【核心升級】設置好萊塢級的 Bloom（發光）後製通道
+const renderPass = new THREE.RenderPass(scene, camera);
+// 參數分別為：新視窗大小、發光強度(Strength)、擴散半徑(Radius)、發光閾值(Threshold)
+const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.6, 0.4, 0.1);
+
+const composer = new THREE.EffectComposer(renderer);
+composer.addPass(renderPass);
+composer.addPass(bloomPass);
+
+// 4. 香港觀測站座標對應表
+const locationCoords = {
+"尖沙咀": { x: 0, z: 10 }, "香港天文台": { x: 5, z: 0 }, "跑馬地": { x: 15, z: 35 },
+"黃大仙": { x: 25, z: -25 }, "屯門": { x: -110, z: -10 }, "大埔": { x: 40, z: -80 },
+"石崗": { x: -30, z: -50 }, "沙田": { x: 25, z: -30 }, "將軍澳": { x: 75, z: 15 },
+"長洲": { x: -90, z: 100 }, "赤鱲角": { x: -130, z: 30 }, "流浮山": { x: -100, z: -40 }
+};
+
+const HKO_API_URL = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc";
+let weatherData = [];
+let temperatureMarkers = [];
+let labelGroup = new THREE.Group(); // 用於存放文字標籤的群組
+scene.add(labelGroup);
+
+// 5. 建立文字紋理（用畫布動態畫出精緻的科幻地區標籤）
+function createTextTexture(text) {
+const canvas = document.createElement('canvas');
+canvas.width = 256;
+canvas.height = 64;
+const ctx = canvas.getContext('2d');
+ctx.fillStyle = 'rgba(0,0,0,0)';
+ctx.fillRect(0, 0, 256, 64);
+
+// 畫出科幻框線
+ctx.strokeStyle = '#00ffff';
+ctx.lineWidth = 2;
+ctx.strokeRect(10, 10, 236, 44);
+
+// 寫入文字
+ctx.fillStyle = '#ffffff';
+ctx.font = 'bold 20px sans-serif';
+ctx.textAlign = 'center';
+ctx.textBaseline = 'middle';
+ctx.shadowColor = '#00ffff';
+ctx.shadowBlur = 8;
+ctx.fillText(text, 128, 32);
+
+const texture = new THREE.CanvasTexture(canvas);
+return texture;
+}
+
+// 6. 抓取數據與生成高發光光柱
+async function fetchHKWeatherData() {
+try {
+const response = await fetch(HKO_API_URL);
+const data = await response.json();
+weatherData = data.temperature.data;
+update3DMarkers();
+} catch (error) {
+console.error("API 連線失敗，啟用本地模擬數據");
+weatherData = [
+{ place: "尖沙咀", value: 29 }, { place: "跑馬地", value: 31 },
+{ place: "屯門", value: 34 }, { place: "大埔", value: 26 },
+{ place: "沙田", value: 32 }, { place: "赤鱲角", value: 30 }
+];
+update3DMarkers();
+}
+}
+
+function update3DMarkers() {
+temperatureMarkers.forEach(m => scene.remove(m));
+temperatureMarkers = [];
+
+// 清除舊文字標籤
+while(labelGroup.children.length > 0){
+labelGroup.remove(labelGroup.children[0]);
+}
+
+weatherData.forEach(item => {
+const pos = locationCoords[item.place];
+if (!pos) return;
+
+const temp = item.value;
+
+// 動態色彩漸變
+const coldColor = new THREE.Color(0x00aaff);
+const hotColor = new THREE.Color(0xff2200);
+const progress = Math.min(Math.max((temp - 15) / 20, 0), 1); // 15°C - 35°C
+const finalColor = new THREE.Color().lerpColors(coldColor, hotColor, progress);
+
+// 光柱高度隨溫度劇烈變化
+const height = temp * 2.5;
+const geometry = new THREE.CylinderGeometry(1.2, 2.0, height, 16);
+const material = new THREE.MeshStandardMaterial({
+color: finalColor,
+emissive: finalColor,
+emissiveIntensity: 1.2, // 提高自發光強度，配合 Bloom 通道效果極佳
+transparent: true,
+opacity: 0.7,
+roughness: 0.1
+});
+const marker = new THREE.Mesh(geometry, material);
+marker.position.set(pos.x, height / 2, pos.z);
+scene.add(marker);
+temperatureMarkers.push(marker);
+
+// 【細節升級】在光柱頂部建立 3D 文字看板（Sprite）
+const texture = createTextTexture(`${item.place}: ${temp}°C`);
+const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+const sprite = new THREE.Sprite(spriteMaterial);
+sprite.position.set(pos.x, height + 8, pos.z);
+sprite.scale.set(30, 7.5, 1);
+labelGroup.add(sprite);
+});
+}
+
+// 7. 自動電視運鏡
+let angle = 0;
+function animateCamera() {
+if (!controls.state == -1) return;
+angle += 0.0012;
+camera.position.x = Math.sin(angle) * 240;
+camera.position.z = Math.cos(angle) * 240;
+camera.position.y = 120 + Math.sin(angle * 2) * 30;
+}
+
+// 8. 循環渲染
+function animate() {
+requestAnimationFrame(animate);
+
+animateCamera();
+controls.update();
+
+// 光柱微轉與動態能量呼吸
+temperatureMarkers.forEach((m, index) => {
+m.rotation.y += 0.01;
+m.material.emissiveIntensity = 0.8 + Math.sin(Date.now() * 0.004 + index) * 0.4;
+});
+
+// 雷達外環緩慢旋轉
+radarRing.rotation.z -= 0.002;
+
+// 【關鍵修改】使用 composer.render() 代替原本的 renderer.render()，特效才會生效
+composer.render();
+}
+
+fetchHKWeatherData();
+setInterval(fetchHKWeatherData, 60000);
+animate();
+
+window.addEventListener('resize', () => {
+camera.aspect = window.innerWidth / window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+composer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
