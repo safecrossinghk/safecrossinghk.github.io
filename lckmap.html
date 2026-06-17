@@ -202,7 +202,7 @@ const weatherIconMap = {
 const currentIcon = weatherIconMap[weatherCode] || "☁️";
 
 // 5. 動態更新到網頁 UI 上
-document.getElementById("weather").innerHTML = 荔枝角 ｜ `${currentIcon} 溫度 ${temp}°C ｜ 濕度 ${humidity}%`;
+document.getElementById("weather").innerHTML = `${currentIcon} 溫度 ${temp}°C ｜ 濕度 ${humidity}%`;
 
 } catch (e) {
 console.error(e);
