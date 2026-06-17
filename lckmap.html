@@ -49,32 +49,34 @@ text-align: center;
 <body>
 
 <h2>📍 荔枝角食店人流地圖</h2>
-<div id="weather">⛅ 正在載入天氣資訊...</div>
+<div id="weather">⛅ 正在確認您的位置並載入天氣資訊...</div>
 
-<!-- 下拉選單取代按鈕 -->
 <select id="locationSelect" onchange="onLocationChange(this.value)">
-  <option value="">請選擇地點查詢</option>
-  <option value="必勝客(宇晴匯)">必勝客(宇晴匯)</option>
-  <option value="麥當勞 (宇晴軒)">麥當勞 (宇晴軒)</option>
-  <option value="元氣壽司 (泓景匯)">元氣壽司 (泓景匯)</option>
-  <option value="譚仔三哥米線（荔枝角D2）">譚仔三哥米線（荔枝角D2）</option>
-  <option value="Thai-ger(荔枝角)">Thai-ger(荔枝角)</option>
-  <option value="黑布小巷[荔枝角店]">黑布小巷[荔枝角店]</option>
-  <option value="馬德里">馬德里</option>
-  <option value="吉野家長沙灣廣場">吉野家長沙灣廣場</option>
-  <option value="阿木台灣麵（茘枝角）">阿木台灣麵（茘枝角）</option>
-  <option value="肯德基（長沙灣廣場）">肯德基（長沙灣廣場）</option>
-  <option value="一冰廳（茘枝角）">一冰廳（茘枝角）</option>
-  <option value="迎麵">迎麵</option>
-  <option value="李圓圓（荔枝角）">李圓圓（荔枝角）</option>
-  <option value="星巴克（長沙灣廣場）">星巴克（長沙灣廣場）</option>
-  <option value="星巴克（昇悅居）">星巴克（昇悅居）</option>
+<option value="">請選擇地點查詢</option>
+<option value="必勝客(宇晴匯)">必勝客(宇晴匯)</option>
+<option value="麥當勞 (宇晴軒)">麥當勞 (宇晴軒)</option>
+<option value="元氣壽司 (泓景匯)">元氣壽司 (泓景匯)</option>
+<option value="譚仔三哥米線（荔枝角D2）">譚仔三哥米線（荔枝角D2）</option>
+<option value="Thai-ger(荔枝角)">Thai-ger(荔枝角)</option>
+<option value="黑布小巷[荔枝角店]">黑布小巷[荔枝角店]</option>
+<option value="馬德里">馬德里</option>
+<option value="吉野家長沙灣廣場">吉野家長沙灣廣場</option>
+<option value="阿木台灣麵（茘枝角）">阿木台灣麵（茘枝角）</option>
+<option value="肯德基（長沙灣廣場）">肯德基（長沙灣廣場）</option>
+<option value="一冰廳（茘枝角）">一冰廳（茘枝角）</option>
+<option value="迎麵">迎麵</option>
+<option value="李圓圓（荔枝角）">李圓圓（荔枝角）</option>
+<option value="星巴克（長沙灣廣場）">星巴克（長沙灣廣場）</option>
+<option value="星巴克（昇悅居）">星巴克（昇悅居）</option>
 </select>
 
 <div id="result">🔍 請選擇上方地點以查詢。</div>
 <iframe id="wazeMap" src=""></iframe>
 
 <script>
+// ⚠️ 請在此處填入你在 Tomorrow.io 申請的 API Key
+const TOMORROW_API_KEY = 'Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh';
+
 const wazeUrls = {
 "荔枝角站出口 A": "https://embed.waze.com/iframe?zoom=17&lat=22.338611&lon=114.149444&pin=1",
 "D2 Place": "https://embed.waze.com/iframe?zoom=17&lat=22.338336&lon=114.149792&pin=1",
@@ -138,34 +140,77 @@ function onLocationChange(value) {
 if (value) queryLocation(value);
 }
 
-async function loadWeather() {
-  try {
-    const res = await fetch("https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc");
-    const data = await res.json();
-
-    const temp = data.temperature.data.find(d => d.place === "香港天文台");
-    const humidity = data.humidity.data[0];
-
-    const iconCode = data.icon[0];
-    const iconUrl = `https://www.hko.gov.hk/images/HKOWxIconOutline/pic${iconCode}.png`;
-
-    let warning = "";
-    if (Array.isArray(data.warningMessage)) {
-      warning = data.warningMessage.join("，");
-    } else if (typeof data.warningMessage === "string" && data.warningMessage.trim() !== "") {
-      warning = data.warningMessage;
-    }
-
-    document.getElementById("weather").innerHTML = `
-      <img src="${iconUrl}" alt="天氣圖示" style="height:24px;vertical-align:middle;"> 
-      溫度 ${temp?.value || '未知'}°C ｜ 濕度 ${humidity?.value || '未知'}% <br>
-      ${warning}`;
-  } catch (e) {
-    console.error(e);
-    document.getElementById("weather").textContent = "⚠️ 無法載入天氣資料。";
-  }
+// 核心修改：使用地理定位獲取經緯度，並讀取 Tomorrow.io 數據
+function loadWeather() {
+if (navigator.geolocation) {
+navigator.geolocation.getCurrentPosition(
+(position) => {
+// 成功獲取使用者目前位置的經緯度
+const lat = position.coords.latitude;
+const lon = position.coords.longitude;
+fetchTomorrowWeather(lat, lon);
+},
+(error) => {
+console.warn("無法獲取使用者位置，將載入預設荔枝角位置的天氣:", error);
+// 降級處理：使用者拒絕或無法定位時，使用預設荔枝角經緯度 (22.3372, 114.1398)
+fetchTomorrowWeather(22.3372, 114.1398);
+}
+);
+} else {
+console.warn("瀏覽器不支援地理位置定位，載入預設位置。");
+fetchTomorrowWeather(22.3372, 114.1398);
+}
 }
 
+// 呼叫 Tomorrow.io Realtime 天氣 API 的異步函數
+async function fetchTomorrowWeather(lat, lon) {
+const url = `https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lon}&units=metric&apikey=${TOMORROW_API_KEY}`;
+
+try {
+const response = await fetch(url, {
+method: 'GET',
+headers: { 'Accept': 'application/json' }
+});
+
+if (!response.ok) throw new Error("Tomorrow.io API 請求錯誤: " + response.status);
+const data = await response.json();
+
+// 1. 提取溫度與濕度並四捨五入成整數
+const temp = Math.round(data.data.values.temperature);
+const humidity = Math.round(data.data.values.humidity);
+
+// 2. 提取 Tomorrow.io 的天氣代碼 (Weather Code)
+const weatherCode = data.data.values.weatherCode;
+
+// 3. 定義天氣代碼與 Emoji 的對照表
+const weatherIconMap = {
+1000: "☀️", // 晴朗 (Clear, Sunny)
+1100: "🌤️", // 大部分晴朗 (Mostly Clear)
+1101: "⛅", // 多雲時晴 (Partly Cloudy)
+1102: "☁️", // 多雲 (Mostly Cloudy)
+1001: "☁️", // 陰天 (Cloudy)
+2000: "🌫️", // 有霧 (Fog)
+2100: "🌫️", // 薄霧 (Light Fog)
+4000: "🌧️", // 毛毛雨 (Drizzle)
+4001: "🌧️", // 下雨 (Rain)
+4200: "🌧️", // 小雨 (Light Rain)
+4201: "⛈️", // 大雨 (Heavy Rain)
+8000: "⛈️" // 雷暴 (Thunderstorm)
+};
+
+// 4. 根據 API 回傳的代碼找出圖示，如果找不到就用預設的 ☁️
+const currentIcon = weatherIconMap[weatherCode] || "☁️";
+
+// 5. 動態更新到網頁 UI 上
+document.getElementById("weather").innerHTML = 荔枝角 ｜ `${currentIcon} 溫度 ${temp}°C ｜ 濕度 ${humidity}%`;
+
+} catch (e) {
+console.error(e);
+document.getElementById("weather").textContent = "⚠️ 無法載入 Tomorrow.io 天氣資料。";
+}
+}
+
+// 初始化天氣載入
 loadWeather();
 </script>
 
