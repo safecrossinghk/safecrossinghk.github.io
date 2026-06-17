@@ -133,8 +133,9 @@ attributionControl: false
 
 // 2. 【核心修復】載入絕對不會失敗的高清深色科技感/衛星地理圖瓦片
 // 這裡採用極高質感的深色地理圖層，讓溫度數據在手機上更顯眼
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-maxZoom: 19
+L.tileLayer('https://mt1.google.com/vt/lyrs=y&hl=zh-TW&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
 }).addTo(map);
 
 // 各大主要觀測站精確經緯度 (Lat, Lng)
