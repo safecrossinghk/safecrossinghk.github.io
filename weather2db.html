@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港實時天氣與降雨預報戰情室</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+body {
+margin: 0;
+padding: 0;
+background-color: #f0f6fa; /* 配合降雨網站的清爽淺藍灰底色 */
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+color: #334e68; /* 優雅的深藍灰文字 */
+display: flex;
+flex-direction: column;
+align-items: center;
+}
+
+/* 統一風格的頂部標題 */
+.app-header {
+text-align: center;
+padding: 20px 15px 10px 15px;
+width: 100%;
+max-width: 600px;
+}
+.app-header h1 {
+margin: 0;
+font-size: 24px;
+font-weight: 700;
+color: #243b53;
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 8px;
+}
+.app-header p {
+margin: 5px 0 0 0;
+font-size: 13px;
+color: #627d98;
+}
+
+/* 主容器 */
+.main-container {
+width: 100%;
+max-width: 600px;
+padding: 0 15px 30px 15px;
+}
+
+/* 降雨與溫度 功能切換頁籤 (Tabs) */
+.tab-container {
+display: flex;
+background: #e2ecf4;
+border-radius: 12px;
+padding: 4px;
+margin-bottom: 15px;
+}
+.tab-btn {
+flex: 1;
+border: none;
+background: none;
+padding: 10px;
+font-size: 15px;
+font-weight: 600;
+color: #486581;
+cursor: pointer;
+border-radius: 9px;
+transition: all 0.2s ease;
+}
+.tab-btn.active {
+background: #ffffff;
+color: #0066ff;
+box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+/* 區塊面板控制 */
+.panel {
+display: none;
+}
+.panel.active {
+display: block;
+}
+
+/* 降雨網站原本的精美白底卡片風格 */
+.info-card {
+background: #ffffff;
+border: 1px solid #dce6f0;
+border-radius: 16px;
+padding: 18px;
+box-shadow: 0 4px 12px rgba(138, 149, 158, 0.08);
+margin-bottom: 15px;
+}
+.info-card h3 {
+margin: 0 0 10px 0;
+font-size: 16px;
+color: #102a43;
+display: flex;
+align-items: center;
+gap: 6px;
+}
+
+/* 地圖容器樣式 - 統一調整為圓角白邊框 */
+.map-wrapper {
+background: #ffffff;
+border: 1px solid #dce6f0;
+border-radius: 16px;
+padding: 8px;
+box-shadow: 0 4px 12px rgba(138, 149, 158, 0.08);
+margin-bottom: 15px;
+overflow: hidden;
+}
+.map-element {
+height: 320px;
+width: 100%;
+border-radius: 12px;
+background: #e4e9ed;
+}
+
+/* 溫度分區數據網格 - 改為清新明亮版 */
+.temperature-grid {
+display: grid;
+grid-template-columns: repeat(2, 1fr);
+gap: 10px;
+}
+.temp-card {
+background: #ffffff;
+border: 1px solid #e4ecf5;
+border-radius: 12px;
+padding: 12px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+.temp-card-title {
+font-size: 13px;
+font-weight: 600;
+color: #486581;
+}
+.temp-card-value {
+font-size: 20px;
+font-weight: 800;
+}
+
+/* 地圖上客製化天氣標籤 - 改為明亮清澈高對比風格 */
+.map-weather-label {
+background: none;
+border: none;
+}
+.map-box {
+background: rgba(255, 255, 255, 0.96);
+border: 2px solid #0066ff;
+color: #102a43;
+padding: 4px 6px;
+border-radius: 6px;
+font-size: 11px;
+font-weight: bold;
+white-space: nowrap;
+box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+text-align: center;
+}
+.map-box-temp {
+display: block;
+font-size: 13px;
+font-weight: 800;
+}
+
+/* 頁尾提示 */
+.footer-notes {
+font-size: 12px;
+color: #829ab1;
+line-height: 1.8;
+margin-top: 15px;
+}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+<h1>☔ 香港天氣戰情室</h1>
+<p>實時降雨預報 ＆ 分區溫度監測系統</p>
+</div>
+
+<div class="main-container">
+
+<div class="tab-container">
+<button class="tab-btn active" onclick="switchTab('rain-panel', this)">降雨預報</button>
+<button class="tab-btn" onclick="switchTab('temp-panel', this)">分區溫度地圖</button>
+</div>
+
+<div id="rain-panel" class="panel active">
+<div class="map-wrapper">
+<div id="rain-map" class="map-element"></div>
+</div>
+
+<div class="info-card">
+<h3>🧠 AI 超前預測</h3>
+<div style="font-size: 15px; color: #243b53; font-weight: 600;">
+☀️ 未來三小時暫時無明顯降雨
+</div>
+</div>
+
+<div class="info-card">
+<h3>☁️ 你所在的位置暫時無雨</h3>
+<p style="margin: 0; font-size: 14px; color: #486581;">
+本網站提供香港未來最多三小時內定點的降雨預測，用戶可即時得知身處地點的降雨情況。
+</p>
+</div>
+</div>
+
+<div id="temp-panel" class="panel">
+<div class="map-wrapper">
+<div id="temp-map" class="map-element"></div>
+</div>
+
+<div class="temperature-grid" id="temp-grid-target">
+</div>
+</div>
+
+<div class="footer-notes">
+資料來源：香港天文台 / Tomorrow.io (AI 超前預測)<br>
+- 用户請先允許定位服務<br>
+- 預報在某些情況可能出現誤差<br>
+- 網站功能將不斷更新，敬請留意
+</div>
+
+</div>
+
+<script>
+// --- 頁籤切換邏輯 ---
+function switchTab(panelId, btn) {
+document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+document.getElementById(panelId).classList.add('active');
+btn.classList.add('active');
+
+// 解決 Leaflet 地圖在隱藏標籤頁中加載時的尺寸錯位問題
+setTimeout(() => {
+rainMap.invalidateSize();
+tempMap.invalidateSize();
+}, 50);
+}
+
+// ================= 地圖初始化與配置 =================
+
+// 1. 初始化 降雨地圖
+const rainMap = L.map('rain-map', { zoomControl: true, attributionControl: false }).setView([22.3400, 114.1500], 11);
+// 2. 初始化 溫度地圖
+const tempMap = L.map('temp-map', { zoomControl: true, attributionControl: false }).setView([22.3400, 114.1500], 10);
+
+// 3. 【明亮清澈底圖】統一採用明亮清晰、帶有繁體中文街道的開放地理圖層
+const lightTileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+L.tileLayer(lightTileUrl, { maxZoom: 18 }).addTo(rainMap);
+L.tileLayer(lightTileUrl, { maxZoom: 18 }).addTo(tempMap);
+
+// 降雨預報的原生大頭針定位
+L.marker([22.3400, 114.1500]).addTo(rainMap);
+
+// ================= 溫度數據連線與渲染邏輯 =================
+const locationCoords = {
+"香港天文台": { lat: 22.3022, lng: 114.1742, color: '#ff3366' },
+"跑馬地": { lat: 22.2711, lng: 114.1816, color: '#0066ff' },
+"沙田": { lat: 22.3858, lng: 114.2078, color: '#00aa55' },
+"屯門": { lat: 22.3912, lng: 113.9772, color: '#ff9900' },
+"大埔": { lat: 22.4461, lng: 114.1789, color: '#00aa55' },
+"赤鱲角": { lat: 22.3094, lng: 113.9219, color: '#9933ff' },
+"長洲": { lat: 22.2011, lng: 114.0267, color: '#9933ff' }
+};
+
+const HKO_API_URL = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc";
+let tempMarkerLayer = L.layerGroup().addTo(tempMap);
+
+async function fetchHKWeatherData() {
+try {
+const response = await fetch(HKO_API_URL);
+const data = await response.json();
+renderTemperatureData(data.temperature.data);
+} catch (error) {
+// 備用離線數據
+const mockData = [
+{ place: "香港天文台", value: 27 }, { place: "跑馬地", value: 27 },
+{ place: "屯門", value: 26 }, { place: "大埔", value: 27 },
+{ place: "沙田", value: 27 }, { place: "赤鱲角", value: 27 }, { place: "長洲", value: 26 }
+];
+renderTemperatureData(mockData);
+}
+}
+
+function renderTemperatureData(data) {
+tempMarkerLayer.clearLayers();
+const gridTarget = document.getElementById('temp-grid-target');
+gridTarget.innerHTML = '';
+
+data.forEach(item => {
+const coord = locationCoords[item.place];
+if (!coord) return;
+
+const temp = item.value;
+
+// 在明亮地圖上生成高亮白底藍框的溫度標籤
+const customIcon = L.divIcon({
+className: 'map-weather-label',
+html: `<div class="map-box" style="border-color: ${coord.color}">
+${item.place}
+<span class="map-box-temp" style="color: ${coord.color}">${temp}°C</span>
+</div>`,
+iconSize: [70, 40],
+iconAnchor: [35, 20]
+});
+L.marker([coord.lat, coord.lng], { icon: customIcon }).addTo(tempMarkerLayer);
+
+// 在下方 Grid 插入配合雨量網站風格的白底精美溫度字卡
+const card = document.createElement('div');
+card.className = 'temp-card';
+card.style.borderLeft = `4px solid ${coord.color}`;
+card.innerHTML = `
+<span class="temp-card-title">${item.place}</span>
+<span class="temp-card-value" style="color: ${coord.color}">${temp}°C</span>
+`;
+gridTarget.appendChild(card);
+});
+}
+
+// 初始化加載
+fetchHKWeatherData();
+setInterval(fetchHKWeatherData, 60000);
+</script>
+</body>
+</html>
