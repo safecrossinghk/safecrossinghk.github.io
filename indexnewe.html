@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>香港實時溫度 3D 可視化戰情室</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.166.1/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.166.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main class="war-room">
+    <canvas id="battlefield" aria-label="香港實時氣象 3D 可視化"></canvas>
+
+    <section class="title-lockup" aria-label="戰情室標題">
+      <p>HKO LIVE / ATMOSPHERIC 3D GRID</p>
+      <h1>香港實時氣象戰情室</h1>
+      <span id="updatedAt">等待天文台資料同步</span>
+    </section>
+
+    <section class="hud panel info-panel" aria-label="即時狀態">
+      <div class="panel-topline">
+        <span>LIVE TELEMETRY</span>
+        <strong id="status">連線中</strong>
+      </div>
+      <div class="readout-grid">
+        <div>
+          <span>目前焦點</span>
+          <strong id="focusArea">維多利亞港</strong>
+        </div>
+        <div>
+          <span>最高溫</span>
+          <strong id="hotReadout">-- °C</strong>
+        </div>
+        <div>
+          <span>最低溫</span>
+          <strong id="coldReadout">-- °C</strong>
+        </div>
+        <div>
+          <span>大氣模式</span>
+          <strong id="weatherMode">掃描中</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="hud panel station-panel" aria-label="測站排行">
+      <div class="panel-topline">
+        <span>THERMAL COLUMNS</span>
+        <strong id="stationCount">0 個測站</strong>
+      </div>
+      <ol id="stationList" class="station-list"></ol>
+    </section>
+
+    <section class="hud command-strip" aria-label="視角控制">
+      <button class="control-button active" type="button" data-shot="harbor">維港</button>
+      <button class="control-button" type="button" data-shot="hot">熱點</button>
+      <button class="control-button" type="button" data-shot="cold">低溫</button>
+      <button class="control-button" type="button" data-shot="wide">全域</button>
+    </section>
+
+    <div class="reticle" aria-hidden="true"></div>
+    <div id="loading" class="loading">正在建立全息氣象網格...</div>
+  </main>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
