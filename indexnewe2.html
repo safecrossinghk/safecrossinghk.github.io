@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>香港實時溫度 3D 可視化戰情室</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        #info-panel { position: absolute; top: 10px; left: 10px; color: white; font-family: sans-serif; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; z-index: 10; }
+        #time-axis { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; background: rgba(0,0,0,0.8); padding: 10px 30px; border-radius: 20px; z-index: 10; font-size: 18px;}
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="info-panel">
+        <h2>HK Weather 3D Live</h2>
+        <p>狀態：<span id="status" style="color: #00ff00;">實時數據連線中</span></p>
+        <p>目前焦點：<span id="focus-area">香港島</span></p>
+    </div>
+    <div id="time-axis">時間軸：Live 實時監測中</div>
+
+    <script>
+        // 1. 初始化 3D 場景與鏡頭（電視節目運鏡風格）
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x111122, 0.002); // 電視節目感的大氣迷霧
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        
+        // 設定初始鏡頭位置（由南海高空俯瞰香港島與九龍半島）
+        camera.position.set(0, 150, 200);
+        controls.target.set(0, 0, 0);
+
+        // 2. 模擬 Google 3D 地形網格 (實際運作時需載入 Google Photorealistic 3D Tiles)
+        const terrainGeo = new THREE.PlaneGeometry(500, 500, 64, 64);
+        const terrainMat = new THREE.MeshStandardMaterial({ color: 0x223344, wireframe: false, roughness: 0.8 });
+        const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+        terrain.rotation.x = -Math.PI / 2;
+        scene.add(terrain);
+
+        // 燈光設置
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(100, 300, 100);
+        scene.add(dirLight);
+
+        // 3. 從香港天文台 API 抽取實時溫度數據
+        const HKO_API_URL = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc";
+        let weatherData = [];
+        let temperatureMarkers = [];
+
+        // 模擬香港主要地區的經緯度轉 3D 空間座標對應表
+        const locationCoords = {
+            "尖沙咀": { x: 0, z: 0 },
+            "香港天文台": { x: 2, z: -5 },
+            "跑馬地": { x: 5, z: 15 },
+            "黃大仙": { x: 10, z: -30 },
+            "屯門": { x: -80, z: -20 },
+            "大埔": { x: -10, z: -70 },
+            "石崗": { x: -40, z: -50 }
+        };
+
+        async function fetchHKWeatherData() {
+            try {
+                const response = await fetch(HKO_API_URL);
+                const data = await response.json();
+                weatherData = data.temperature.data;
+                update3DMarkers();
+            } catch (error) {
+                console.error("無法獲取天文台數據，啟用模擬數據:", error);
+                // 斷線時的備用模擬數據
+                weatherData = [
+                    { place: "尖沙咀", value: 28 },
+                    { place: "跑馬地", value: 31 },
+                    { place: "屯門", value: 33 },
+                    { place: "大埔", value: 26 }
+                ];
+                update3DMarkers();
+            }
+        }
+
+        // 4. 根據溫度動態建立 3D 能量柱與特效
+        function update3DMarkers() {
+            // 清除舊標記
+            temperatureMarkers.forEach(m => scene.remove(m));
+            temperatureMarkers = [];
+
+            weatherData.forEach(item => {
+                const pos = locationCoords[item.place];
+                if (!pos) return; // 跳過未定義座標的地區
+
+                const temp = item.value;
+                
+                // 根據溫度決定顏色：高溫=紅(熱浪)，低溫=藍(寒流)
+                const heatColor = new THREE.Color().lerpColors(
+                    new THREE.Color(0x00aaff), // 藍色
+                    new THREE.Color(0xff3300), // 紅色
+                    (temp - 10) / 30 // 將 10°C - 40°C 對應到 0 - 1
+                );
+
+                // 建立溫度光柱特效 (Cylinder)
+                const height = temp * 2; // 高度隨溫度變化
+                const geometry = new THREE.CylinderGeometry(2, 2, height, 16);
+                const material = new THREE.MeshStandardMaterial({
+                    color: heatColor,
+                    emissive: heatColor,
+                    emissiveIntensity: 0.5,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const marker = new THREE.Mesh(geometry, material);
+                
+                // 設置位置
+                marker.position.set(pos.x, height / 2, pos.z);
+                scene.add(marker);
+                temperatureMarkers.push(marker);
+
+                // TODO: 可以在此處加上 Particle System (粒子系統) 模擬熱氣上升或寒風吹襲
+            });
+        }
+
+        // 5. 自動化 3D 電視運鏡（Cinematic Camera Script）
+        let angle = 0;
+        function animateCamera() {
+            if (temperatureMarkers.length > 0) {
+                // 讓相機圍繞著香港中心點緩慢旋轉俯瞰 (遊戲戰略視角)
+                angle += 0.002;
+                camera.position.x = Math.sin(angle) * 200;
+                camera.position.z = Math.cos(angle) * 200;
+                camera.position.y = 120 + Math.sin(angle * 2) * 30; // 鏡頭高低起伏伏，製造戲劇效果
+                
+                // 每隔一段時間，鏡頭特寫（Zoom in）溫度最高或最低的「極端地區」
+                const currentSec = Math.floor(Date.now() / 1000) % 20;
+                if (currentSec === 0) {
+                    const hotZone = locationCoords["屯門"]; // 假設特寫屯門
+                    document.getElementById("focus-area").innerText = "屯門 (熱浪警報)";
+                    controls.target.set(hotZone.x, 0, hotZone.z);
+                } else if (currentSec === 10) {
+                    controls.target.set(0, 0, 0); // 盪回市中心
+                    document.getElementById("focus-area").innerText = "維多利亞港";
+                }
+            }
+            controls.update();
+        }
+
+        // 6. 動態循環渲染
+        function animate() {
+            requestAnimationFrame(animate);
+            animateCamera();
+            
+            // 讓溫度光柱有微微自轉與呼吸燈特效
+            temperatureMarkers.forEach(m => {
+                m.rotation.y += 0.01;
+                m.material.emissiveIntensity = 0.4 + Math.sin(Date.now() * 0.003) * 0.2;
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // 初始化啟動
+        fetchHKWeatherData();
+        setInterval(fetchHKWeatherData, 60000); // 每分鐘自動與天文台同步實時溫度
+        animate();
+
+        // 視窗大小重設
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
