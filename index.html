@@ -25,6 +25,7 @@ height: 300px;
 margin: 0 10px;
 border-radius: 8px;
 border: 1px solid #ccc;
+position: relative;
 }
 #ai-forecast {
 margin: 1em;
@@ -69,15 +70,47 @@ color: white;
 border: none;
 border-radius: 5px;
 }
+
+/* 🌤️ 地圖右上角：白色精簡天氣膠囊方塊（已完美移除右側箭頭） */
+.map-weather-pill {
+background: rgba(255, 255, 255, 0.95); /* 白色底 */
+border: 1px solid rgba(0, 0, 0, 0.15); /* 細邊框 */
+border-radius: 30px; /* 完美圓角膠囊 */
+padding: 5px 12px; /* 調整內邊距平衡視覺 */
+box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* 微陰影 */
+display: flex;
+align-items: center;
+gap: 6px; /* 氣溫與圖標之間的間距 */
+pointer-events: auto;
+margin-top: 10px !important;
+margin-right: 10px !important;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.pill-temp {
+font-size: 15px;
+font-weight: bold;
+color: #111;
+}
+.pill-logo {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+font-size: 16px;
+min-width: 22px;
+height: 22px;
+}
+.pill-logo img {
+width: 22px;
+height: 22px;
+object-fit: contain;
+}
 </style>
 
-<!-- 🔔 PWA 設定 -->
 <link rel="manifest" href="/manifest.json">
 <meta name="apple-mobile-web-app-capable" content="no">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="香港降雨預報">
 
-<!-- 🔔 OneSignal SDK -->
 <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
 <script>
 window.OneSignal = window.OneSignal || [];
@@ -94,7 +127,6 @@ safari_web_id: "🔑 換成你的 Safari Web ID"
 <h1>🌂 香港降雨預報</h1>
 <div id="map"></div>
 
-<!-- AI 超前預測 -->
 <div id="ai-forecast">
 <strong>🧠 AI 超前預測</strong>
 <div id="rainMsg">⏳ 正在載入...</div>
@@ -102,7 +134,6 @@ safari_web_id: "🔑 換成你的 Safari Web ID"
 
 <div id="rain-alert">⏳ 正在讀取預報資料...</div>
 
-<!-- 全裝置共用提示框 -->
 <div id="customPrompt" class="promptBox" style="display:none;">
 📢 歡迎使用《香港降雨預報》<br>
 👉 你可以訂閱通知，即時收到降雨提示。<br>
@@ -110,15 +141,13 @@ safari_web_id: "🔑 換成你的 Safari Web ID"
 <button id="closeCustomBtn">稍後再說</button>
 </div>
 
-<!-- iOS 專屬提示框 -->
 <div id="iosPrompt" class="promptBox" style="display:none;">
 📱 如果你用 iPhone / iPad：<br>
 請先按 Safari 底部的 <b>分享</b> 按鈕 <br>
-➜ 再揀 <b>加入主畫面</b> 才可收到推播通知。<br>
+➜ 再揀 <b>加入主畫面</b>才可收到推播通知。<br>
 <button id="iosCloseBtn">知道了</button>
 </div>
 
-<!-- 文末三句 -->
 <div id="footer-text">
 <p style="text-align: left; margin-bottom: 1.5em;">
 本網站提供香港未來最多三小時內定點的降雨預測，用戶可即時得知身處地點的降雨情況。
@@ -147,6 +176,21 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+// 🌦️ 定義地圖右上角精簡白色膠囊元件（已剔除箭頭 HTML 結構）
+const WeatherControl = L.Control.extend({
+options: { position: 'topright' },
+onAdd: function(map) {
+const div = L.DomUtil.create('div', 'map-weather-pill');
+div.innerHTML = `
+<span class="pill-temp" id="pill-temp">--°</span>
+<span class="pill-logo" id="pill-logo">☀️</span>
+`;
+L.DomEvent.disableClickPropagation(div);
+return div;
+}
+});
+map.addControl(new WeatherControl());
+
 let marker;
 let rainStatus = 0; // 0 = 無雨，1 = 已推送過
 
@@ -162,6 +206,30 @@ fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
 .then(data => {
 const alertDiv = document.getElementById('rain-alert');
 console.log("API 回傳資料：", data);
+
+// 1. 動態更新實時天文台氣溫（若 Worker 內包含數據）
+if (data && typeof data.temperature === "number") {
+document.getElementById('pill-temp').innerText = `${Math.round(data.temperature)}°`;
+}
+
+// 2. 獲取天文台天氣圖標（帶有錯誤捕獲與備用機制，防止顯示問號）
+const logoContainer = document.getElementById('pill-logo');
+if (data && data.weatherIcon) {
+const imgUrl = `https://www.hko.gov.hk/images/wxicon/pic${data.weatherIcon}.png`;
+
+// 預先檢查圖片是否能成功載入
+const imgCheck = new Image();
+imgCheck.src = imgUrl;
+imgCheck.onload = function() {
+logoContainer.innerHTML = `<img src="${imgUrl}" alt="HKO Icon">`;
+};
+imgCheck.onerror = function() {
+// 如果網址不可用，改為用精緻的網頁代碼格式
+logoContainer.innerText = (data.immediateRain > 0.5) ? "🌧️" : "☁️";
+};
+} else {
+logoContainer.innerText = (data && data.immediateRain > 0.5) ? "🌧️" : "☀️";
+}
 
 if (data && typeof data.immediateRain === "number") {
 if (data.immediateRain > 0.5) {
@@ -205,6 +273,13 @@ if (
 document.getElementById("rainMsg").innerText =
 "⚠️ AI 預報暫時不可用";
 return;
+}
+
+// 備用機制：如果自訂 Worker 未返回溫度，這裡會用實時高精度氣溫填補
+const pillTempEl = document.getElementById('pill-temp');
+if ((pillTempEl.innerText === "--°" || pillTempEl.innerText === "0°") && data.timelines.hourly[0] && data.timelines.hourly[0].values.temperature !== undefined) {
+const currentTemp = Math.round(data.timelines.hourly[0].values.temperature);
+pillTempEl.innerText = `${currentTemp}°`;
 }
 
 const hours = data.timelines.hourly.slice(0, 3);
