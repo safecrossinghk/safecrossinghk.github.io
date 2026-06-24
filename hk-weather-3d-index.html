@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>香港實時分區天氣 · 3D 地形動畫</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@300;400;700;900&family=Orbitron:wght@400;700;900&display=swap');
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --cold:    #3EB5F1;
+      --warm:    #FF4E3A;
+      --neutral: #E8D87A;
+      --bg:      #060B14;
+      --glass:   rgba(6, 11, 20, 0.72);
+      --border:  rgba(62, 181, 241, 0.22);
+      --text:    #D6EAF8;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans HK', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── Canvas ── */
+    #canvas-container {
+      position: fixed; inset: 0;
+    }
+    #canvas-container canvas {
+      display: block; width: 100% !important; height: 100% !important;
+    }
+
+    /* ── Top bar ── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 28px;
+      background: linear-gradient(180deg, rgba(6,11,20,0.95) 60%, transparent);
+      border-bottom: 1px solid var(--border);
+    }
+    #topbar .logo {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900; font-size: 13px; letter-spacing: 3px;
+      color: var(--cold);
+      text-transform: uppercase;
+    }
+    #topbar .title {
+      font-weight: 700; font-size: 17px; letter-spacing: 1px;
+    }
+    #topbar .clock {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px; color: var(--cold); letter-spacing: 2px;
+    }
+
+    /* ── Bottom legend ── */
+    #legend {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      display: flex; gap: 24px; align-items: center;
+      background: var(--glass);
+      border: 1px solid var(--border);
+      border-radius: 40px;
+      padding: 10px 28px;
+      backdrop-filter: blur(14px);
+      font-size: 12px; letter-spacing: 1px;
+    }
+    .legend-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      display: inline-block; margin-right: 6px;
+    }
+    .leg-cold .legend-dot { background: var(--cold); box-shadow: 0 0 8px var(--cold); }
+    .leg-neutral .legend-dot { background: var(--neutral); box-shadow: 0 0 8px var(--neutral); }
+    .leg-warm .legend-dot { background: var(--warm); box-shadow: 0 0 8px var(--warm); }
+
+    /* ── Camera info strip ── */
+    #cam-info {
+      position: fixed; bottom: 68px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      font-size: 11px; letter-spacing: 2px;
+      color: rgba(214,234,248,0.55);
+      text-transform: uppercase;
+      transition: opacity 0.6s;
+    }
+
+    /* ── Status overlay ── */
+    #status {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: var(--bg);
+      transition: opacity 0.8s;
+    }
+    #status.hidden { opacity: 0; pointer-events: none; }
+    #status .spinner {
+      width: 52px; height: 52px;
+      border: 3px solid var(--border);
+      border-top-color: var(--cold);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 22px;
+    }
+    #status .msg {
+      font-size: 14px; letter-spacing: 2px;
+      color: rgba(214,234,248,0.7);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Weather label ── */
+    .wx-label {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      pointer-events: none;
+      text-align: center;
+      animation: labelIn 0.5s ease both;
+    }
+    @keyframes labelIn {
+      from { opacity: 0; transform: translate(-50%, -110%) scale(0.85); }
+      to   { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+    }
+    .wx-label .bubble {
+      display: inline-block;
+      padding: 7px 13px 5px;
+      border-radius: 8px;
+      border: 1.5px solid;
+      backdrop-filter: blur(10px);
+      white-space: nowrap;
+      position: relative;
+    }
+    .wx-label .bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -7px; left: 50%;
+      transform: translateX(-50%);
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top-width: 7px;
+      border-top-style: solid;
+    }
+    .wx-label .stn  { font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 2px; }
+    .wx-label .temp { font-family: 'Orbitron', sans-serif; font-size: 15px; font-weight: 700; }
+
+    /* cold */
+    .wx-cold .bubble {
+      background: rgba(10, 30, 60, 0.82);
+      border-color: var(--cold);
+      box-shadow: 0 0 18px rgba(62,181,241,0.5), inset 0 0 10px rgba(62,181,241,0.1);
+    }
+    .wx-cold .bubble::after { border-top-color: var(--cold); }
+    .wx-cold .temp { color: var(--cold); }
+
+    /* warm */
+    .wx-warm .bubble {
+      background: rgba(60, 10, 10, 0.82);
+      border-color: var(--warm);
+      box-shadow: 0 0 18px rgba(255,78,58,0.5), inset 0 0 10px rgba(255,78,58,0.1);
+    }
+    .wx-warm .bubble::after { border-top-color: var(--warm); }
+    .wx-warm .temp { color: var(--warm); }
+
+    /* neutral */
+    .wx-neutral .bubble {
+      background: rgba(30, 28, 10, 0.82);
+      border-color: var(--neutral);
+      box-shadow: 0 0 18px rgba(232,216,122,0.4), inset 0 0 10px rgba(232,216,122,0.08);
+    }
+    .wx-neutral .bubble::after { border-top-color: var(--neutral); }
+    .wx-neutral .temp { color: var(--neutral); }
+
+    /* ── CSS2D label host ── */
+    #label-host {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 20;
+      overflow: hidden;
+    }
+
+    /* ── Side data panel ── */
+    #data-panel {
+      position: fixed; right: 22px; top: 70px;
+      z-index: 30; width: 190px;
+      display: flex; flex-direction: column; gap: 8px;
+      opacity: 0; transition: opacity 0.8s;
+    }
+    #data-panel.visible { opacity: 1; }
+    .dp-row {
+      background: var(--glass);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 13px;
+      backdrop-filter: blur(12px);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px;
+    }
+    .dp-row .dp-name { color: rgba(214,234,248,0.7); }
+    .dp-row .dp-val  { font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="status">
+  <div class="spinner"></div>
+  <div class="msg" id="status-msg">正在載入地形資料…</div>
+</div>
+
+<!-- 3D canvas -->
+<div id="canvas-container"></div>
+
+<!-- CSS2D labels -->
+<div id="label-host"></div>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div class="logo">HKO · Live 3D</div>
+  <div class="title">香港實時分區天氣報告</div>
+  <div class="clock" id="clock">--:--:--</div>
+</div>
+
+<!-- Camera description -->
+<div id="cam-info" id="cam-info">正在初始化鏡頭…</div>
+
+<!-- Side data panel -->
+<div id="data-panel"></div>
+
+<!-- Bottom legend -->
+<div id="legend">
+  <span class="leg-cold"><span class="legend-dot"></span>低溫 (&lt;23°C)</span>
+  <span class="leg-neutral"><span class="legend-dot"></span>適中 (23–28°C)</span>
+  <span class="leg-warm"><span class="legend-dot"></span>高溫 (&gt;28°C)</span>
+</div>
+
+<!-- Three.js via CDN -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
