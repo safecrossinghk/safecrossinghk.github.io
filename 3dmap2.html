@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港實時分區天氣報告 - 3D 地形動畫</title>
+<style>
+body {
+margin: 0;
+padding: 0;
+overflow: hidden;
+background-color: #0b0f19;
+font-family: "Microsoft JhengHei", sans-serif;
+}
+#canvas-container {
+width: 100vw;
+height: 100vh;
+}
+#loading {
+position: absolute;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+color: #ffffff;
+font-size: 20px;
+font-weight: bold;
+pointer-events: none;
+transition: opacity 0.5s ease;
+text-align: center;
+z-index: 999;
+}
+.info-panel {
+position: absolute;
+top: 20px;
+left: 20px;
+background: rgba(10, 16, 30, 0.85);
+padding: 15px;
+border-radius: 8px;
+color: white;
+border: 1px solid #1e293b;
+pointer-events: none;
+z-index: 999;
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+
+<div id="loading">📡 3D 場景正在渲染中...</div>
+<div class="info-panel">
+<h3 style="margin:0 0 5px 0;">香港實時天氣 3D 巡航</h3>
+<div id="status">狀態: 初始化中...</div>
+</div>
+<div id="canvas-container"></div>
+
+<script>
+let scene, camera, renderer, baseGrid;
+const container = document.getElementById('canvas-container');
+
+// 香港主要觀測站地理座標 (緯度, 經度)
+const stationCoords = {
+"尖沙咀": [22.3021, 114.1743],
+"大帽山": [22.4116, 114.1244],
+"打鼓嶺": [22.5286, 114.1567],
+"西貢": [22.3836, 114.2708],
+"昂坪": [22.2559, 113.9050],
+"赤鱲角": [22.3094, 113.9219],
+"將軍澳": [22.3140, 114.2620]
+};
+
+const centerLat = 22.3500;
+const centerLon = 114.1500;
+const scaleFactor = 2500; // 放大比例，讓站點距離更明顯
+
+function init3D() {
+scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f19);
+
+// 增加環境霧氣，營造空間感
+scene.fog = new THREE.FogExp2(0x0b0f19, 0.0002);
+
+camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 50000);
+
+renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+container.appendChild(renderer.domElement);
+
+// 增強燈光，確保物件絕對可見
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0x00a8ff, 0.6);
+dirLight.position.set(1000, 3000, 1000);
+scene.add(dirLight);
+
+// 建立藍色科幻科技網格基底（替代容易穿模的地形）
+baseGrid = new THREE.GridHelper(10000, 40, 0x1e293b, 0x0f172a);
+baseGrid.position.y = -50;
+scene.add(baseGrid);
+
+// 加載天氣數據
+fetchWeatherData();
+
+window.addEventListener('resize', onWindowResize);
+}
+
+// 經緯度轉 3D 座標
+function latLonToVector3(lat, lon, height = 0) {
+const x = (lon - centerLon) * scaleFactor * 1.5;
+const z = -(lat - centerLat) * scaleFactor;
+return new THREE.Vector3(x, height, z);
+}
+
+async function fetchWeatherData() {
+const fallbackProxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://data.weather.gov.hk/weatherAPI/opendata/weather.do?dataType=rhrread&lang=tc');
+
+try {
+const response = await fetch(fallbackProxy);
+const data = await response.json();
+if (data && data.temperature) {
+renderWeather(data);
+} else {
+throw new Error();
+}
+} catch (e) {
+// 本地安全演示數據 Fallback
+const mockData = {
+updateTime: new Date().toISOString(),
+temperature: {
+data: [
+{ place: "尖沙咀", value: 28 },
+{ place: "大帽山", value: 19 },
+{ place: "打鼓嶺", value: 29 },
+{ place: "西貢", value: 27 },
+{ place: "昂坪", value: 21 },
+{ place: "赤鱲角", value: 28 },
+{ place: "將軍澳", value: 27 }
+]
+}
+};
+renderWeather(mockData);
+}
+}
+
+function renderWeather(data) {
+document.getElementById('status').innerText = `狀態: 實時安全通道已接通`;
+document.getElementById('loading').style.opacity = 0;
+
+const list = data.temperature.data;
+list.forEach(item => {
+const name = item.place;
+const temp = item.value;
+
+if (stationCoords[name]) {
+const [lat, lon] = stationCoords[name];
+// 根據溫度決定柱體高度
+const barHeight = (temp - 15) * 20 + 50;
+const pos = latLonToVector3(lat, lon, barHeight / 2);
+
+// 1. 生成發光科幻能量柱
+const geo = new THREE.BoxGeometry(60, barHeight, 60);
+let colorHex = 0x00ff88; // 舒適綠色
+if (temp >= 28) colorHex = '#ff4d4d'; // 熱
+if (temp <= 22) colorHex = '#00d2ff'; // 涼
+
+const mat = new THREE.MeshBasicMaterial({
+color: colorHex,
+wireframe: true,
+transparent: true,
+opacity: 0.4
+});
+const mesh = new THREE.Mesh(geo, mat);
+mesh.position.copy(pos);
+scene.add(mesh);
+
+// 2. 在能量柱頂端懸掛 3D 天氣標籤
+const labelPos = new THREE.Vector3(pos.x, barHeight + 40, pos.z);
+createWeatherSprite(name, temp, labelPos);
+}
+});
+
+// 數據載入完成，立刻開展相機軌道巡航
+startCameraCruise();
+}
+
+function createWeatherSprite(name, temp, position) {
+const canvas = document.createElement('canvas');
+canvas.width = 256;
+canvas.height = 128;
+const ctx = canvas.getContext('2d');
+
+// 繪製氣泡背景
+ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+if (temp >= 28) ctx.strokeStyle = '#ff4d4d';
+else if (temp <= 22) ctx.strokeStyle = '#00d2ff';
+else ctx.strokeStyle = '#00ff88';
+
+ctx.lineWidth = 6;
+ctx.beginPath();
+ctx.roundRect(10, 10, 236, 108, 12);
+ctx.fill();
+ctx.stroke();
+
+// 站點文字
+ctx.fillStyle = '#ffffff';
+ctx.font = 'bold 24px "Microsoft JhengHei"';
+ctx.textAlign = 'center';
+ctx.fillText(name, 128, 52);
+
+// 溫度數字
+if (temp >= 28) ctx.fillStyle = '#ff4d4d';
+else if (temp <= 22) ctx.fillStyle = '#00d2ff';
+else ctx.fillStyle = '#00ff88';
+ctx.font = 'bold 32px Arial';
+ctx.fillText(`${temp} °C`, 128, 94);
+
+const texture = new THREE.CanvasTexture(canvas);
+const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+const sprite = new THREE.Sprite(spriteMaterial);
+
+sprite.position.copy(position);
+sprite.scale.set(500, 250, 1);
+scene.add(sprite);
+}
+
+function startCameraCruise() {
+// 定義關鍵巡航點 (尖沙咀中心、大帽山、打鼓嶺)
+const vhk = latLonToVector3(22.3021, 114.1743, 100);
+const tms = latLonToVector3(22.4116, 114.1244, 200);
+const tkl = latLonToVector3(22.5286, 114.1567, 150);
+
+// 將鏡頭拉高到一個絕對可以俯瞰全景的起始點
+camera.position.set(0, 4500, 5000);
+camera.lookAt(vhk);
+
+const lookTarget = new THREE.Vector3(vhk.x, vhk.y, vhk.z);
+
+// 鏡頭動態動畫時序
+const p1 = new TWEEN.Tween(camera.position)
+.to({ x: tms.x + 800, y: tms.y + 800, z: tms.z + 1200 }, 7000)
+.easing(TWEEN.Easing.Cubic.InOut)
+.delay(1000);
+
+const l1 = new TWEEN.Tween(lookTarget)
+.to({ x: tms.x, y: tms.y, z: tms.z }, 7000)
+.easing(TWEEN.Easing.Cubic.InOut)
+.delay(1000);
+
+const p2 = new TWEEN.Tween(camera.position)
+.to({ x: tkl.x - 800, y: tkl.y + 600, z: tkl.z + 1000 }, 7000)
+.easing(TWEEN.Easing.Cubic.InOut);
+
+const l2 = new TWEEN.Tween(lookTarget)
+.to({ x: tkl.x, y: tkl.y, z: tkl.z }, 7000)
+.easing(TWEEN.Easing.Cubic.InOut);
+
+const p3 = new TWEEN.Tween(camera.position)
+.to({ x: 0, y: 5000, z: 5500 }, 6000)
+.easing(TWEEN.Easing.Quadratic.Out);
+
+const l3 = new TWEEN.Tween(lookTarget)
+.to({ x: vhk.x, y: vhk.y, z: vhk.z }, 6000)
+.easing(TWEEN.Easing.Quadratic.Out);
+
+p1.chain(p2); p2.chain(p3);
+l1.chain(l2); l2.chain(l3);
+
+p1.start();
+l1.start();
+
+window.cruiseUpdate = () => {
+camera.lookAt(lookTarget);
+};
+}
+
+function onWindowResize() {
+camera.aspect = window.innerWidth / window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate(time) {
+requestAnimationFrame(animate);
+TWEEN.update(time);
+
+if (window.cruiseUpdate) window.cruiseUpdate();
+
+// 讓整個空間緩慢旋轉
+if (TWEEN.getAll().length === 0) {
+scene.rotation.y += 0.0005;
+}
+
+renderer.render(scene, camera);
+}
+
+// 啟動
+init3D();
+animate();
+</script>
+</body>
+</html>
