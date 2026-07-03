@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>香港實時分區天氣 · Google Maps</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--cold:#3EB5F1;--warm:#FF4E3A;--neu:#E8D87A;--bg:#060B14;--glass:rgba(6,11,20,0.85);--bd:rgba(62,181,241,0.22)}
+html,body{width:100%;height:100vh;overflow:hidden;font-family:'Segoe UI',sans-serif;color:#D6EAF8}
+#map{position:fixed;inset:0}
+#topbar{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:12px 22px;background:linear-gradient(180deg,rgba(6,11,20,.95) 60%,transparent);border-bottom:1px solid var(--bd)}
+.logo{font-family:monospace;font-weight:700;font-size:11px;letter-spacing:3px;color:var(--cold)}
+.title{font-weight:700;font-size:15px}
+#clock{font-family:monospace;font-size:12px;color:var(--cold);letter-spacing:2px}
+#cami{position:fixed;bottom:54px;left:50%;transform:translateX(-50%);z-index:50;font-size:10px;letter-spacing:2px;color:rgba(214,234,248,.5);text-transform:uppercase;white-space:nowrap}
+#legend{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:50;display:flex;gap:20px;align-items:center;background:var(--glass);border:1px solid var(--bd);border-radius:28px;padding:7px 22px;backdrop-filter:blur(12px);font-size:11px}
+.ldot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+#panel{position:fixed;right:14px;top:62px;z-index:50;width:170px;display:flex;flex-direction:column;gap:6px;opacity:0;transition:opacity .8s}
+#panel.vis{opacity:1}
+.pr{background:var(--glass);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;backdrop-filter:blur(10px);display:flex;justify-content:space-between;align-items:center;font-size:11px}
+.pn{color:rgba(214,234,248,.65)}
+.pv{font-family:monospace;font-size:12px;font-weight:700}
+#loading{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);transition:opacity .8s}
+#loading.gone{opacity:0;pointer-events:none}
+.spin{width:46px;height:46px;border:2px solid var(--bd);border-top-color:var(--cold);border-radius:50%;animation:rot 1s linear infinite;margin-bottom:16px}
+@keyframes rot{to{transform:rotate(360deg)}}
+.smsg{font-size:12px;letter-spacing:2px;color:rgba(214,234,248,.6)}
+/* markers */
+.wx-pin{position:absolute;transform:translate(-50%,-100%);text-align:center;pointer-events:none;animation:lbin .5s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes lbin{from{opacity:0;transform:translate(-50%,-110%) scale(.7)}to{opacity:1;transform:translate(-50%,-100%)}}
+.wx-box{display:inline-block;padding:7px 12px 5px;border-radius:9px;border:1.5px solid;white-space:nowrap;position:relative}
+.wx-box::after{content:'';position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-width:7px;border-top-style:solid}
+.wx-n{font-size:10px;font-weight:700;letter-spacing:1px;color:#D6EAF8;margin-bottom:2px}
+.wx-t{font-family:monospace;font-size:15px;font-weight:700}
+.cold .wx-box{background:rgba(8,22,55,.92);border-color:var(--cold);box-shadow:0 0 18px rgba(62,181,241,.5)}.cold .wx-box::after{border-top-color:var(--cold)}.cold .wx-t{color:var(--cold)}
+.warm .wx-box{background:rgba(55,8,8,.92);border-color:var(--warm);box-shadow:0 0 18px rgba(255,78,58,.5)}.warm .wx-box::after{border-top-color:var(--warm)}.warm .wx-t{color:var(--warm)}
+.neu  .wx-box{background:rgba(28,25,8,.92);border-color:var(--neu); box-shadow:0 0 18px rgba(232,216,122,.4)}.neu  .wx-box::after{border-top-color:var(--neu)} .neu  .wx-t{color:var(--neu)}
+/* pulse */
+.pdot{position:absolute;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%}
+.pdot::after{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid;animation:pu 2s ease-out infinite}
+@keyframes pu{0%{transform:scale(1);opacity:.9}100%{transform:scale(2.8);opacity:0}}
+.cold.pdot{background:var(--cold)}.cold.pdot::after{border-color:var(--cold)}
+.warm.pdot{background:var(--warm)}.warm.pdot::after{border-color:var(--warm)}
+.neu.pdot {background:var(--neu)} .neu.pdot::after {border-color:var(--neu)}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spin"></div><div class="smsg" id="smsg">正在初始化…</div></div>
+<div id="map"></div>
+<div id="topbar">
+  <div class="logo">HKO · LIVE</div>
+  <div class="title">香港實時分區天氣報告</div>
+  <div id="clock">--:--:--</div>
+</div>
+<div id="cami">—</div>
+<div id="panel"></div>
+<div id="legend">
+  <span><span class="ldot" style="background:var(--cold);box-shadow:0 0 6px var(--cold)"></span>低溫&lt;23°C</span>
+  <span><span class="ldot" style="background:var(--neu);box-shadow:0 0 6px var(--neu)"></span>適中</span>
+  <span><span class="ldot" style="background:var(--warm);box-shadow:0 0 6px var(--warm)"></span>高溫&gt;28°C</span>
+</div>
+
+<script>
+const STNS={
+  '尖沙咀':{lat:22.3021,lng:114.1743,temp:null},
+  '大帽山':{lat:22.4116,lng:114.1244,temp:null},
+  '打鼓嶺':{lat:22.5286,lng:114.1567,temp:null},
+  '西貢':  {lat:22.3836,lng:114.2708,temp:null},
+  '昂坪':  {lat:22.2559,lng:113.9050,temp:null},
+  '赤鱲角':{lat:22.3094,lng:113.9219,temp:null},
+  '將軍澳':{lat:22.3140,lng:114.2620,temp:null},
+};
+const DEMO={'尖沙咀':30.2,'大帽山':18.5,'打鼓嶺':27.1,'西貢':29.8,'昂坪':20.3,'赤鱲角':28.6,'將軍澳':29.0};
+const setMsg=t=>document.getElementById('smsg').textContent=t;
+const hideLoading=()=>document.getElementById('loading').classList.add('gone');
+const cami=document.getElementById('cami');
+const panEl=document.getElementById('panel');
+
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('zh-HK',{hour12:false});},1000);
+
+async function fetchHKO(){
+  const URL='https://data.weather.gov.hk/weatherAPI/opendata/weather.do?dataType=rhrread&lang=tc';
+  for(const p of['https://api.allorigins.win/raw?url=','https://corsproxy.io/?','https://api.codetabs.com/v1/proxy?quest=']){
+    try{
+      const r=await fetch(p+encodeURIComponent(URL),{signal:AbortSignal.timeout(6000)});
+      if(!r.ok) continue;
+      const data=await r.json();
+      let n=0;
+      (data.temperature?.data||[]).forEach(d=>{if(STNS[d.place]){STNS[d.place].temp=parseFloat(d.value);n++;}});
+      if(n>0) return;
+    }catch(e){}
+  }
+  Object.keys(STNS).forEach(k=>STNS[k].temp=DEMO[k]);
+}
+
+const DARK=[
+  {elementType:'geometry',stylers:[{color:'#0d1b2e'}]},
+  {elementType:'labels.text.fill',stylers:[{color:'#7aadcc'}]},
+  {elementType:'labels.text.stroke',stylers:[{color:'#06111f'}]},
+  {featureType:'administrative',elementType:'geometry.stroke',stylers:[{color:'#1a3a5c'}]},
+  {featureType:'landscape',elementType:'geometry',stylers:[{color:'#0d2035'}]},
+  {featureType:'landscape.natural',elementType:'geometry',stylers:[{color:'#132b1e'}]},
+  {featureType:'poi',stylers:[{visibility:'off'}]},
+  {featureType:'poi.park',elementType:'geometry',stylers:[{color:'#1a3820'}]},
+  {featureType:'road',elementType:'geometry',stylers:[{color:'#1c3a5e'}]},
+  {featureType:'road.arterial',elementType:'geometry',stylers:[{color:'#1e4070'}]},
+  {featureType:'road.highway',elementType:'geometry',stylers:[{color:'#1e4a7a'}]},
+  {featureType:'road.highway',elementType:'geometry.stroke',stylers:[{color:'#0a2040'}]},
+  {featureType:'transit',stylers:[{visibility:'off'}]},
+  {featureType:'water',elementType:'geometry',stylers:[{color:'#071828'}]},
+];
+
+const CAM=[
+  {t:0, lat:22.35,lng:114.13,zoom:11,lbl:'全港概覽 · 維多利亞港上空'},
+  {t:5, lat:22.35,lng:114.13,zoom:11,lbl:'全港概覽 · 維多利亞港上空'},
+  {t:15,lat:22.41,lng:114.12,zoom:13,lbl:'大帽山特寫 · 全港最高點 · 低溫預警'},
+  {t:25,lat:22.52,lng:114.15,zoom:12,lbl:'打鼓嶺 · 新界北部內陸溫差'},
+  {t:30,lat:22.35,lng:114.13,zoom:11,lbl:'全景收尾 · 香港各區實時氣溫'},
+];
+function eio(t){return t<.5?4*t*t*t:1-(-2*t+2)**3/2}
+function lerp(a,b,t){return a+(b-a)*t}
+
+let map,layer,cinemaStart;
+
+function makeOverlay(){
+  // Define class only after google is available
+  class WxOverlay extends google.maps.OverlayView{
+    onAdd(){
+      layer=document.createElement('div');
+      layer.style.cssText='position:absolute;top:0;left:0;width:0;height:0;overflow:visible';
+      this.getPanes().overlayLayer.appendChild(layer);
+    }
+    draw(){
+      const proj=this.getProjection();
+      if(!proj||!layer) return;
+      layer.innerHTML='';
+      Object.entries(STNS).forEach(([name,s],i)=>{
+        if(s.temp===null) return;
+        const pt=proj.fromLatLngToDivPixel(new google.maps.LatLng(s.lat,s.lng));
+        const cls=s.temp>28?'warm':s.temp<23?'cold':'neu';
+        // pulse dot
+        const dot=document.createElement('div');
+        dot.className=`pdot ${cls}`;
+        dot.style.cssText=`position:absolute;left:${pt.x}px;top:${pt.y}px`;
+        layer.appendChild(dot);
+        // label
+        const pin=document.createElement('div');
+        pin.className=`wx-pin ${cls}`;
+        pin.style.cssText=`position:absolute;left:${pt.x}px;top:${pt.y-4}px;animation-delay:${i*.08}s`;
+        pin.innerHTML=`<div class="wx-box"><div class="wx-n">${name}</div><div class="wx-t">${s.temp.toFixed(1)}°C</div></div>`;
+        layer.appendChild(pin);
+      });
+    }
+    onRemove(){layer&&layer.remove();}
+  }
+  return new WxOverlay();
+}
+
+function animateCinema(){
+  const t=Math.min((Date.now()-cinemaStart)/1000,30);
+  let seg=CAM.length-2;
+  for(let i=0;i<CAM.length-1;i++){if(t>=CAM[i].t&&t<CAM[i+1].t){seg=i;break;}}
+  const a=CAM[seg],b=CAM[seg+1];
+  const dur=b.t-a.t,e=dur>0?eio(Math.min((t-a.t)/dur,1)):1;
+  map.panTo({lat:lerp(a.lat,b.lat,e),lng:lerp(a.lng,b.lng,e)});
+  map.setZoom(lerp(a.zoom,b.zoom,e));
+  cami.textContent=t<30?(b.lbl||a.lbl):'動畫完畢 · 可自由操控地圖';
+  if(t<30) requestAnimationFrame(animateCinema);
+}
+
+async function initApp(){
+  setMsg('正在連接香港天文台 API…');
+  await fetchHKO();
+  setMsg('正在建立地圖…');
+
+  // Side panel
+  Object.entries(STNS).sort((a,b)=>a[1].temp-b[1].temp).forEach(([n,s])=>{
+    const c=s.temp>28?'#FF4E3A':s.temp<23?'#3EB5F1':'#E8D87A';
+    const d=document.createElement('div');d.className='pr';
+    d.innerHTML=`<span class="pn">${n}</span><span class="pv" style="color:${c}">${s.temp.toFixed(1)}°C</span>`;
+    panEl.appendChild(d);
+  });
+  panEl.classList.add('vis');
+
+  // Map — NO mapId so styles work, mapTypeId roadmap
+  map=new google.maps.Map(document.getElementById('map'),{
+    center:{lat:22.35,lng:114.13},
+    zoom:11,
+    mapTypeId:'roadmap',
+    styles:DARK,
+    disableDefaultUI:false,
+    zoomControl:true,
+    mapTypeControl:false,
+    streetViewControl:false,
+    fullscreenControl:false,
+    gestureHandling:'greedy',
+  });
+
+  const ov=makeOverlay();
+  ov.setMap(map);
+  map.addListener('bounds_changed',()=>ov.draw());
+
+  hideLoading();
+  setTimeout(()=>{cinemaStart=Date.now();animateCinema();},600);
+}
+
+// Poll until google.maps ready
+(function wait(){
+  if(typeof google!=='undefined'&&google.maps&&google.maps.Map) initApp();
+  else setTimeout(wait,50);
+})();
+</script>
+
+<!-- Load Maps API last, no callback -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCe2towtdCB_tiGtfXFQbdk9Kq63T3D2UU&libraries=places" async defer></script>
+</body>
+</html>
