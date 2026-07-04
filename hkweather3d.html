@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>香港保衛戰 3D 戰況特別節目</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.166.1/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.166.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main class="war-room">
+    <canvas id="battlefield" aria-label="香港保衛戰三維地圖"></canvas>
+
+    <section class="title-lockup" aria-label="節目標題">
+      <p>戰史特別節目 / 3D 推演</p>
+      <h1>香港保衛戰</h1>
+      <span>1941.12.08 - 12.25</span>
+    </section>
+
+    <section class="hud panel event-panel" aria-label="目前戰況">
+      <div class="panel-topline">
+        <span id="eventDate">1941.12.08</span>
+        <strong id="phaseName">新界接戰</strong>
+      </div>
+      <h2 id="eventTitle">日軍越過深圳河，啟德遭空襲</h2>
+      <p id="eventCopy">第 23 軍自北面推進，守軍退向醉酒灣防線，空中與炮兵壓力迅速升高。</p>
+      <div class="stats-grid">
+        <div>
+          <span>日軍戰力</span>
+          <strong id="japaneseStrength">約 26,900</strong>
+        </div>
+        <div>
+          <span>英聯邦守軍</span>
+          <strong id="alliedStrength">約 14,000</strong>
+        </div>
+        <div>
+          <span>天氣</span>
+          <strong id="weatherReadout">陰雲、海霧</strong>
+        </div>
+        <div>
+          <span>鏡頭</span>
+          <strong id="cameraReadout">自由運鏡</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="hud panel roster-panel" aria-label="指揮官和圖例">
+      <div class="side-row japanese">
+        <span class="side-chip"></span>
+        <div>
+          <strong>日軍 / 紅色</strong>
+          <p>酒井隆、佐野忠義、新美正一</p>
+        </div>
+      </div>
+      <div class="side-row allied">
+        <span class="side-chip"></span>
+        <div>
+          <strong>英聯邦守軍 / 藍色</strong>
+          <p>莫德庇、羅遜、華里士、楊慕琦</p>
+        </div>
+      </div>
+      <div class="legend-row">
+        <span>旗幟：日軍旭日/菊紋，英軍王冠/獅紋</span>
+        <span>拖曳旋轉，滾輪縮放，右鍵平移</span>
+      </div>
+    </section>
+
+    <section class="hud timeline-panel" aria-label="戰役時間軸">
+      <button id="playButton" class="control-button" type="button" aria-label="播放或暫停">播放</button>
+      <input id="timeline" type="range" min="0" max="5" step="1" value="0" aria-label="選擇戰役日期">
+      <div id="timelineTicks" class="timeline-ticks"></div>
+    </section>
+
+    <div class="reticle" aria-hidden="true"></div>
+    <div id="loading" class="loading">載入 3D 戰場...</div>
+  </main>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
