@@ -302,15 +302,24 @@ const currentTemp = Math.round(currentHourData.values.temperature);
 pillTempEl.innerText = `${currentTemp}°`;
 }
 
-const hours = data.timelines.hourly.slice(0, 3);
-let msg = "☀️ 未來三小時暫時無明顯降雨";
+const hours = data.timelines.hourly.slice(0, 6);
+let msg = "☀️ 未來六小時暫時無明顯降雨";
 
 for (let i = 0; i < hours.length; i++) {
 const rain = hours[i].values.rainIntensity || 0;
 if (rain >= 3) {
-if (i === 0) { msg = "🌧 一小時內可能有雨"; }
-else if (i === 1) { msg = "🌧 兩小時內可能有雨"; }
-else { msg = "🌧 三小時內可能有雨"; }
+if (i === 0) {
+    msg = "🌧 一小時內可能有雨";
+}
+else if (i === 1) {
+    msg = "🌧 兩小時內可能有雨";
+}
+else if (i === 2) {
+    msg = "🌧 三小時內可能有雨";
+}
+else {
+    msg = "🌧 六小時內可能有雨";
+}
 break;
 }
 }
