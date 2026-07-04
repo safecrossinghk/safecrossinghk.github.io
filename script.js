@@ -1,180 +1,35 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
+// ==========================================
+// 1. DOM 元素獲取與基礎配置
+// ==========================================
 const canvas = document.getElementById("battlefield");
 const loading = document.getElementById("loading");
-const eventDate = document.getElementById("eventDate");
-const phaseName = document.getElementById("phaseName");
-const eventTitle = document.getElementById("eventTitle");
-const eventCopy = document.getElementById("eventCopy");
-const japaneseStrength = document.getElementById("japaneseStrength");
-const alliedStrength = document.getElementById("alliedStrength");
 const weatherReadout = document.getElementById("weatherReadout");
 const cameraReadout = document.getElementById("cameraReadout");
-const timeline = document.getElementById("timeline");
-const timelineTicks = document.getElementById("timelineTicks");
-const playButton = document.getElementById("playButton");
 
-const red = new THREE.Color("#ff3b35");
-const blue = new THREE.Color("#2797ff");
-const gold = new THREE.Color("#f2c45b");
+// 天氣專用顏色定義
+const waterBlue = new THREE.Color("#0b2b3f");
 const terrainGreen = new THREE.Color("#2f7655");
 const terrainHigh = new THREE.Color("#6fa36f");
-const waterBlue = new THREE.Color("#0b2b3f");
 
-const battleSteps = [
-  {
-    date: "1941.12.08",
-    tick: "12/8",
-    phase: "新界接戰",
-    title: "日軍越過深圳河，啟德遭空襲",
-    copy: "第 23 軍從深圳河以北展開南進，啟德機場遭轟炸，英聯邦守軍退向醉酒灣防線。",
-    weather: "陰雲、海霧",
-    jStrength: "約 26,900",
-    aStrength: "約 14,000",
-    camera: new THREE.Vector3(0, 55, 72),
-    target: new THREE.Vector3(0, 0, 0),
-    japanese: [
-      { name: "第230聯隊", from: [-42, 0, -52], to: [-40, 0, -22], commander: "佐野忠義", strength: "西路" },
-      { name: "第229聯隊", from: [-6, 0, -54], to: [-7, 0, -24], commander: "新美正一", strength: "中路" },
-      { name: "第228聯隊", from: [34, 0, -52], to: [24, 0, -20], commander: "酒井隆", strength: "東路" }
-    ],
-    allied: [
-      { name: "Royal Scots", from: [-44, 0, -9], to: [-44, 0, -9], commander: "莫德庇", strength: "右翼守備" },
-      { name: "2/14 Punjab", from: [-7, 0, -10], to: [-7, 0, -10], commander: "莫德庇", strength: "中央守備" },
-      { name: "5/7 Rajput", from: [26, 0, -8], to: [26, 0, -8], commander: "莫德庇", strength: "左翼守備" }
-    ],
-    bursts: [[6, 2, -18], [18, 2, 3], [-24, 2, -16]]
-  },
-  {
-    date: "1941.12.09-10",
-    tick: "12/9",
-    phase: "醉酒灣防線",
-    title: "城門碉堡失守，防線被夜襲穿透",
-    copy: "日軍偵察到城門水塘與孖指徑附近弱點，快速突破醉酒灣防線，九龍北部防禦崩解。",
-    weather: "低雲、細雨",
-    jStrength: "突擊隊先導",
-    aStrength: "防線三營",
-    camera: new THREE.Vector3(-17, 42, 44),
-    target: new THREE.Vector3(-8, 0, -4),
-    japanese: [
-      { name: "第228聯隊", from: [24, 0, -20], to: [7, 0, -3], commander: "酒井隆", strength: "夜襲" },
-      { name: "第229聯隊", from: [-7, 0, -24], to: [-12, 0, -2], commander: "新美正一", strength: "中路突破" },
-      { name: "第230聯隊", from: [-40, 0, -22], to: [-34, 0, -2], commander: "佐野忠義", strength: "西路壓迫" }
-    ],
-    allied: [
-      { name: "城門碉堡", from: [-5, 0, -6], to: [-10, 0, 2], commander: "Middlesex", strength: "機槍陣地" },
-      { name: "Punjabs", from: [-7, 0, -10], to: [-12, 0, 4], commander: "莫德庇", strength: "後撤" },
-      { name: "Rajputs", from: [26, 0, -8], to: [18, 0, 5], commander: "莫德庇", strength: "東段" }
-    ],
-    bursts: [[-5, 3, -5], [-12, 2, 0], [2, 2, -2]]
-  },
-  {
-    date: "1941.12.13",
-    tick: "12/13",
-    phase: "九龍撤退",
-    title: "守軍放棄九龍，退守港島",
-    copy: "新界與九龍難以持續防守，守軍破壞設施後撤過維多利亞港，日軍控制九龍半島。",
-    weather: "炮煙、海面能見度低",
-    jStrength: "九龍集結",
-    aStrength: "港島防衛",
-    camera: new THREE.Vector3(0, 36, 46),
-    target: new THREE.Vector3(0, 0, 12),
-    japanese: [
-      { name: "九龍攻擊群", from: [-12, 0, -2], to: [-10, 0, 12], commander: "酒井隆", strength: "推進" },
-      { name: "炮兵群", from: [10, 0, -5], to: [8, 0, 9], commander: "第23軍", strength: "炮擊港島" }
-    ],
-    allied: [
-      { name: "西旅", from: [-14, 0, 10], to: [-26, 0, 26], commander: "羅遜", strength: "港島西段" },
-      { name: "東旅", from: [16, 0, 10], to: [22, 0, 25], commander: "華里士", strength: "港島東段" },
-      { name: "總部", from: [0, 0, 12], to: [-4, 0, 30], commander: "莫德庇", strength: "指揮" }
-    ],
-    bursts: [[-7, 2, 12], [7, 2, 14], [0, 2, 23]]
-  },
-  {
-    date: "1941.12.18",
-    tick: "12/18",
-    phase: "港島登陸",
-    title: "日軍橫渡維港，登陸北角與太古",
-    copy: "日軍趁夜渡海，在北角、太古一帶登陸，港島戰線由北岸向山脊急速擴散。",
-    weather: "夜雨、探照燈、海霧",
-    jStrength: "多路登陸",
-    aStrength: "東西旅分守",
-    camera: new THREE.Vector3(26, 30, 42),
-    target: new THREE.Vector3(14, 0, 25),
-    japanese: [
-      { name: "北角登陸隊", from: [6, 0, 12], to: [12, 0, 23], commander: "酒井隆", strength: "渡海" },
-      { name: "太古登陸隊", from: [16, 0, 12], to: [24, 0, 25], commander: "佐野忠義", strength: "渡海" },
-      { name: "炮兵支援", from: [-8, 0, 10], to: [-1, 0, 18], commander: "第23軍", strength: "火力壓制" }
-    ],
-    allied: [
-      { name: "西旅司令部", from: [-26, 0, 26], to: [-18, 0, 28], commander: "羅遜", strength: "反擊" },
-      { name: "東旅", from: [22, 0, 25], to: [28, 0, 30], commander: "華里士", strength: "防守" },
-      { name: "HKVDC", from: [4, 0, 26], to: [7, 0, 27], commander: "義勇軍", strength: "街壘" }
-    ],
-    bursts: [[10, 2, 22], [18, 2, 25], [4, 2, 20]]
-  },
-  {
-    date: "1941.12.19-23",
-    tick: "12/19",
-    phase: "黃泥涌峽",
-    title: "黃泥涌峽激戰，港島防線被切開",
-    copy: "羅遜准將在西旅司令部附近陣亡，黃泥涌峽失守後，港島東西守軍難以互相支援。",
-    weather: "雨霧、山谷炮煙",
-    jStrength: "山脊穿插",
-    aStrength: "孤立據點",
-    camera: new THREE.Vector3(4, 34, 58),
-    target: new THREE.Vector3(4, 0, 32),
-    japanese: [
-      { name: "黃泥涌突擊", from: [12, 0, 23], to: [4, 0, 33], commander: "第229聯隊", strength: "穿插" },
-      { name: "淺水灣方向", from: [24, 0, 25], to: [17, 0, 42], commander: "第230聯隊", strength: "南壓" }
-    ],
-    allied: [
-      { name: "Winnipeg Grenadiers", from: [-18, 0, 28], to: [1, 0, 32], commander: "羅遜", strength: "反擊" },
-      { name: "Middlesex MG", from: [7, 0, 27], to: [5, 0, 34], commander: "機槍連", strength: "碉堡" },
-      { name: "赤柱守軍", from: [28, 0, 30], to: [26, 0, 47], commander: "華里士", strength: "堅守" }
-    ],
-    bursts: [[3, 3, 33], [8, 3, 35], [19, 3, 42], [-2, 2, 30]]
-  },
-  {
-    date: "1941.12.25",
-    tick: "12/25",
-    phase: "黑色聖誕",
-    title: "港督楊慕琦與莫德庇向酒井隆投降",
-    copy: "守軍彈藥、通訊與補給逐步崩潰，香港在聖誕日下午投降，戰役歷時 17 天。",
-    weather: "煙塵散落、陰天",
-    jStrength: "控制港島北部",
-    aStrength: "殘餘據點",
-    camera: new THREE.Vector3(-28, 32, 58),
-    target: new THREE.Vector3(-4, 0, 30),
-    japanese: [
-      { name: "日軍司令部", from: [4, 0, 33], to: [-8, 0, 21], commander: "酒井隆", strength: "半島酒店" },
-      { name: "港島掃蕩隊", from: [17, 0, 42], to: [0, 0, 39], commander: "第23軍", strength: "控制線" }
-    ],
-    allied: [
-      { name: "總督府", from: [-4, 0, 30], to: [-9, 0, 29], commander: "楊慕琦", strength: "投降" },
-      { name: "赤柱殘部", from: [26, 0, 47], to: [27, 0, 48], commander: "華里士", strength: "延遲接令" }
-    ],
-    bursts: [[-8, 2, 21], [0, 2, 38]]
-  }
-];
+// ==========================================
+// 2. 香港分區天氣 —— 3D 坐標對照表
+// ==========================================
+const stationCoordinates = {
+  "香港天文台": { pos: [-2, 1.2, 20], color: "#ffe08a" },
+  "沙田":       { pos: [10, 1.2, 5],  color: "#ffe08a" },
+  "屯門":       { pos: [-40, 1.2, -10], color: "#ffe08a" },
+  "將軍澳":     { pos: [20, 1.2, 22], color: "#ffe08a" }
+};
 
-const locations = [
-  { name: "深圳河", pos: [0, 0.2, -55], color: "#b7efff" },
-  { name: "大埔", pos: [19, 1, -21], color: "#ffffff" },
-  { name: "城門水塘", pos: [-4, 1.2, -5], color: "#ffffff" },
-  { name: "醉酒灣防線", pos: [-12, 1.4, 1], color: "#f2c45b" },
-  { name: "九龍", pos: [-5, 1.2, 12], color: "#ffffff" },
-  { name: "啟德", pos: [13, 1, 10], color: "#ffffff" },
-  { name: "維多利亞港", pos: [2, 0.3, 18], color: "#b7efff" },
-  { name: "北角", pos: [10, 1, 23], color: "#ffffff" },
-  { name: "太古", pos: [22, 1, 25], color: "#ffffff" },
-  { name: "黃泥涌峽", pos: [4, 1.5, 33], color: "#f2c45b" },
-  { name: "淺水灣", pos: [16, 1, 42], color: "#ffffff" },
-  { name: "赤柱", pos: [27, 1, 48], color: "#ffffff" },
-  { name: "半島酒店", pos: [-8, 1.1, 21], color: "#ffffff" }
-];
+// 記錄場上已建立的天氣標籤
+const weatherLabels = {};
 
+// ==========================================
+// 3. Three.js 場景基礎環境初始化
+// ==========================================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#03070d");
 scene.fog = new THREE.FogExp2("#07101a", 0.014);
@@ -209,11 +64,12 @@ searchLight.target.position.set(4, 0, 28);
 scene.add(searchLight, searchLight.target);
 
 const battlefield = new THREE.Group();
-const unitLayer = new THREE.Group();
-const arrowLayer = new THREE.Group();
 const effectLayer = new THREE.Group();
-scene.add(battlefield, unitLayer, arrowLayer, effectLayer);
+scene.add(battlefield, effectLayer);
 
+// ==========================================
+// 4. 畫布文字標籤與 2D/3D 工具函式
+// ==========================================
 function makeCanvasTexture(draw, width = 512, height = 256) {
   const labelCanvas = document.createElement("canvas");
   labelCanvas.width = width;
@@ -231,14 +87,22 @@ function makeLabel(text, color = "#ffffff", size = 4.5) {
     ctx.fillStyle = "rgba(3, 7, 13, 0.62)";
     ctx.strokeStyle = "rgba(255, 255, 255, 0.42)";
     ctx.lineWidth = 8;
-    roundRect(ctx, 20, 56, width - 40, 112, 18);
+    roundRect(ctx, 20, 36, width - 40, 150, 18); // 稍微加高容器以容納分行天氣字體
     ctx.fill();
     ctx.stroke();
-    ctx.font = "700 58px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
+    ctx.font = "700 48px 'Noto Sans TC', 'Microsoft JhengHei', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = color;
-    ctx.fillText(text, width / 2, height / 2 + 4, width - 70);
+    
+    // 支援 `\n` 分行繪製
+    const lines = text.split('\n');
+    if (lines.length > 1) {
+      ctx.fillText(lines[0], width / 2, height / 2 - 24, width - 70);
+      ctx.fillText(lines[1], width / 2, height / 2 + 36, width - 70);
+    } else {
+      ctx.fillText(text, width / 2, height / 2 + 4, width - 70);
+    }
   });
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
   const sprite = new THREE.Sprite(material);
@@ -277,6 +141,9 @@ function islandShape(points, color, y = 0, height = 1.2) {
   return mesh;
 }
 
+// ==========================================
+// 5. 建立 3D 香港地形與觀測站地標針
+// ==========================================
 function createTerrain() {
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(130, 130, 1, 1),
@@ -310,14 +177,9 @@ function createTerrain() {
   const harborLine = makeLine([[-32, 0.08, 18], [-16, 0.08, 18], [0, 0.08, 18], [16, 0.08, 18], [32, 0.08, 18]], "#9fd4ff", 0.45);
   battlefield.add(harborLine);
 
-  const ginLine = makeLine([[-42, 1.25, -4], [-20, 1.25, 0], [-3, 1.25, -5], [17, 1.25, 2], [30, 1.25, -2]], "#f2c45b", 0.55);
-  battlefield.add(ginLine);
-
-  locations.forEach((item) => {
-    const label = makeLabel(item.name, item.color, item.name.length > 5 ? 3.8 : 4.2);
-    label.position.set(item.pos[0], item.pos[1] + 3.2, item.pos[2]);
-    battlefield.add(label);
-
+  // 初始化地圖定位針 (Cylinder Pin)
+  Object.keys(stationCoordinates).forEach((key) => {
+    const item = stationCoordinates[key];
     const pin = new THREE.Mesh(
       new THREE.CylinderGeometry(0.14, 0.14, 3.2, 12),
       new THREE.MeshBasicMaterial({ color: item.color })
@@ -334,140 +196,12 @@ function makeLine(points, color, width) {
   return new THREE.Mesh(geometry, material);
 }
 
-function createUnit(unit, color, side, index = 0) {
-  const group = new THREE.Group();
-  const sideColor = side === "japanese" ? red : blue;
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.25, 1.5, 2.2, 5),
-    new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.5, metalness: 0.18, emissive: sideColor, emissiveIntensity: 0.12 })
-  );
-  body.position.y = 1.3;
-  body.castShadow = true;
-  group.add(body);
-
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(1.85, 0.08, 8, 48),
-    new THREE.MeshBasicMaterial({ color: sideColor, transparent: true, opacity: 0.86 })
-  );
-  ring.position.y = 0.2;
-  ring.rotation.x = Math.PI / 2;
-  group.add(ring);
-
-  const pole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06, 0.06, 5.2, 8),
-    new THREE.MeshBasicMaterial({ color: "#e5e7eb" })
-  );
-  pole.position.set(1.25, 3.8, 0);
-  group.add(pole);
-
-  const flag = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, 1.55),
-    new THREE.MeshBasicMaterial({ map: makeFlagTexture(side, unit.name), transparent: true, side: THREE.DoubleSide })
-  );
-  flag.position.set(2.45, 4.65, 0);
-  group.add(flag);
-
-  const label = makeLabel(`${unit.name}\n${unit.commander}`, color, 3.1);
-  const labelSide = side === "japanese" ? 1 : -1;
-  const lane = index % 3;
-  label.position.set(labelSide * (2.7 + lane * 1.2), 6.35 + lane * 0.72, (lane - 1) * 1.15);
-  label.scale.multiplyScalar(0.82);
-  group.add(label);
-  group.userData = { unit, from: new THREE.Vector3(unit.from[0], 0, unit.from[2]), to: new THREE.Vector3(unit.to[0], 0, unit.to[2]) };
-  return group;
-}
-
-function makeFlagTexture(side, unitName) {
-  return makeCanvasTexture((ctx, width, height) => {
-    const bg = side === "japanese" ? "#b11218" : "#0f4ea6";
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = "rgba(255,255,255,0.62)";
-    ctx.lineWidth = 10;
-    ctx.strokeRect(8, 8, width - 16, height - 16);
-
-    if (side === "japanese") {
-      ctx.fillStyle = "#f8f3dc";
-      ctx.beginPath();
-      ctx.arc(width * 0.5, height * 0.48, 56, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#f8f3dc";
-      ctx.lineWidth = 14;
-      for (let i = 0; i < 16; i += 1) {
-        const a = (i / 16) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(width * 0.5, height * 0.48);
-        ctx.lineTo(width * 0.5 + Math.cos(a) * 148, height * 0.48 + Math.sin(a) * 148);
-        ctx.stroke();
-      }
-      ctx.fillStyle = "#b11218";
-      ctx.beginPath();
-      ctx.arc(width * 0.5, height * 0.48, 32, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = "#f2c45b";
-      ctx.font = "900 88px Georgia, serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("♛", width * 0.5, height * 0.36);
-      ctx.font = "900 72px Georgia, serif";
-      ctx.fillText("獅", width * 0.5, height * 0.66);
-    }
-
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.font = "700 28px 'Noto Sans TC', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(unitName.slice(0, 16), width * 0.5, height - 25);
-  }, 512, 320);
-}
-
-function createArrow(unit, color) {
-  const from = new THREE.Vector3(unit.from[0], 0.55, unit.from[2]);
-  const to = new THREE.Vector3(unit.to[0], 0.55, unit.to[2]);
-  const delta = new THREE.Vector3().subVectors(to, from);
-  const length = delta.length();
-  if (length < 0.5) {
-    return null;
-  }
-  const group = new THREE.Group();
-  const shaft = makeLine([from.toArray(), to.toArray()], color, 0.16);
-  const cone = new THREE.Mesh(
-    new THREE.ConeGeometry(0.75, 2.3, 24),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.88 })
-  );
-  cone.position.copy(to);
-  cone.position.y = 0.72;
-  cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.clone().normalize());
-  group.add(shaft, cone);
-  return group;
-}
-
-function createExplosionTexture() {
-  return makeCanvasTexture((ctx, width, height) => {
-    const grd = ctx.createRadialGradient(width / 2, height / 2, 8, width / 2, height / 2, width / 2);
-    grd.addColorStop(0, "rgba(255,255,255,1)");
-    grd.addColorStop(0.22, "rgba(255,220,92,0.95)");
-    grd.addColorStop(0.5, "rgba(255,77,45,0.68)");
-    grd.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, width, height);
-  }, 256, 256);
-}
-
-const explosionTexture = createExplosionTexture();
-const explosions = [];
+// ==========================================
+// 6. 天氣動態環境效果 (雲與雨)
+// ==========================================
 const rainDrops = [];
 
-function makeBurst(position, delay = 0) {
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: explosionTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  sprite.position.set(position[0], position[1] + 1.4, position[2]);
-  sprite.scale.set(0.1, 0.1, 0.1);
-  sprite.userData = { delay, life: 0 };
-  effectLayer.add(sprite);
-  explosions.push(sprite);
-}
-
-function createWeather() {
+function createWeatherEffect() {
   const rainMaterial = new THREE.LineBasicMaterial({ color: "#a7c8dd", transparent: true, opacity: 0.42 });
   for (let i = 0; i < 140; i += 1) {
     const x = THREE.MathUtils.randFloatSpread(120);
@@ -506,95 +240,57 @@ function createWeather() {
   }
 }
 
-function clearLayer(layer) {
-  while (layer.children.length) {
-    const child = layer.children.pop();
-    child.traverse?.((node) => {
-      node.geometry?.dispose?.();
-      if (Array.isArray(node.material)) {
-        node.material.forEach((m) => m.dispose?.());
-      } else {
-        node.material?.dispose?.();
-      }
-    });
+// ==========================================
+// 7. 香港天文台 API 數據抓取與渲染邏輯
+// ==========================================
+async function fetchWeatherData() {
+  try {
+    const response = await fetch(
+      "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc"
+    );
+    if (!response.ok) {
+      throw new Error(`HKO API 回應異常: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.temperature?.data ?? [];
+  } catch (error) {
+    console.error("無法取得天文台數據：", error);
+    return [];
   }
 }
 
-let activeStep = 0;
-let playing = false;
-let playTimer = 0;
-let cameraTween = null;
+function updateWeatherLabels(temperatureData) {
+  temperatureData.forEach((station) => {
+    const coord = stationCoordinates[station.place];
+    if (!coord) return; // 如果這個觀測站目前不在我們的地圖座標表裡，先跳過
 
-function setStep(index) {
-  activeStep = Number(index);
-  const step = battleSteps[activeStep];
-  eventDate.textContent = step.date;
-  phaseName.textContent = step.phase;
-  eventTitle.textContent = step.title;
-  eventCopy.textContent = step.copy;
-  japaneseStrength.textContent = step.jStrength;
-  alliedStrength.textContent = step.aStrength;
-  weatherReadout.textContent = step.weather;
-  timeline.value = String(activeStep);
+    const text = `${station.place}\n${station.value}°${station.unit}`;
 
-  clearLayer(unitLayer);
-  clearLayer(arrowLayer);
-  explosions.length = 0;
-  effectLayer.children = effectLayer.children.filter((child) => !child.userData.isBurst);
+    // 如果場上已有此測站舊標籤，先進行記憶體回收移除，避免疊加與記憶體洩漏
+    if (weatherLabels[station.place]) {
+      const oldSprite = weatherLabels[station.place];
+      battlefield.remove(oldSprite);
+      oldSprite.material.map.dispose();
+      oldSprite.material.dispose();
+    }
 
-  step.japanese.forEach((unit, index) => {
-    const marker = createUnit(unit, "#ffd8d8", "japanese", index);
-    marker.position.set(unit.to[0], 0.5, unit.to[2]);
-    unitLayer.add(marker);
-    const arrow = createArrow(unit, "#ff5a4f");
-    if (arrow) arrowLayer.add(arrow);
-  });
-
-  step.allied.forEach((unit, index) => {
-    const marker = createUnit(unit, "#d8ecff", "allied", index);
-    marker.position.set(unit.to[0], 0.5, unit.to[2]);
-    unitLayer.add(marker);
-    const arrow = createArrow(unit, "#42a5ff");
-    if (arrow) arrowLayer.add(arrow);
-  });
-
-  step.bursts.forEach((pos, i) => makeBurst(pos, i * 0.28));
-  explosions.forEach((burst) => {
-    burst.userData.isBurst = true;
-  });
-
-  document.querySelectorAll(".timeline-ticks button").forEach((button, buttonIndex) => {
-    button.classList.toggle("active", buttonIndex === activeStep);
-  });
-
-  cameraTween = {
-    startPosition: camera.position.clone(),
-    startTarget: controls.target.clone(),
-    endPosition: step.camera.clone(),
-    endTarget: step.target.clone(),
-    t: 0
-  };
-}
-
-function buildTimeline() {
-  battleSteps.forEach((step, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = `${step.tick} ${step.phase}`;
-    button.addEventListener("click", () => setStep(index));
-    timelineTicks.appendChild(button);
+    const label = makeLabel(text, coord.color, 4.2);
+    label.position.set(coord.pos[0], coord.pos[1] + 3.8, coord.pos[2]);
+    battlefield.add(label);
+    weatherLabels[station.place] = label;
   });
 }
 
-timeline.addEventListener("input", (event) => {
-  setStep(event.target.value);
-});
+async function refreshWeather() {
+  if (weatherReadout) weatherReadout.textContent = "正在同步天文台數據...";
+  const temperatureData = await fetchWeatherData();
+  updateWeatherLabels(temperatureData);
+  if (weatherReadout) weatherReadout.textContent = "即時更新成功";
+}
 
-playButton.addEventListener("click", () => {
-  playing = !playing;
-  playButton.textContent = playing ? "暫停" : "播放";
-});
-
+// ==========================================
+// 8. 視窗尺寸改變監聽與動畫渲染循環
+// ==========================================
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -605,32 +301,7 @@ function animate(time) {
   requestAnimationFrame(animate);
   const delta = Math.min(0.05, clock.getDelta());
 
-  if (cameraTween) {
-    cameraTween.t = Math.min(1, cameraTween.t + delta * 0.55);
-    const eased = 1 - Math.pow(1 - cameraTween.t, 3);
-    camera.position.lerpVectors(cameraTween.startPosition, cameraTween.endPosition, eased);
-    controls.target.lerpVectors(cameraTween.startTarget, cameraTween.endTarget, eased);
-    cameraReadout.textContent = eased < 1 ? "節目運鏡中" : "自由運鏡";
-    if (cameraTween.t >= 1) cameraTween = null;
-  }
-
-  unitLayer.children.forEach((group, index) => {
-    group.rotation.y = Math.sin(time * 0.0014 + index) * 0.1;
-    const ring = group.children[1];
-    if (ring) {
-      ring.scale.setScalar(1 + Math.sin(time * 0.004 + index) * 0.08);
-    }
-  });
-
-  explosions.forEach((burst) => {
-    burst.userData.life += delta;
-    const local = Math.max(0, burst.userData.life - burst.userData.delay);
-    const pulse = (local % 1.15) / 1.15;
-    const scale = 2.2 + pulse * 7.5;
-    burst.scale.set(scale, scale, scale);
-    burst.material.opacity = Math.max(0, 1 - pulse) * 0.95;
-  });
-
+  // 下雨動態效果更新
   rainDrops.forEach((drop) => {
     drop.position.y -= drop.userData.speed * delta;
     drop.position.x -= 2.8 * delta;
@@ -641,6 +312,7 @@ function animate(time) {
     }
   });
 
+  // 雲朵飄動效果更新
   effectLayer.children.forEach((child) => {
     if (child.type === "Sprite" && child.userData.drift) {
       child.position.x += child.userData.drift * delta;
@@ -648,23 +320,23 @@ function animate(time) {
     }
   });
 
-  if (playing) {
-    playTimer += delta;
-    if (playTimer > 4.1) {
-      playTimer = 0;
-      setStep((activeStep + 1) % battleSteps.length);
-    }
-  }
-
+  if (cameraReadout) cameraReadout.textContent = "自由運鏡";
+  
   searchLight.position.x = 28 + Math.sin(time * 0.0005) * 20;
   controls.update();
   renderer.render(scene, camera);
 }
 
+// ==========================================
+// 9. 程式初始化入口
+// ==========================================
 const clock = new THREE.Clock();
 createTerrain();
-createWeather();
-buildTimeline();
-setStep(0);
-loading.classList.add("hidden");
+createWeatherEffect();
+
+// 初次載入並執行 5 分鐘自動定時器
+refreshWeather();
+setInterval(refreshWeather, 5 * 60 * 1000);
+
+if (loading) loading.classList.add("hidden");
 requestAnimationFrame(animate);
