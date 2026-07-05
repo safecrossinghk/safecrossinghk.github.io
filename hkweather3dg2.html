@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港即時分區天氣 3D 可視化</title>
+<link rel="stylesheet" href="style.css">
+
+<script type="importmap">
+{
+"imports": {
+"three": "https://unpkg.com/three@0.152.0/build/three.module.js",
+"three/addons/": "https://unpkg.com/three@0.152.0/examples/jsm/"
+}
+}
+</script>
+
+<style>
+/* 強制重設左右面板排版，防止重疊 */
+.main-header {
+position: absolute !important;
+left: 20px !important;
+top: 20px !important;
+width: 320px !important;
+height: auto !important;
+background: rgba(15, 23, 42, 0.85) !important;
+padding: 20px !important;
+border-radius: 12px !important;
+border: 1px solid rgba(255, 255, 255, 0.1) !important;
+box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+z-index: 999 !important;
+transform: none !important;
+}
+.info-panel {
+position: absolute !important;
+right: 20px !important;
+top: 20px !important;
+width: 340px !important;
+height: auto !important;
+background: rgba(15, 23, 42, 0.85) !important;
+padding: 20px !important;
+border-radius: 12px !important;
+border: 1px solid rgba(255, 255, 255, 0.1) !important;
+box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+z-index: 999 !important;
+transform: none !important;
+}
+.event-card {
+background: none !important;
+padding: 0 !important;
+border: none !important;
+height: auto !important;
+}
+.stats-grid {
+display: grid !important;
+grid-template-columns: 1fr 1fr !important;
+gap: 10px !important;
+margin-top: 15px !important;
+}
+.stat-box {
+background: rgba(255, 255, 255, 0.05) !important;
+padding: 10px !important;
+border-radius: 6px !important;
+}
+</style>
+</head>
+<body class="war-room">
+
+<header class="main-header">
+<p class="subtitle" style="color: #cbd5e1; margin: 0 0 5px 0; font-size: 0.85rem;">實時數據動態推演 / 3D 視覺化</p>
+<h1 id="mainTitle" style="color: #ffffff; font-size: 1.8rem; margin: 0 0 10px 0; font-weight: 700;">香港分區氣溫</h1>
+<p class="date-range" id="weatherReadout" style="color: #ffe08a; margin: 0; font-size: 0.95rem; font-weight: bold;">正在讀取天文台數據...</p>
+</header>
+
+<main class="map-container">
+<canvas id="battlefield"></canvas>
+</main>
+
+<section class="info-panel">
+<article class="event-card">
+<time class="event-time" id="cameraReadout" style="color: #94a3b8; font-size: 0.8rem; text-transform: uppercase;">3D 自由運鏡模式</time>
+<h2 class="event-title" id="eventTitle" style="color: #ffffff; font-size: 1.3rem; margin: 5px 0 10px 0;">即時氣象報告</h2>
+<p class="event-copy" id="eventCopy" style="color: #94a3b8; font-size: 0.9rem; line-height: 1.5; margin: 0;">
+本系統每 5 分鐘自動經由 API 同步香港天文台各個監測站的實時氣溫，並即時投射至 3D 地圖對應的空間座標上。
+</p>
+
+<div class="stats-grid">
+<div class="stat-box">
+<span class="stat-label" style="color: #64748b; font-size: 0.75rem; display: block;">環境效果</span>
+<span class="stat-value" style="font-size: 0.9rem; color: #ffe08a; font-weight: bold;">雨絲、雲朵</span>
+</div>
+<div class="stat-box">
+<span class="stat-label" style="color: #64748b; font-size: 0.75rem; display: block;">數據來源</span>
+<span class="stat-value" style="font-size: 0.9rem; color: #ffe08a; font-weight: bold;">香港天文台</span>
+</div>
+</div>
+</article>
+</section>
+
+<footer class="timeline-container" style="display: flex !important; justify-content: center; padding: 15px; color: rgba(255,255,255,0.7); font-size: 0.9rem; z-index: 999; position: absolute; bottom: 20px; width: 100%; pointer-events: none;">
+<span style="background: rgba(15, 23, 42, 0.85); padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); pointer-events: auto;">
+💡 提示：按住滑鼠左鍵拖曳可旋轉 3D 地圖，滑鼠滾輪可放大縮小。
+</span>
+</footer>
+
+<div id="loading" class="loading-overlay">
+<div class="spinner"></div>
+<p>載入 3D 地形場景中...</p>
+</div>
+
+<script type="module" src="script.js"></script>
+</body>
+</html>
