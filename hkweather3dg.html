@@ -18,11 +18,11 @@
 </head>
 <body class="war-room">
 
-<!-- 1. 左側大標題區 -->
-<header class="main-header">
-<p class="subtitle">實時數據動態推推演 / 3D 視覺化</p>
-<h1 id="mainTitle">香港分區氣溫</h1>
-<p class="date-range" id="weatherReadout">正在讀取天文台數據...</p>
+<!-- 1. 左側大標題區（強制顯示） -->
+<header class="main-header" style="display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 999; position: absolute; left: 30px; top: 30px; pointer-events: auto;">
+<p class="subtitle" style="display: block !important; opacity: 1 !important;">實時數據動態推演 / 3D 視覺化</p>
+<h1 id="mainTitle" style="display: block !important; opacity: 1 !important; color: #ffffff;">香港分區氣溫</h1>
+<p class="date-range" id="weatherReadout" style="display: block !important; opacity: 1 !important; color: #ffe08a;">正在讀取天文台數據...</p>
 </header>
 
 <!-- 2. 主要 3D 畫布 -->
@@ -30,32 +30,34 @@
 <canvas id="battlefield"></canvas>
 </main>
 
-<!-- 3. 右側數據面板 -->
-<section class="info-panel">
-<article class="event-card">
-<time class="event-time" id="cameraReadout">3D 自由運鏡模式</time>
-<h2 class="event-title" id="eventTitle">即時氣象報告</h2>
-<p class="event-copy" id="eventCopy">
+<!-- 3. 右側數據面板（強制顯示） -->
+<section class="info-panel" style="display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 999; position: absolute; right: 30px; top: 30px; pointer-events: auto;">
+<article class="event-card" style="display: block !important; opacity: 1 !important;">
+<time class="event-time" id="cameraReadout" style="display: block !important; opacity: 1 !important;">3D 自由運鏡模式</time>
+<h2 class="event-title" id="eventTitle" style="display: block !important; opacity: 1 !important; color: #ffffff;">即時氣象報告</h2>
+<p class="event-copy" id="eventCopy" style="display: block !important; opacity: 1 !important; color: rgba(255,255,255,0.8);">
 本系統每 5 分鐘自動經由 API 同步香港天文台各個監測站的實時氣溫，並即時投射至 3D 地圖對應的空間座標上。
 </p>
 
 <!-- 數據統計格 -->
-<div class="stats-grid">
-<div class="stat-box">
+<div class="stats-grid" style="display: grid !important; opacity: 1 !important;">
+<div class="stat-box" style="display: block !important; opacity: 1 !important;">
 <span class="stat-label">環境效果</span>
-<span class="stat-value" style="font-size: 1rem; color: #ffe08a;">雨絲、雲朵、探照燈</span>
+<span class="stat-value" style="font-size: 1rem; color: #ffe08a; display: block !important;">雨絲、雲朵、探照燈</span>
 </div>
-<div class="stat-box">
+<div class="stat-box" style="display: block !important; opacity: 1 !important;">
 <span class="stat-label">數據來源</span>
-<span class="stat-value" style="font-size: 1rem; color: #ffe08a;">香港天文台 (API)</span>
+<span class="stat-value" style="font-size: 1rem; color: #ffe08a; display: block !important;">香港天文台 (API)</span>
 </div>
 </div>
 </article>
 </section>
 
-<!-- 4. 底部圖例說明 -->
-<footer class="timeline-container" style="justify-content: center; padding: 15px; color: rgba(255,255,255,0.7); font-size: 0.9rem;">
+<!-- 4. 底部圖例說明（強制顯示） -->
+<footer class="timeline-container" style="display: flex !important; opacity: 1 !important; visibility: visible !important; justify-content: center; padding: 15px; color: rgba(255,255,255,0.7); font-size: 0.9rem; z-index: 999; position: absolute; bottom: 20px; width: 100%; pointer-events: none;">
+<span style="background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 4px; pointer-events: auto;">
 💡 提示：按住滑鼠左鍵拖曳可旋轉 3D 地圖，滑鼠滾輪可放大縮小，滑鼠右鍵拖曳可平移視角。
+</span>
 </footer>
 
 <!-- 讀取動畫遮罩 -->
