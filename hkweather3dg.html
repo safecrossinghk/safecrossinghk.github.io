@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>香港即時分區天氣 3D 可視化</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="war-room">
+
+    <header class="main-header">
+        <p class="subtitle">實時數據動態推演 / 3D 視覺化</p>
+        <h1 id="mainTitle">香港分區氣溫</h1>
+        <p class="date-range" id="weatherReadout">正在讀取天文台數據...</p>
+    </header>
+
+    <main class="map-container">
+        <canvas id="battlefield"></canvas>
+    </main>
+
+    <section class="info-panel">
+        <article class="event-card">
+            <time class="event-time" id="cameraReadout">3D 自由運鏡模式</time>
+            <h2 class="event-title" id="eventTitle">即時氣象報告</h2>
+            <p class="event-copy" id="eventCopy">
+                本系統每 5 分鐘自動經由 API 同步香港天文台各個監測站的實時氣溫，並即時投射至 3D 地圖對應的空間座標上。
+            </p>
+            
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <span class="stat-label">環境效果</span>
+                    <span class="stat-value" style="font-size: 1rem; color: #ffe08a;">雨絲、雲朵、探照燈</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">數據來源</span>
+                    <span class="stat-value" style="font-size: 1rem; color: #ffe08a;">香港天文台 (API)</span>
+                </div>
+            </div>
+        </article>
+    </section>
+
+    <footer class="timeline-container" style="justify-content: center; padding: 15px; color: rgba(255,255,255,0.7); font-size: 0.9rem;">
+        💡 提示：按住滑鼠左鍵拖曳可旋轉 3D 地圖，滑鼠滾輪可放大縮放，滑鼠右鍵拖曳可平移視角。
+    </footer>
+
+    <div id="loading" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>載入 3D 地形場景中...</p>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
