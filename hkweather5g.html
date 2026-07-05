@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港即時分區天氣 3D 可視化</title>
+
+<style>
+* {
+box-sizing: border-box;
+}
+
+body, html {
+background-color: #F8F9FA !important; /* Google Maps 淺灰白 */
+margin: 0 !important;
+padding: 0 !important;
+width: 100vw !important;
+height: 100vh !important;
+overflow: hidden !important;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* 強制將原本可能殘留的 loading 元素完全蒸發 */
+#loading, .loading-overlay, #loading.active, [id*="loading"], [class*="loading"] {
+display: none !important;
+opacity: 0 !important;
+visibility: hidden !important;
+pointer-events: none !important;
+width: 0 !important;
+height: 0 !important;
+}
+
+/* 確保 3D 畫布佔滿全螢幕並置於底層 */
+#battlefield {
+position: absolute !important;
+top: 0 !important;
+left: 0 !important;
+width: 100vw !important;
+height: 100vh !important;
+z-index: 1 !important;
+display: block !important;
+}
+
+/* 左側大標題區（毛玻璃深色面板） */
+.main-header {
+position: absolute !important;
+left: 20px !important;
+top: 20px !important;
+width: 320px !important;
+background: rgba(32, 33, 36, 0.9) !important;
+padding: 20px !important;
+border-radius: 12px !important;
+border: 1px solid rgba(255, 255, 255, 0.15) !important;
+box-shadow: 0 4px 24px rgba(0,0,0,0.25) !important;
+z-index: 10 !important;
+}
+
+/* 右側數據面板 */
+.info-panel {
+position: absolute !important;
+right: 20px !important;
+top: 20px !important;
+width: 340px !important;
+background: rgba(32, 33, 36, 0.9) !important;
+padding: 20px !important;
+border-radius: 12px !important;
+border: 1px solid rgba(255, 255, 255, 0.15) !important;
+box-shadow: 0 4px 24px rgba(0,0,0,0.25) !important;
+z-index: 10 !important;
+}
+
+.stats-grid {
+display: grid !important;
+grid-template-columns: 1fr 1fr !important;
+gap: 10px !important;
+margin-top: 15px !important;
+}
+
+.stat-box {
+background: rgba(255, 255, 255, 0.08) !important;
+padding: 10px !important;
+border-radius: 6px !important;
+}
+
+/* 底部圖例說明 */
+.timeline-container {
+display: flex !important;
+justify-content: center !important;
+padding: 0 !important;
+z-index: 10 !important;
+position: absolute !important;
+bottom: 25px !important;
+width: 100% !important;
+pointer-events: none !important;
+}
+.timeline-container span {
+background: rgba(32, 33, 36, 0.9) !important;
+color: #ffffff !important;
+padding: 10px 20px !important;
+border-radius: 20px !important;
+font-size: 0.85rem !important;
+border: 1px solid rgba(255, 255, 255, 0.1) !important;
+box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+pointer-events: auto !important;
+}
+</style>
+</head>
+<body>
+
+<canvas id="battlefield"></canvas>
+
+<header class="main-header">
+<p style="color: #9aa0a6; margin: 0 0 4px 0; font-size: 0.8rem; letter-spacing: 0.5px;">實時數據動態推演 / 3D 視覺化</p>
+<h1 id="mainTitle" style="color: #ffffff; font-size: 1.6rem; margin: 0 0 8px 0; font-weight: 700;">香港分區氣溫</h1>
+<p id="weatherReadout" style="color: #ffe08a; margin: 0; font-size: 0.95rem; font-weight: bold;">正在讀取天文台數據...</p>
+</header>
+
+<section class="info-panel">
+<article>
+<time id="cameraReadout" style="color: #8ab4f8; font-size: 0.75rem; font-weight: bold; letter-spacing: 0.5px;">3D 自由運鏡模式</time>
+<h2 id="eventTitle" style="color: #ffffff; font-size: 1.25rem; margin: 4px 0 8px 0; font-weight: 600;">即時氣象報告</h2>
+<p id="eventCopy" style="color: #e8eaed; font-size: 0.85rem; line-height: 1.5; margin: 0;">
+本系統每 5 分鐘自動經由 API 同步香港天文台各個監測站的實時氣溫，並即時投射至 3D 地圖對應的空間座標上。
+</p>
+
+<div class="stats-grid">
+<div class="stat-box">
+<span style="color: #9aa0a6; font-size: 0.7rem; display: block; margin-bottom: 2px;">環境效果</span>
+<span style="font-size: 0.85rem; color: #ffe08a; font-weight: bold;">雨絲、雲朵</span>
+</div>
+<div class="stat-box">
+<span style="color: #9aa0a6; font-size: 0.7rem; display: block; margin-bottom: 2px;">數據來源</span>
+<span style="font-size: 0.85rem; color: #ffe08a; font-weight: bold;">香港天文台</span>
+</div>
+</div>
+</article>
+</section>
+
+<footer class="timeline-container">
+<span>💡 提示：按住滑鼠左鍵拖曳可旋轉 3D 地圖，滑鼠滾輪可放大縮小。</span>
+</footer>
+
+<script type="module" src="script.js"></script>
+</body>
+</html>
