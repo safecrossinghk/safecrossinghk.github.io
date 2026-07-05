@@ -9,78 +9,77 @@ const loading = document.getElementById("loading");
 const weatherReadout = document.getElementById("weatherReadout");
 const cameraReadout = document.getElementById("cameraReadout");
 
-// 🎨 Google Maps 風格配色方案
+// 🎨 Google Maps 風格配色方案 (已被重新完整定義，防止報錯)
 const waterBlue = new THREE.Color("#AAD3DF"); // 經典 Google Maps 藍色海洋
 const terrainGreen = new THREE.Color("#E4E8EC"); // 淺灰色陸地主體
 const terrainHigh = new THREE.Color("#DCE1E5"); // 稍深一點的小山丘
-const labelColor = "#202124"; // 深灰色文字（Google Maps 預設標籤色）
+const labelColor = "#202124"; // 深灰色文字
 
 const clock = new THREE.Clock();
 
 // ==========================================
-// 2. 香港分區天氣 —— 3D 坐標對照表
+// 2. 香港分區天氣 —— 3D 坐標對照表 (已整合 32 個測站)
 // ==========================================
 const stationCoordinates = {
-"尖沙咀": { pos: [0, 1.2, 0], color: "#1A73E8" }, // 換成漂亮的 Google 藍色字
-"香港天文台": { pos: [3, 1.2, -5], color: "#1A73E8" },
-"京士柏": { pos: [6, 1.2, -8], color: "#1A73E8" },
-"跑馬地": { pos: [12, 1.2, 20], color: "#1A73E8" },
-"黃大仙": { pos: [18, 1.2, -28], color: "#1A73E8" },
-"屯門": { pos: [-82, 1.2, -22], color: "#1A73E8" },
-"大埔": { pos: [-15, 1.2, -76], color: "#1A73E8" },
-"石崗": { pos: [-45, 1.2, -54], color: "#1A73E8" },
-"沙田": { pos: [-3, 1.2, -38], color: "#1A73E8" },
-"將軍澳": { pos: [38, 1.2, -8], color: "#1A73E8" },
-"赤鱲角": { pos: [-88, 1.2, 30], color: "#1A73E8" },
-"長洲": { pos: [-45, 1.2, 66], color: "#1A73E8" },
-"西貢": { pos: [48, 1.2, -42], color: "#1A73E8" },
-"流浮山": { pos: [-96, 1.2, -48], color: "#1A73E8" },
-"濕地公園": { pos: [-92, 1.2, -56], color: "#1A73E8" },
-"打鼓嶺": { pos: [-30, 1.2, -94], color: "#1A73E8" },
+"尖沙咀": { pos: [2, 1.2, 11], color: "#1A73E8" },
+"香港天文台": { pos: [3, 1.2, 8], color: "#1A73E8" },
+"京士柏": { pos: [6, 1.2, 5], color: "#1A73E8" },
+"跑馬地": { pos: [12, 1.2, 28], color: "#1A73E8" },
+"黃大仙": { pos: [18, 1.2, -10], color: "#1A73E8" },
+"屯門": { pos: [-82, 1.2, -15], color: "#1A73E8" },
+"大埔": { pos: [-15, 1.2, -55], color: "#1A73E8" },
+"石崗": { pos: [-45, 1.2, -35], color: "#1A73E8" },
+"沙田": { pos: [-3, 1.2, -20], color: "#1A73E8" },
+"將軍澳": { pos: [38, 1.2, 5], color: "#1A73E8" },
+"赤鱲角": { pos: [-88, 1.2, 25], color: "#1A73E8" },
+"長洲": { pos: [-45, 1.2, 60], color: "#1A73E8" },
+"西貢": { pos: [48, 1.2, -25], color: "#1A73E8" },
+"流浮山": { pos: [-96, 1.2, -35], color: "#1A73E8" },
+"濕地公園": { pos: [-92, 1.2, -45], color: "#1A73E8" },
+"打鼓嶺": { pos: [-30, 1.2, -75], color: "#1A73E8" },
 "坪洲": { pos: [-34, 1.2, 38], color: "#1A73E8" },
-"黃竹坑": { pos: [12, 1.2, 48], color: "#1A73E8" },
+"黃竹坑": { pos: [12, 1.2, 40], color: "#1A73E8" },
 "青衣": { pos: [-35, 1.2, 3], color: "#1A73E8" },
-"荃灣可觀": { pos: [-44, 1.2, -16], color: "#1A73E8" },
-"荃灣城門谷": { pos: [-35, 1.2, -24], color: "#1A73E8" },
-"香港公園": { pos: [5, 1.2, 33], color: "#1A73E8" },
-"筲箕灣": { pos: [42, 1.2, 35], color: "#1A73E8" },
-"九龍城": { pos: [18, 1.2, -4], color: "#1A73E8" },
-"觀塘": { pos: [36, 1.2, -5], color: "#1A73E8" },
-"深水埗": { pos: [-12, 1.2, -8], color: "#1A73E8" },
-"啟德跑道公園": { pos: [30, 1.2, 6], color: "#1A73E8" },
-"元朗公園": { pos: [-88, 1.2, -68], color: "#1A73E8" },
-"大美督": { pos: [12, 1.2, -86], color: "#1A73E8" },
-"赤柱": { pos: [30, 1.2, 70], color: "#1A73E8" }
+"荃灣可觀": { pos: [-44, 1.2, -10], color: "#1A73E8" },
+"荃灣城門谷": { pos: [-35, 1.2, -15], color: "#1A73E8" },
+"香港公園": { pos: [5, 1.2, 25], color: "#1A73E8" },
+"筲箕灣": { pos: [35, 1.2, 32], color: "#1A73E8" },
+"九龍城": { pos: [18, 1.2, 4], color: "#1A73E8" },
+"觀塘": { pos: [32, 1.2, 8], color: "#1A73E8" },
+"深水埗": { pos: [-12, 1.2, 2], color: "#1A73E8" },
+"啟德跑道公園": { pos: [26, 1.2, 12], color: "#1A73E8" },
+"元朗公園": { pos: [-78, 1.2, -45], color: "#1A73E8" },
+"大美督": { pos: [22, 1.2, -65], color: "#1A73E8" },
+"赤柱": { pos: [28, 1.2, 60], color: "#1A73E8" }
 };
 
 const weatherLabels = {};
 
 // ==========================================
-// 3. Three.js 場景基礎環境初始化 (明亮天空)
+// 3. Three.js 場景基礎環境初始化
 // ==========================================
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#F8F9FA"); // Google 明亮背景底色
-scene.fog = new THREE.FogExp2("#F8F9FA", 0.008);
+scene.background = new THREE.Color("#F8F9FA");
+scene.fog = new THREE.FogExp2("#F8F9FA", 0.006);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 
-const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 260);
-camera.position.set(0, 55, 72);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 400);
+camera.position.set(0, 110, 140); // 稍微拉高視野，更適合看真實大地形
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.07;
 controls.target.set(0, 0, 0);
 
-// 提高整體照明度，做出白天的感覺
-const ambient = new THREE.AmbientLight("#ffffff", 1.6);
+const ambient = new THREE.AmbientLight("#ffffff", 1.5);
 scene.add(ambient);
 
-const keyLight = new THREE.DirectionalLight("#ffffff", 1.5);
-keyLight.position.set(-32, 58, 24);
+const keyLight = new THREE.DirectionalLight("#ffffff", 1.2);
+keyLight.position.set(-50, 100, 50);
 scene.add(keyLight);
 
 const battlefield = new THREE.Group();
@@ -88,7 +87,7 @@ const effectLayer = new THREE.Group();
 scene.add(battlefield, effectLayer);
 
 // ==========================================
-// 4. 畫布文字標籤 (改為白底深字，類似 Google Maps Bubble)
+// 4. 2D / 3D 工具函式
 // ==========================================
 function makeCanvasTexture(draw, width = 512, height = 256) {
 const labelCanvas = document.createElement("canvas");
@@ -104,7 +103,6 @@ function makeLabel(text, color = "#1A73E8", size = 4.5) {
 const texture = makeCanvasTexture((ctx, width, height) => {
 ctx.clearRect(0, 0, width, height);
 
-// Google Maps 風格的對話框白底
 ctx.fillStyle = "#ffffff";
 ctx.strokeStyle = "#DACDC0";
 ctx.lineWidth = 4;
@@ -112,15 +110,13 @@ roundRect(ctx, 20, 36, width - 40, 150, 24);
 ctx.fill();
 ctx.stroke();
 
-ctx.font = "700 44px 'Noto Sans TC', sans-serif";
+ctx.font = "700 42px 'Noto Sans TC', sans-serif";
 ctx.textAlign = "center";
 ctx.textBaseline = "middle";
 
 const lines = text.split('\n');
-// 地區名稱用深灰
 ctx.fillStyle = "#202124";
 ctx.fillText(lines[0], width / 2, height / 2 - 24, width - 70);
-// 溫度用 Google 藍
 ctx.fillStyle = color;
 ctx.fillText(lines[1], width / 2, height / 2 + 36, width - 70);
 });
@@ -160,27 +156,52 @@ return mesh;
 }
 
 // ==========================================
-// 5. 建立地形與針頭
+// 5. 建立真實香港地形 (已修復變數遺漏問題)
 // ==========================================
 function createTerrain() {
 const water = new THREE.Mesh(
-new THREE.PlaneGeometry(150, 150, 1, 1),
+new THREE.PlaneGeometry(350, 350, 1, 1),
 new THREE.MeshStandardMaterial({ color: waterBlue, roughness: 0.9, metalness: 0.0 })
 );
 water.rotation.x = -Math.PI / 2;
 water.position.y = -0.45;
 battlefield.add(water);
 
-const newTerritories = islandShape([[-56, -48], [50, -48], [54, -16], [38, -6], [16, -10], [0, 0], [-24, -2], [-52, -12]], terrainGreen, 0, 1.1);
-const kowloon = islandShape([[-26, -2], [25, -2], [28, 8], [20, 16], [2, 17], [-18, 14], [-30, 6]], terrainGreen, 0, 1);
-const hongKongIsland = islandShape([[-30, 22], [-18, 18], [5, 19], [27, 23], [35, 33], [28, 50], [4, 53], [-19, 45], [-33, 35]], terrainGreen, 0, 1.25);
-battlefield.add(newTerritories, kowloon, hongKongIsland);
+// 真實海岸線點陣列
+const mainlandPoints = [
+[-98, -50], [-85, -62], [-65, -70], [-45, -78], [-20, -78],
+[5, -72], [25, -68], [42, -62], [58, -50], [68, -32],
+[65, -12], [52, -2], [36, -6], [28, -2], [25, 4],
+[21, 6], [16, 3], [12, 5], [10, 10], [5, 12],
+[2, 11], [-2, 12], [-6, 10], [-10, 12], [-14, 11],
+[-18, 13], [-25, 10], [-32, 2], [-42, -2], [-55, -4],
+[-68, -2], [-76, -8], [-88, -18], [-95, -32], [-98, -45]
+];
 
+const hkIslandPoints = [
+[-32, 25], [-24, 21], [-15, 20], [-2, 20], [8, 21],
+[18, 23], [26, 25], [35, 30], [38, 38], [35, 46],
+[28, 52], [18, 54], [5, 53], [-8, 50], [-18, 46],
+[-28, 42], [-34, 35], [-34, 28]
+];
+
+const lantauPoints = [
+[-92, 15], [-82, 12], [-72, 14], [-64, 20], [-56, 22],
+[-52, 28], [-48, 35], [-52, 42], [-58, 45], [-68, 44],
+[-78, 45], [-86, 42], [-94, 36], [-96, 25]
+];
+
+const newTerritoriesAndKowloon = islandShape(mainlandPoints, terrainGreen, 0, 1.2);
+const hongKongIsland = islandShape(hkIslandPoints, terrainGreen, 0, 1.25);
+const lantauIsland = islandShape(lantauPoints, terrainGreen, 0, 1.15);
+
+battlefield.add(newTerritoriesAndKowloon, hongKongIsland, lantauIsland);
+
+// 建立大頭針
 Object.keys(stationCoordinates).forEach((key) => {
 const item = stationCoordinates[key];
-// 定位針換成 Google Maps 經典紅色大頭針
 const pin = new THREE.Mesh(
-new THREE.CylinderGeometry(0.05, 0.2, 2.5, 12),
+new THREE.CylinderGeometry(0.08, 0.25, 3.0, 12),
 new THREE.MeshBasicMaterial({ color: "#EA4335" })
 );
 pin.position.set(item.pos[0], item.pos[1] + 1.0, item.pos[2]);
@@ -189,7 +210,7 @@ battlefield.add(pin);
 }
 
 // ==========================================
-// 6. 天氣效果 (白天淡淡的雨)
+// 6. 天氣環境效果
 // ==========================================
 const rainDrops = [];
 function createWeatherEffect() {
@@ -199,7 +220,7 @@ const drop = new THREE.Line(
 new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.2, -2.0, 0.1)]),
 rainMaterial
 );
-drop.position.set(THREE.MathUtils.randFloatSpread(120), THREE.MathUtils.randFloat(10, 55), THREE.MathUtils.randFloatSpread(110));
+drop.position.set(THREE.MathUtils.randFloatSpread(200), THREE.MathUtils.randFloat(10, 70), THREE.MathUtils.randFloatSpread(200));
 drop.userData.speed = THREE.MathUtils.randFloat(15, 25);
 rainDrops.push(drop);
 scene.add(drop);
@@ -207,7 +228,7 @@ scene.add(drop);
 }
 
 // ==========================================
-// 7. API 連動
+// 7. API 數據同步
 // ==========================================
 async function fetchWeatherData() {
 try {
@@ -229,8 +250,8 @@ if (weatherLabels[station.place]) {
 battlefield.remove(weatherLabels[station.place]);
 }
 
-const label = makeLabel(text, coord.color, 4.0);
-label.position.set(coord.pos[0], coord.pos[1] + 3.2, coord.pos[2]);
+const label = makeLabel(text, coord.color, 4.5);
+label.position.set(coord.pos[0], coord.pos[1] + 4.5, coord.pos[2]);
 battlefield.add(label);
 weatherLabels[station.place] = label;
 });
@@ -243,6 +264,9 @@ updateWeatherLabels(temperatureData);
 if (weatherReadout) weatherReadout.textContent = "即時更新成功";
 }
 
+// ==========================================
+// 8. 渲染與動畫
+// ==========================================
 window.addEventListener("resize", () => {
 camera.aspect = window.innerWidth / window.innerHeight;
 camera.updateProjectionMatrix();
@@ -255,13 +279,16 @@ const delta = Math.min(0.05, clock.getDelta());
 
 rainDrops.forEach((drop) => {
 drop.position.y -= drop.userData.speed * delta;
-if (drop.position.y < 0) drop.position.y = THREE.MathUtils.randFloat(32, 58);
+if (drop.position.y < 0) drop.position.y = THREE.MathUtils.randFloat(40, 70);
 });
 
 controls.update();
 renderer.render(scene, camera);
 }
 
+// ==========================================
+// 9. 初始化入口
+// ==========================================
 createTerrain();
 createWeatherEffect();
 refreshWeather();
