@@ -18,10 +18,36 @@ const terrainHigh = new THREE.Color("#6fa36f");
 // 2. 香港分區天氣 —— 3D 坐標對照表
 // ==========================================
 const stationCoordinates = {
-  "香港天文台": { pos: [-2, 1.2, 20], color: "#ffe08a" },
-  "沙田":       { pos: [10, 1.2, 5],  color: "#ffe08a" },
-  "屯門":       { pos: [-40, 1.2, -10], color: "#ffe08a" },
-  "將軍澳":     { pos: [20, 1.2, 22], color: "#ffe08a" }
+"尖沙咀": { pos: [2, 1.2, 11], color: "#ffffff" },
+"香港天文台": { pos: [3, 1.2, 8], color: "#ffffff" },
+"京士柏": { pos: [6, 1.2, 5], color: "#ffffff" },
+"跑馬地": { pos: [12, 1.2, 28], color: "#ffffff" },
+"黃大仙": { pos: [18, 1.2, -10], color: "#ffffff" },
+"屯門": { pos: [-82, 1.2, -15], color: "#ffffff" },
+"大埔": { pos: [-15, 1.2, -55], color: "#ffffff" },
+"石崗": { pos: [-45, 1.2, -35], color: "#ffffff" },
+"沙田": { pos: [-3, 1.2, -20], color: "#ffffff" },
+"將軍澳": { pos: [38, 1.2, 5], color: "#ffffff" },
+"赤鱲角": { pos: [-88, 1.2, 25], color: "#ffffff" },
+"長洲": { pos: [-45, 1.2, 60], color: "#ffffff" },
+"西貢": { pos: [48, 1.2, -25], color: "#ffffff" },
+"流浮山": { pos: [-96, 1.2, -35], color: "#ffffff" },
+"濕地公園": { pos: [-92, 1.2, -45], color: "#ffffff" },
+"打鼓嶺": { pos: [-30, 1.2, -75], color: "#ffffff" },
+"坪洲": { pos: [-34, 1.2, 38], color: "#ffffff" },
+"黃竹坑": { pos: [12, 1.2, 40], color: "#ffffff" },
+"青衣": { pos: [-35, 1.2, 3], color: "#ffffff" },
+"荃灣可觀": { pos: [-44, 1.2, -10], color: "#ffffff" },
+"荃灣城門谷": { pos: [-35, 1.2, -15], color: "#ffffff" },
+"香港公園": { pos: [5, 1.2, 25], color: "#ffffff" },
+"筲箕灣": { pos: [35, 1.2, 32], color: "#ffffff" },
+"九龍城": { pos: [18, 1.2, 4], color: "#ffffff" },
+"觀塘": { pos: [32, 1.2, 8], color: "#ffffff" },
+"深水埗": { pos: [-12, 1.2, 2], color: "#ffffff" },
+"啟德跑道公園": { pos: [26, 1.2, 12], color: "#ffffff" },
+"元朗公園": { pos: [-78, 1.2, -45], color: "#ffffff" },
+"大美督": { pos: [22, 1.2, -65], color: "#ffffff" },
+"赤柱": { pos: [28, 1.2, 60], color: "#ffffff" }
 };
 
 // 記錄場上已建立的天氣標籤
