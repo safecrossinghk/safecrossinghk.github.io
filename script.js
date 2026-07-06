@@ -9,10 +9,10 @@ const loading = document.getElementById("loading");
 const weatherReadout = document.getElementById("weatherReadout");
 const cameraReadout = document.getElementById("cameraReadout");
 
-// 🎨 Google Maps 風格配色方案
-const waterBlue = new THREE.Color("#AAD3DF"); // 經典 Google Maps 藍色海洋
-const terrainGreen = new THREE.Color("#E4E8EC"); // 淺灰色陸地主體
-const terrainHigh = new THREE.Color("#DCE1E5"); // 稍深一點的小山丘
+// 🎨 強化對比度配色方案 (讓海岸線一眼看清)
+const waterBlue = new THREE.Color("#7FB5C8"); // 深色海洋藍
+const terrainGreen = new THREE.Color("#A3C9A8"); // 翠綠色陸地主體
+const terrainHigh = new THREE.Color("#84B082"); // 深綠色山丘
 const labelColor = "#202124"; // 深灰色文字
 
 const clock = new THREE.Clock();
@@ -67,8 +67,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 400);
-camera.position.set(0, 110, 140);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(0, 140, 160); // 調整至經典斜45度鳥瞰視角
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
