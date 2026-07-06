@@ -226,14 +226,22 @@ scene.add(drop);
 }
 
 // ==========================================
-// 7. API 數據同步
+// 7. API 數據同步 (已加入 CORS 跨域代理，解決全白死機問題)
 // ==========================================
 async function fetchWeatherData() {
 try {
-const response = await fetch("https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc");
-const data = await response.json();
+// 使用 allorigins.win 免費跨域代理服務轉發，繞過天文台的 CORS 限制
+const targetUrl = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc";
+const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+
+const response = await fetch(proxyUrl);
+const wrapper = await response.json();
+
+// allorigins 會把原本的 JSON 字串包在 wrapper.contents 裡面
+const data = JSON.parse(wrapper.contents);
 return data.temperature?.data ?? [];
 } catch (error) {
+console.error("氣象數據抓取失敗:", error);
 return [];
 }
 }
