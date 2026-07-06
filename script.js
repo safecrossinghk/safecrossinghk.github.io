@@ -9,12 +9,12 @@ const loading = document.getElementById("loading");
 const weatherReadout = document.getElementById("weatherReadout");
 const cameraReadout = document.getElementById("cameraReadout");
 
-// 🎨 強化對比度配色方案 (讓海岸線一眼看清)
-const waterBlue = new THREE.Color("#7FB5C8"); // 深色海洋藍
-const terrainGreen = new THREE.Color("#A3C9A8"); // 翠綠色陸地主體
-const terrainHigh = new THREE.Color("#84B082"); // 深綠色山丘
-const labelColor = "#202124"; // 深灰色文字
-
+const red = new THREE.Color("#ff3b35");
+const blue = new THREE.Color("#2797ff");
+const gold = new THREE.Color("#f2c45b");
+const terrainGreen = new THREE.Color("#2f7655");
+const terrainHigh = new THREE.Color("#6fa36f");
+const waterBlue = new THREE.Color("#0b2b3f");
 const clock = new THREE.Clock();
 
 // ==========================================
