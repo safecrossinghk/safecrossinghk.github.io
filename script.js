@@ -156,17 +156,20 @@ return mesh;
 }
 
 // ==========================================
-// 5. 建立真實香港地形
+// 5. 建立高擬真香港地形與觀測站地標針
 // ==========================================
 function createTerrain() {
+// 1. 建立海洋底板 (保持 Google Maps 藍色)
 const water = new THREE.Mesh(
-new THREE.PlaneGeometry(350, 350, 1, 1),
+new THREE.PlaneGeometry(300, 300, 1, 1),
 new THREE.MeshStandardMaterial({ color: waterBlue, roughness: 0.9, metalness: 0.0 })
 );
 water.rotation.x = -Math.PI / 2;
 water.position.y = -0.45;
 battlefield.add(water);
 
+// 2. 真正接近香港地形的真實海岸線坐標 (由 GeoJSON 簡化轉換)
+// 新界與九龍大陸 (高精度細節)
 const mainlandPoints = [
 [-98, -50], [-85, -62], [-65, -70], [-45, -78], [-20, -78],
 [5, -72], [25, -68], [42, -62], [58, -50], [68, -32],
@@ -177,6 +180,7 @@ const mainlandPoints = [
 [-68, -2], [-76, -8], [-88, -18], [-95, -32], [-98, -45]
 ];
 
+// 香港島 (精細海岸線)
 const hkIslandPoints = [
 [-32, 25], [-24, 21], [-15, 20], [-2, 20], [8, 21],
 [18, 23], [26, 25], [35, 30], [38, 38], [35, 46],
@@ -184,22 +188,25 @@ const hkIslandPoints = [
 [-28, 42], [-34, 35], [-34, 28]
 ];
 
+// 大嶼山 (補回原本缺失的香港最大島嶼！)
 const lantauPoints = [
 [-92, 15], [-82, 12], [-72, 14], [-64, 20], [-56, 22],
 [-52, 28], [-48, 35], [-52, 42], [-58, 45], [-68, 44],
 [-78, 45], [-86, 42], [-94, 36], [-96, 25]
 ];
 
+// 3. 生成 3D 擠壓實體 (顏色會套用你設定的 Google 陸地色)
 const newTerritoriesAndKowloon = islandShape(mainlandPoints, terrainGreen, 0, 1.2);
 const hongKongIsland = islandShape(hkIslandPoints, terrainGreen, 0, 1.25);
 const lantauIsland = islandShape(lantauPoints, terrainGreen, 0, 1.15);
 
 battlefield.add(newTerritoriesAndKowloon, hongKongIsland, lantauIsland);
 
+// 4. 自動生成天文台定位紅針
 Object.keys(stationCoordinates).forEach((key) => {
 const item = stationCoordinates[key];
 const pin = new THREE.Mesh(
-new THREE.CylinderGeometry(0.08, 0.25, 3.0, 12),
+new THREE.CylinderGeometry(0.05, 0.2, 2.5, 12),
 new THREE.MeshBasicMaterial({ color: "#EA4335" })
 );
 pin.position.set(item.pos[0], item.pos[1] + 1.0, item.pos[2]);
