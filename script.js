@@ -132,7 +132,7 @@ function createMapTerrain() {
 const textureLoader = new THREE.TextureLoader();
 
 // 📥 這裡讀取你剛剛改名並上傳到 GitHub 嘅全新本地地圖圖片
-const mapTexture = textureLoader.load('./hk_map_v2.PNG',
+const mapTexture = textureLoader.load('./hk_base_map.PNG',
 () => { console.log("地圖貼圖載入成功！"); },
 undefined,
 (err) => { console.error("地圖載入失敗，請檢查檔名是否正確:", err); }
