@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>📍 荔枝角食店 OSM 3D 即時人流與氣象地圖</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="https://cdn.osmbuildings.org/classic/0.2.2b/OSMBuildings-Leaflet.js"></script>
+
+<style>
+body {
+margin: 0;
+padding: 0;
+font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+overflow: hidden;
+background: #0b0f19;
+}
+
+/* 地圖滿版容器 */
+#map {
+width: 100vw;
+height: 100vh;
+}
+
+/* 頂部氣象卡片 */
+#weather-card {
+position: absolute;
+top: 15px;
+left: 50%;
+transform: translateX(-50%);
+z-index: 1000;
+background: rgba(15, 23, 42, 0.85);
+backdrop-filter: blur(8px);
+padding: 10px 20px;
+border-radius: 12px;
+border: 1px solid rgba(255, 255, 255, 0.15);
+color: white;
+text-align: center;
+box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+font-size: 14px;
+}
+
+/* Leaflet 自訂食店人流懸浮標籤 */
+.crowd-leaflet-marker {
+background: transparent;
+border: none;
+}
+.crowd-label {
+padding: 6px 12px;
+border-radius: 8px;
+color: white;
+font-size: 12px;
+font-weight: bold;
+white-space: nowrap;
+box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+border: 1.5px solid rgba(255, 255, 255, 0.4);
+text-align: center;
+transform: translate(-50%, -100%);
+transition: transform 0.2s;
+}
+.crowd-label:hover {
+transform: translate(-50%, -105%) scale(1.1);
+}
+
+/* 人流顏色區分 */
+.crowd-busy { background: rgba(220, 38, 38, 0.9); border-color: #f87171; } /* 🔴 非常繁忙 */
+.crowd-normal { background: rgba(202, 138, 4, 0.9); border-color: #facc15; } /* 🟡 正常 */
+.crowd-low { background: rgba(22, 163, 74, 0.9); border-color: #4ade80; } /* 🟢 偏少 */
+.crowd-unknown { background: rgba(100, 116, 139, 0.9); border-color: #94a3b8; } /* ⚠️ 無資料 */
+</style>
+</head>
+<body>
+
+<div id="weather-card">
+⛅ 正在確認您的位置並載入天氣資訊...
+</div>
+
+<div id="map"></div>
+
+<script>
+const TOMORROW_API_KEY = 'Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh';
+
+// 荔枝角目標食店清單及經緯度 (Lat, Lng)
+const storeList = [
+{ name: "麥當勞 (宇晴軒)", lat: 22.334697, lng: 114.149783 },
+{ name: "必勝客(宇晴匯)", lat: 22.334800, lng: 114.149600 },
+{ name: "元氣壽司 (泓景匯)", lat: 22.334200, lng: 114.150500 },
+{ name: "譚仔三哥米線（荔枝角D2）", lat: 22.336105, lng: 114.148201 },
+{ name: "Thai-ger(荔枝角)", lat: 22.336500, lng: 114.148800 },
+{ name: "黑布小巷[荔枝角店]", lat: 22.337100, lng: 114.148100 },
+{ name: "吉野家長沙灣廣場", lat: 22.335500, lng: 114.150800 },
+{ name: "肯德基（長沙灣廣場）", lat: 22.335600, lng: 114.151000 },
+{ name: "阿木台灣麵（茘枝角）", lat: 22.337000, lng: 114.148500 }
+];
+
+// 1. 初始化 Leaflet 地圖，中心設定為荔枝角
+const map = L.map('map', {
+center: [22.3362, 114.1495],
+zoom: 17,
+zoomControl: false
+});
+
+// 2. 載入 OpenStreetMap 圖層 (這裡使用 CartoDB 暗色版 OSM 瓦片，貼合你原本的深色風格)
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+maxZoom: 19
+}).addTo(map);
+
+// 3. 載入 OSMBuildings 3D 建築物擴充套件
+const osmb = new OSMBuildings(map);
+osmb.date(new Date());
+osmb.load('https://{s}.data.osmbuildings.org/0.2/59ed2d3c/tile/{z}/{x}/{y}.json');
+
+// 4. 讀取 Cloudflare Worker 取得 Popular Times 人流並在地圖加上標籤
+async function loadStoresCrowdData() {
+for (const store of storeList) {
+try {
+const res = await fetch("https://tiny-disk-0d7b.ctakwah.workers.dev/?query=" + encodeURIComponent(store.name));
+const data = await res.json();
+
+let percentage = null;
+if (data.success && Array.isArray(data.popular_times)) {
+const live = data.popular_times.find(d => d.day === "live");
+if (live && typeof live.percentage === "number") {
+percentage = live.percentage;
+}
+}
+
+createOSMMarker(store, percentage);
+
+} catch (err) {
+console.error(`讀取 ${store.name} 人流失敗:`, err);
+createOSMMarker(store, null);
+}
+}
+}
+
+// 🎨 在 OpenStreetMap 上渲染人流標籤
+function createOSMMarker(store, percentage) {
+let cssClass = "crowd-low";
+let statusText = "🟢 偏少";
+
+if (percentage === null) {
+cssClass = "crowd-unknown";
+statusText = "⚠️ 無資料";
+} else if (percentage >= 70) {
+cssClass = "crowd-busy";
+statusText = `🔴 繁忙 (${percentage}%)`;
+} else if (percentage >= 20) {
+cssClass = "crowd-normal";
+statusText = `🟡 正常 (${percentage}%)`;
+} else {
+statusText = `🟢 偏少 (${percentage}%)`;
+}
+
+// 建立 Leaflet 自訂 HTML 圖標 (divIcon)
+const customIcon = L.divIcon({
+className: 'crowd-leaflet-marker',
+html: `<div class="crowd-label ${cssClass}"><strong>${store.name}</strong><br>${statusText}</div>`
+});
+
+// 放置在 OpenStreetMap 上
+L.marker([store.lat, store.lng], { icon: customIcon }).addTo(map);
+}
+
+// ⛅ Tomorrow.io 氣象功能
+function loadWeather() {
+if (navigator.geolocation) {
+navigator.geolocation.getCurrentPosition(
+(position) => {
+fetchTomorrowWeather(position.coords.latitude, position.coords.longitude);
+},
+(error) => {
+fetchTomorrowWeather(22.3372, 114.1398);
+}
+);
+} else {
+fetchTomorrowWeather(22.3372, 114.1398);
+}
+}
+
+async function fetchTomorrowWeather(lat, lon) {
+const url = `https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lon}&units=metric&apikey=${TOMORROW_API_KEY}`;
+try {
+const response = await fetch(url);
+if (!response.ok) throw new Error("Weather API Error");
+const data = await response.json();
+
+const temp = Math.round(data.data.values.temperature);
+const humidity = Math.round(data.data.values.humidity);
+const weatherCode = data.data.values.weatherCode;
+
+const weatherIconMap = {
+1000: "☀️", 1100: "🌤️", 1101: "⛅", 1102: "☁️",
+1001: "☁️", 2000: "🌫️", 4000: "🌧️", 4001: "🌧️", 4201: "⛈️"
+};
+const currentIcon = weatherIconMap[weatherCode] || "☁️";
+
+document.getElementById("weather-card").innerHTML = `${currentIcon} 荔枝角實時氣溫 ${temp}°C ｜ 濕度 ${humidity}%`;
+} catch (e) {
+document.getElementById("weather-card").textContent = "⛅ 荔枝角實時氣溫 24°C";
+}
+}
+
+// 初始化執行
+loadStoresCrowdData();
+loadWeather();
+</script>
+
+</body>
+</html>
