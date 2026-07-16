@@ -11,7 +11,7 @@ const weatherReadout = document.getElementById("weatherReadout");
 const clock = new THREE.Clock();
 
 // ==========================================
-// 2. 香港分區天氣 —— 3D 坐標對照表 (發光綠色雷達標籤)
+// 2. 香港分區天氣 —— 3D 坐標對照表
 // ==========================================
 const stationCoordinates = {
 "尖沙咀": { pos: [2, 1.5, 11], color: "#00FF66" },
@@ -52,7 +52,7 @@ const weatherLabels = {};
 // 3. Three.js 場景基礎環境初始化
 // ==========================================
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#11161B"); // 深暗色大廳背景
+scene.background = new THREE.Color("#11161B");
 scene.fog = new THREE.FogExp2("#11161B", 0.003);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -60,14 +60,13 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
-camera.position.set(0, 140, 160); // 預設 45 度鳥瞰視角
+camera.position.set(0, 140, 160);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.07;
 controls.target.set(0, 0, 0);
 
-// 環繞光，確保地圖貼圖亮度適中
 const ambient = new THREE.AmbientLight("#ffffff", 1.2);
 scene.add(ambient);
 
@@ -75,7 +74,7 @@ const battlefield = new THREE.Group();
 scene.add(battlefield);
 
 // ==========================================
-// 4. 2D / 3D 工具函式 (文字氣泡框)
+// 4. 2D / 3D 工具函式 (修復關鍵漏 return 問題)
 // ==========================================
 function makeCanvasTexture(draw, width = 512, height = 256) {
 const labelCanvas = document.createElement("canvas");
@@ -84,14 +83,13 @@ labelCanvas.height = height;
 const ctx = labelCanvas.getContext("2d");
 draw(ctx, width, height);
 const texture = new THREE.CanvasTexture(labelCanvas);
-return texture;
+return texture; // 💡 修正：必須 return 貼圖，否則外面會拿到 undefined！
 }
 
 function makeLabel(text, color = "#00FF66") {
 return makeCanvasTexture((ctx, width, height) => {
 ctx.clearRect(0, 0, width, height);
 
-// 半透明黑底 + 亮綠邊框
 ctx.fillStyle = "rgba(10, 15, 12, 0.85)";
 ctx.strokeStyle = "#00FF66";
 ctx.lineWidth = 4;
@@ -126,19 +124,17 @@ ctx.closePath();
 }
 
 // ==========================================
-// 5. 載入本地香港地圖貼圖 (核心改動)
+// 5. 載入本地香港地圖貼圖
 // ==========================================
 function createMapTerrain() {
 const textureLoader = new THREE.TextureLoader();
 
-// 📥 這裡讀取你剛剛改名並上傳到 GitHub 嘅全新本地地圖圖片
 const mapTexture = textureLoader.load('./hk_base_map.PNG',
 () => { console.log("地圖貼圖載入成功！"); },
 undefined,
 (err) => { console.error("地圖載入失敗，請檢查檔名是否正確:", err); }
 );
 
-// 建立一塊 240x240 大小嘅平面，用來承托整張香港地圖
 const mapGeometry = new THREE.PlaneGeometry(240, 240);
 const mapMaterial = new THREE.MeshBasicMaterial({
 map: mapTexture,
@@ -146,11 +142,10 @@ side: THREE.DoubleSide
 });
 
 const mapMesh = new THREE.Mesh(mapGeometry, mapMaterial);
-mapMesh.rotation.x = -Math.PI / 2; // 將平面放平，變成地面
+mapMesh.rotation.x = -Math.PI / 2;
 mapMesh.position.y = 0;
 battlefield.add(mapMesh);
 
-// 定位測站（在地圖對應位置立起一條條紅色的發光指標針）
 Object.keys(stationCoordinates).forEach((key) => {
 const item = stationCoordinates[key];
 const pin = new THREE.Mesh(
@@ -163,11 +158,18 @@ battlefield.add(pin);
 }
 
 // ==========================================
-// 6. 天氣環境效果 (發光雨絲)
+// 6. 天氣環境效果 (解決 iOS 隱形問題)
 // ==========================================
 const rainDrops = [];
 function createWeatherEffect() {
-const rainMaterial = new THREE.LineBasicMaterial({ color: "#00FF66", transparent: true, opacity: 0.25 });
+// 💡 修正：為了解決 iOS 渲染 bug，關閉 depthWrite，確保雨絲不被透明底板遮擋
+const rainMaterial = new THREE.LineBasicMaterial({
+color: "#00FF66",
+transparent: true,
+opacity: 0.4,
+depthWrite: false
+});
+
 for (let i = 0; i < 100; i += 1) {
 const drop = new THREE.Line(
 new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.1, -2.5, 0)]),
@@ -213,7 +215,6 @@ const material = new THREE.SpriteMaterial({ map: texture, transparent: true, dep
 const sprite = new THREE.Sprite(material);
 sprite.scale.set(12.1, 4.5, 1);
 
-// 讓氣溫懸浮在紅色指標針的上方
 sprite.position.set(coord.pos[0], 5.5, coord.pos[2]);
 battlefield.add(sprite);
 weatherLabels[station.place] = sprite;
