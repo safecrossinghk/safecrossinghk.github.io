@@ -150,7 +150,7 @@ safari_web_id: "🔑 換成你的 Safari Web ID"
 
 <div id="footer-text">
 <p style="text-align: left; margin-bottom: 1.5em;">
-本網站提供香港未來最多三小時內定點的降雨預測，用戶可即時得知身處地點的降雨情況。
+本網站提供香港未來最多六小時內定點的降雨預測，用戶可即時得知身處地點的降雨情況。
 </p>
 <p style="text-align: left; margin-bottom: 1.5em;">
 資料來源：香港天文台 / Tomorrow.io (AI 超前預測)
@@ -249,7 +249,7 @@ if(logoContainer.innerText === "⏳") logoContainer.innerText = (data.immediateR
 
 if (data && typeof data.immediateRain === "number") {
 if (data.immediateRain > 0.5) {
-alertDiv.innerText = `⚠️ 即時預報：你所在的位置將會有雨`;
+alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
 if (rainStatus === 0) {
 speak("⚠️ 你所在的位置將會有雨");
 sendPush();
@@ -312,13 +312,13 @@ if (i === 0) {
     msg = "🌧 一小時內可能有雨";
 }
 else if (i === 1) {
-    msg = "🌧 兩小時內可能有雨";
+    msg = "🌧 一小時內可能有雨";
 }
 else if (i === 2) {
-    msg = "🌧 三小時內可能有雨";
+    msg = "🌧 兩小時內可能有雨";
 }
 else {
-    msg = "🌧 六小時內可能有雨";
+    msg = "🌧 約六小時內可能有雨";
 }
 break;
 }
