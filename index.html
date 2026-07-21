@@ -114,17 +114,11 @@ object-fit: contain;
 <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
 <script>
 window.OneSignal = window.OneSignal || [];
-OneSignal.push(async function () {
-
-    await OneSignal.init({
-        appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
-        safari_web_id: "🔑 換成你的 Safari Web ID"
-    });
-
-    const id = await OneSignal.User.PushSubscription.id;
-
-    console.log("Player ID:", id);
-
+OneSignal.push(function() {
+OneSignal.init({
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "🔑 換成你的 Safari Web ID"
+});
 });
 </script>
 </head>
@@ -409,15 +403,20 @@ function showCustomPrompt() {
 if (localStorage.getItem("subscribedToRainAlert")) return;
 document.getElementById("customPrompt").style.display = "block";
 document.getElementById("subscribeBtn").onclick = function() {
-OneSignal.push(function() {
-OneSignal.showNativePrompt();
-setTimeout(function () {
+OneSignal.push(async function () {
 
-    OneSignal.getUserId(function(id) {
+    console.log("OneSignal 開始");
 
-        console.log("OneSignal Player ID：", id);
-
+    await OneSignal.init({
+        appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+        safari_web_id: "🔑 換成你的 Safari Web ID"
     });
+
+    console.log("OneSignal 初始化完成");
+
+    console.log(OneSignal);
+
+});
 
 }, 3000);
 
