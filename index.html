@@ -423,7 +423,9 @@ setTimeout(() => {
 
         console.log("======== OneSignal ========");
 
-        console.log(OneSignal);
+        const id = await OneSignal.User.PushSubscription.id;
+
+        console.log("Player ID:", id);
 
     });
 
