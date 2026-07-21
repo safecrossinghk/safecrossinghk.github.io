@@ -228,26 +228,17 @@ fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
 const alertDiv = document.getElementById('rain-alert');
 console.log("API 回傳資料：", data);
 
-// 1. 動態更新實時天文台氣溫（若 Worker 內包含數據）
-if (
-    data &&
-    data.hko &&
-    typeof data.hko.immediateRain === "number"
-) {
-document.getElementById('pill-temp').innerText = `${Math.round(data.temperature)}°`;
-}
-
 // 2. 混合雙向容錯機制：如果 Worker 有天文台圖標則使用，否則保留給 Tomorrow.io 判定
 const logoContainer = document.getElementById('pill-logo');
-if (data && data.weatherIcon) {
-const imgUrl = `https://www.hko.gov.hk/images/wxicon/pic${data.weatherIcon}.png`;
+if (data && data.hko && data.hko.weatherIcon) {
+const imgUrl = `https://www.hko.gov.hk/images/wxicon/pic${data.hko.weatherIcon}.png`;
 const imgCheck = new Image();
 imgCheck.src = imgUrl;
 imgCheck.onload = function() {
 logoContainer.innerHTML = `<img src="${imgUrl}" alt="HKO Icon">`;
 };
 imgCheck.onerror = function() {
-if(logoContainer.innerText === "⏳") logoContainer.innerText = (data.immediateRain > 0.5) ? "🌧️" : "☁️";
+if(logoContainer.innerText === "⏳") logoContainer.innerText = (data.hko.immediateRain > 0.5) ? "🌧️" : "☁️";
 };
 }
 
