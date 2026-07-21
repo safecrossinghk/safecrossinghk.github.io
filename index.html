@@ -309,16 +309,16 @@ for (let i = 0; i < hours.length; i++) {
 const rain = hours[i].values.rainIntensity || 0;
 if (rain >= 3) {
 if (i === 0) {
-    msg = "🌧 一小時內可能有雨";
+msg = "🌧 一小時內可能有雨";
 }
 else if (i === 1) {
-    msg = "🌧 一小時內可能有雨";
+msg = "🌧 一小時內可能有雨";
 }
 else if (i === 2) {
-    msg = "🌧 兩小時內可能有雨";
+msg = "🌧 兩小時內可能有雨";
 }
 else {
-    msg = "🌧 約六小時內可能有雨";
+msg = "🌧 約六小時內可能有雨";
 }
 break;
 }
@@ -335,6 +335,52 @@ function speak(text) {
 const msg = new SpeechSynthesisUtterance(text);
 msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
+}
+
+// ===================================================
+// OneSignal 訂閱同步到 Cloudflare
+// ===================================================
+async function registerSubscription(lat, lon) {
+
+try {
+
+const subscriptionId =
+await OneSignal.User.PushSubscription.id;
+
+if (!subscriptionId) {
+
+console.warn("⚠️ 尚未取得 Subscription ID");
+return;
+
+}
+
+console.log("✅ Subscription ID:", subscriptionId);
+
+const response = await fetch(
+workerUrl + "registerLocation",
+{
+method: "POST",
+headers: {
+"Content-Type": "application/json"
+},
+body: JSON.stringify({
+playerId: subscriptionId,
+lat,
+lon
+})
+}
+);
+
+const result = await response.json();
+
+console.log("📍 registerLocation:", result);
+
+} catch (err) {
+
+console.error("❌ registerLocation 失敗:", err);
+
+}
+
 }
 
 function sendPush() {
