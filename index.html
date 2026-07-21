@@ -423,13 +423,15 @@ setTimeout(() => {
 
         console.log("======== OneSignal ========");
 
-        const id = await OneSignal.User.PushSubscription.id;
+        console.log("Permission:", OneSignal.Notifications.permission);
 
-        console.log("Player ID:", id);
+        console.log("OptedIn:", OneSignal.User.PushSubscription.optedIn);
+
+        console.log("ID:", OneSignal.User.PushSubscription.id);
 
     });
 
-},5000);
+}, 5000);
 </script>
 </body>
 </html>
