@@ -242,38 +242,22 @@ if(logoContainer.innerText === "⏳") logoContainer.innerText = (data.hko.immedi
 };
 }
 
-if (data.success && data.hko) {
-
-    if (data.hko.rainExpected) {
-
-        alertDiv.innerText =
-            "⚠️ 你所在的位置將會有雨";
-
-        if (rainStatus === 0) {
-
-            speak("⚠️ 你所在的位置將會有雨");
-
-            sendPush();
-
-            rainStatus = 1;
-
-        }
-
-    } else {
-
-        alertDiv.innerText =
-            "☁️ 你所在的位置暫時無雨";
-
-        rainStatus = 0;
-
-    }
-
-} else {
-
-    alertDiv.innerText =
-        "⚠️ 系統繁忙，請稍後再試";
-
+if (data && data.hko) {
+if (data.hko.immediateRain > 0.5) {
+alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
+if (rainStatus === 0) {
+speak("⚠️ 你所在的位置將會有雨");
+sendPush();
+rainStatus = 1;
 }
+} else {
+alertDiv.innerText = `☁️ 你所在的位置暫時無雨`;
+rainStatus = 0;
+}
+} else {
+alertDiv.innerText = "⚠️ 系統繁忙，請稍後再試";
+}
+})
 .catch(err => {
 console.error("讀取預報錯誤", err);
 document.getElementById('rain-alert').innerText = "⚠️ 系統繁忙，請稍後再試";
