@@ -419,15 +419,16 @@ showIosPromptOnce();
 showCustomPrompt();
 setTimeout(() => {
 
-    OneSignal.push(async function () {
+    OneSignal.push(function () {
 
-        console.log("======== User ========");
+        console.log("===== OneSignal Keys =====");
+        console.log(Object.keys(OneSignal));
 
-        console.log(OneSignal.User);
+        console.dir(OneSignal);
 
     });
 
-},5000);
+}, 5000);
 </script>
 </body>
 </html>
