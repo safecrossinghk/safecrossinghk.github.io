@@ -421,14 +421,15 @@ setTimeout(() => {
 
     OneSignal.push(function () {
 
-        console.log("===== OneSignal Keys =====");
         console.log(Object.keys(OneSignal));
 
-        console.dir(OneSignal);
+        console.log("getUserId:", typeof OneSignal.getUserId);
+
+        console.log("getDeviceState:", typeof OneSignal.getDeviceState);
 
     });
 
-}, 5000);
+},5000);
 </script>
 </body>
 </html>
