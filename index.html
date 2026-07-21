@@ -229,7 +229,11 @@ const alertDiv = document.getElementById('rain-alert');
 console.log("API 回傳資料：", data);
 
 // 1. 動態更新實時天文台氣溫（若 Worker 內包含數據）
-if (data && typeof data.temperature === "number") {
+if (
+    data &&
+    data.hko &&
+    typeof data.hko.immediateRain === "number"
+) {
 document.getElementById('pill-temp').innerText = `${Math.round(data.temperature)}°`;
 }
 
@@ -247,8 +251,8 @@ if(logoContainer.innerText === "⏳") logoContainer.innerText = (data.immediateR
 };
 }
 
-if (data && typeof data.immediateRain === "number") {
-if (data.immediateRain > 0.5) {
+if (data && data.hko) {
+if (data.hko.immediateRain > 0.5) {
 alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
 if (rainStatus === 0) {
 speak("⚠️ 你所在的位置將會有雨");
@@ -337,55 +341,6 @@ msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
 }
 
-// ===================================================
-// OneSignal 訂閱同步到 Cloudflare
-// ===================================================
-async function registerSubscription(lat, lon) {
-
-try {
-
-const subscriptionId =
-await OneSignal.User.PushSubscription.id;
-
-console.log("Subscription ID =", subscriptionId);
-alert("Subscription ID = " + subscriptionId);
-
-if (!subscriptionId) {
-
-console.warn("⚠️ 尚未取得 Subscription ID");
-return;
-
-}
-
-console.log("✅ Subscription ID:", subscriptionId);
-
-const response = await fetch(
-workerUrl + "registerLocation",
-{
-method: "POST",
-headers: {
-"Content-Type": "application/json"
-},
-body: JSON.stringify({
-playerId: subscriptionId,
-lat,
-lon
-})
-}
-);
-
-const result = await response.json();
-
-console.log("📍 registerLocation:", result);
-
-} catch (err) {
-
-console.error("❌ registerLocation 失敗:", err);
-
-}
-
-}
-
 function sendPush() {
 const REST_API_KEY = "os_v2_app_rabedtomivecbnpmuerwwdr6tciiske3mk5ez3mancrg7qmdy275ruzqq3c623gckamggtnnaqow5hyvghfdfbhhcbq2llehcl6jwki";
 
@@ -417,7 +372,6 @@ map.setView([fallbackLat, fallbackLon], 11);
 setMarker(fallbackLat, fallbackLon);
 fetchForecast(fallbackLat, fallbackLon);
 fetchTomorrowAI(fallbackLat, fallbackLon);
-registerSubscription(lat, lon);
 return;
 }
 navigator.geolocation.getCurrentPosition(
