@@ -347,6 +347,9 @@ try {
 const subscriptionId =
 await OneSignal.User.PushSubscription.id;
 
+console.log("Subscription ID =", subscriptionId);
+alert("Subscription ID = " + subscriptionId);
+
 if (!subscriptionId) {
 
 console.warn("⚠️ 尚未取得 Subscription ID");
