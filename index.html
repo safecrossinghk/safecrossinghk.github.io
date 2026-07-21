@@ -417,6 +417,17 @@ document.getElementById("customPrompt").style.display = "none";
 initLocation();
 showIosPromptOnce();
 showCustomPrompt();
+setTimeout(() => {
+
+    OneSignal.push(async function () {
+
+        console.log("======== OneSignal ========");
+
+        console.log(OneSignal);
+
+    });
+
+},5000);
 </script>
 </body>
 </html>
