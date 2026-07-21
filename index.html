@@ -405,6 +405,16 @@ document.getElementById("customPrompt").style.display = "block";
 document.getElementById("subscribeBtn").onclick = function() {
 OneSignal.push(function() {
 OneSignal.showNativePrompt();
+setTimeout(function () {
+
+    OneSignal.getUserId(function(id) {
+
+        console.log("OneSignal Player ID：", id);
+
+    });
+
+}, 3000);
+
 });
 document.getElementById("customPrompt").style.display = "none";
 localStorage.setItem("subscribedToRainAlert", "1");
