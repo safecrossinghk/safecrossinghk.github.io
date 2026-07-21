@@ -421,17 +421,13 @@ setTimeout(() => {
 
     OneSignal.push(async function () {
 
-        console.log("======== OneSignal ========");
+        console.log("======== User ========");
 
-        console.log("Permission:", OneSignal.Notifications.permission);
-
-        console.log("OptedIn:", OneSignal.User.PushSubscription.optedIn);
-
-        console.log("ID:", OneSignal.User.PushSubscription.id);
+        console.log(OneSignal.User);
 
     });
 
-}, 5000);
+},5000);
 </script>
 </body>
 </html>
