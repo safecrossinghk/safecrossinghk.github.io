@@ -169,7 +169,6 @@ safari_web_id: "🔑 換成你的 Safari Web ID"
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
 const workerUrl = 'https://crowdtest8r.ctakwah.workers.dev/';
-const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
 
 const map = L.map('map').setView([22.3, 114.2], 11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -266,14 +265,12 @@ document.getElementById('rain-alert').innerText = "⚠️ 系統繁忙，請稍�
 
 // Tomorrow.io AI 預報與實時天氣狀態獲取
 function fetchTomorrowAI(lat, lon) {
-fetch(
-`https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&timesteps=1h&apikey=${TOMORROW_API_KEY}`
-)
+fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
 .then(res => res.json())
 .then(data => {
 console.log("Tomorrow.io:", data);
 
-if (!data.timelines || !data.timelines.hourly) {
+if (!data.timelines || !data.tomorrow) {
 document.getElementById("rainMsg").innerText = "⚠️ AI 預報暫時不可用";
 return;
 }
