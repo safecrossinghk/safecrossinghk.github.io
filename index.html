@@ -414,6 +414,7 @@ map.setView([fallbackLat, fallbackLon], 11);
 setMarker(fallbackLat, fallbackLon);
 fetchForecast(fallbackLat, fallbackLon);
 fetchTomorrowAI(fallbackLat, fallbackLon);
+registerSubscription(lat, lon);
 return;
 }
 navigator.geolocation.getCurrentPosition(
