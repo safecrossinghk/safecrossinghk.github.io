@@ -134,20 +134,6 @@ OneSignal.push(async function () {
 
 });
 
-OneSignal.on("subscriptionChange", function (isSubscribed) {
-
-        console.log("======== subscriptionChange ========");
-
-        console.log(isSubscribed);
-
-        OneSignal.getUserId().then(function(id){
-
-            console.log("Player ID:", id);
-
-        });
-
-    });
-
 </script>
 </head>
 
