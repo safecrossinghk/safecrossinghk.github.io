@@ -389,10 +389,40 @@ fetchTomorrowAI(fallbackLat, fallbackLon);
 return;
 }
 navigator.geolocation.getCurrentPosition(
-pos => {
+async pos => {
 const lat = pos.coords.latitude;
 const lon = pos.coords.longitude;
 console.log("✅ 取得定位：", lat, lon);
+try {
+
+    const playerId = await OneSignal.getUserId();
+
+    console.log("OneSignal Player ID:", playerId);
+
+    if (playerId) {
+
+        await registerLocation(
+            playerId,
+            lat,
+            lon
+        );
+
+    } else {
+
+        console.warn("⚠️ 尚未取得 OneSignal Player ID");
+
+    }
+
+}
+catch (err) {
+
+    console.error(
+        "registerLocation 失敗:",
+        err
+    );
+
+}
+
 map.setView([lat, lon], 13);
 setMarker(lat, lon);
 fetchForecast(lat, lon);
