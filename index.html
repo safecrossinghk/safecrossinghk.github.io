@@ -114,10 +114,24 @@ object-fit: contain;
 <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
 <script>
 window.OneSignal = window.OneSignal || [];
-OneSignal.push(function() {
-OneSignal.init({
-appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
-safari_web_id: "🔑 換成你的 Safari Web ID"
+OneSignal.push(async function () {
+
+    console.log("========== OneSignal 初始化完成 ==========");
+
+    await OneSignal.init({
+
+        appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+
+        safari_web_id: "你的 Safari ID"
+
+    });
+
+    console.log("初始化完成");
+
+    const id = await OneSignal.getUserId();
+
+    console.log("Player ID =", id);
+
 });
 
 OneSignal.on("subscriptionChange", function (isSubscribed) {
