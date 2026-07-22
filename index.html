@@ -119,6 +119,21 @@ OneSignal.init({
 appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
 safari_web_id: "🔑 換成你的 Safari Web ID"
 });
+
+OneSignal.on("subscriptionChange", function (isSubscribed) {
+
+        console.log("======== subscriptionChange ========");
+
+        console.log(isSubscribed);
+
+        OneSignal.getUserId().then(function(id){
+
+            console.log("Player ID:", id);
+
+        });
+
+    });
+
 });
 </script>
 </head>
