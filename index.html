@@ -396,6 +396,7 @@ const lat = pos.coords.latitude;
 const lon = pos.coords.longitude;
 console.log("✅ 取得定位：", lat, lon);
 console.log("===== 準備取得 OneSignal Player ID =====");
+/*
 try {
 
     console.log("開始取得 Player ID...");
@@ -429,6 +430,7 @@ catch (err) {
     );
 
 }
+*/
 
 map.setView([lat, lon], 13);
 setMarker(lat, lon);
