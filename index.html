@@ -382,9 +382,6 @@ pos => {
 const lat = pos.coords.latitude;
 const lon = pos.coords.longitude;
 console.log("✅ 取得定位：", lat, lon);
-const id = await OneSignal.User.PushSubscription.id;
-
-console.log("Subscription ID:", id);
 map.setView([lat, lon], 13);
 setMarker(lat, lon);
 fetchForecast(lat, lon);
