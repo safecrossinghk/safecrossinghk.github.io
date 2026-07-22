@@ -379,6 +379,7 @@ large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
 }
 
 function initLocation() {
+console.log("===== initLocation 開始 =====");
 if (!navigator.geolocation) {
 alert("此瀏覽器不支援定位功能");
 const fallbackLat = 22.3, fallbackLon = 114.2;
@@ -390,14 +391,20 @@ return;
 }
 navigator.geolocation.getCurrentPosition(
 async pos => {
+console.log("===== 已進入 getCurrentPosition =====");
 const lat = pos.coords.latitude;
 const lon = pos.coords.longitude;
 console.log("✅ 取得定位：", lat, lon);
+console.log("===== 準備取得 OneSignal Player ID =====");
 try {
 
-    const playerId = await OneSignal.getUserId();
+    console.log("開始取得 Player ID...");
 
-    console.log("OneSignal Player ID:", playerId);
+const playerId = await OneSignal.getUserId();
+
+console.log("Player ID =", playerId);
+
+console.log("已完成 getUserId()");
 
     if (playerId) {
 
