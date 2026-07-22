@@ -119,13 +119,6 @@ OneSignal.init({
 appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
 safari_web_id: "🔑 換成你的 Safari Web ID"
 });
-
-    console.log("========== OneSignal 初始化完成 ==========");
-
-    console.log("Notification Permission:", Notification.permission);
-
-    console.log("Service Worker:", navigator.serviceWorker.controller);
-
 });
 </script>
 </head>
@@ -175,7 +168,7 @@ safari_web_id: "🔑 換成你的 Safari Web ID"
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-const workerUrl = 'https://crowdtest8.ctakwah.workers.dev/';
+const workerUrl = 'https://crowdtest8r.ctakwah.workers.dev/';
 const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
 
 const map = L.map('map').setView([22.3, 114.2], 11);
@@ -235,27 +228,22 @@ fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
 const alertDiv = document.getElementById('rain-alert');
 console.log("API 回傳資料：", data);
 
-// 1. 動態更新實時天文台氣溫（若 Worker 內包含數據）
-if (data && typeof data.temperature === "number") {
-document.getElementById('pill-temp').innerText = `${Math.round(data.temperature)}°`;
-}
-
 // 2. 混合雙向容錯機制：如果 Worker 有天文台圖標則使用，否則保留給 Tomorrow.io 判定
 const logoContainer = document.getElementById('pill-logo');
-if (data && data.weatherIcon) {
-const imgUrl = `https://www.hko.gov.hk/images/wxicon/pic${data.weatherIcon}.png`;
+if (data && data.hko && data.hko.weatherIcon) {
+const imgUrl = `https://www.hko.gov.hk/images/wxicon/pic${data.hko.weatherIcon}.png`;
 const imgCheck = new Image();
 imgCheck.src = imgUrl;
 imgCheck.onload = function() {
 logoContainer.innerHTML = `<img src="${imgUrl}" alt="HKO Icon">`;
 };
 imgCheck.onerror = function() {
-if(logoContainer.innerText === "⏳") logoContainer.innerText = (data.immediateRain > 0.5) ? "🌧️" : "☁️";
+if(logoContainer.innerText === "⏳") logoContainer.innerText = (data.hko.immediateRain > 0.5) ? "🌧️" : "☁️";
 };
 }
 
-if (data && typeof data.immediateRain === "number") {
-if (data.immediateRain > 0.5) {
+if (data && data.hko) {
+if (data.hko.immediateRain > 0.5) {
 alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
 if (rainStatus === 0) {
 speak("⚠️ 你所在的位置將會有雨");
@@ -316,16 +304,16 @@ for (let i = 0; i < hours.length; i++) {
 const rain = hours[i].values.rainIntensity || 0;
 if (rain >= 3) {
 if (i === 0) {
-    msg = "🌧 一小時內可能有雨";
+msg = "🌧 一小時內可能有雨";
 }
 else if (i === 1) {
-    msg = "🌧 一小時內可能有雨";
+msg = "🌧 一小時內可能有雨";
 }
 else if (i === 2) {
-    msg = "🌧 兩小時內可能有雨";
+msg = "🌧 兩小時內可能有雨";
 }
 else {
-    msg = "🌧 約六小時內可能有雨";
+msg = "🌧 約六小時內可能有雨";
 }
 break;
 }
@@ -342,6 +330,29 @@ function speak(text) {
 const msg = new SpeechSynthesisUtterance(text);
 msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
+}
+
+async function registerLocation(playerId, lat, lon) {
+
+    const res = await fetch(
+        workerUrl + "registerLocation",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                playerId,
+                lat,
+                lon
+            })
+        }
+    );
+
+    const result = await res.json();
+
+    console.log("registerLocation:", result);
+
 }
 
 function sendPush() {
@@ -429,6 +440,19 @@ document.getElementById("customPrompt").style.display = "none";
 initLocation();
 showIosPromptOnce();
 showCustomPrompt();
+setTimeout(() => {
+
+    OneSignal.push(async function () {
+
+        console.log("======== OneSignal ========");
+
+        const id = await OneSignal.User.PushSubscription.id;
+
+        console.log("Player ID:", id);
+
+    });
+
+},5000);
 </script>
 </body>
 </html>
