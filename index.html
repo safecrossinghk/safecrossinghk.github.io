@@ -396,40 +396,26 @@ const lat = pos.coords.latitude;
 const lon = pos.coords.longitude;
 console.log("✅ 取得定位：", lat, lon);
 console.log("===== 準備取得 OneSignal Player ID =====");
-/*
-try {
 
-    console.log("開始取得 Player ID...");
+OneSignal.getUserId()
+.then(function(playerId) {
 
-const playerId = await OneSignal.getUserId();
+    console.log("===== 已取得 Player ID =====");
+    console.log(playerId);
 
-console.log("Player ID =", playerId);
-
-console.log("已完成 getUserId()");
-
-    if (playerId) {
-
-        await registerLocation(
-            playerId,
-            lat,
-            lon
-        );
-
-    } else {
-
-        console.warn("⚠️ 尚未取得 OneSignal Player ID");
-
+    if (!playerId) {
+        console.log("❌ Player ID 為空");
+        return;
     }
 
-}
-catch (err) {
+    registerLocation(playerId, lat, lon);
 
-    console.error(
-        "registerLocation 失敗:",
-        err
-    );
+})
+.catch(function(err) {
 
-}
+    console.error("❌ getUserId 失敗", err);
+
+});
 */
 
 map.setView([lat, lon], 13);
