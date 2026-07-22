@@ -470,19 +470,6 @@ document.getElementById("customPrompt").style.display = "none";
 initLocation();
 showIosPromptOnce();
 showCustomPrompt();
-setTimeout(() => {
-
-    OneSignal.push(async function () {
-
-        console.log("======== OneSignal ========");
-
-        const id = await OneSignal.User.PushSubscription.id;
-
-        console.log("Player ID:", id);
-
-    });
-
-},5000);
 </script>
 </body>
 </html>
