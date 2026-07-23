@@ -114,26 +114,24 @@ object-fit: contain;
 <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
 <script>
 window.OneSignal = window.OneSignal || [];
+
 OneSignal.push(async function () {
+
+    await OneSignal.init({
+        appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+        safari_web_id: "web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98"
+    });
 
     console.log("========== OneSignal 初始化完成 ==========");
 
-    await OneSignal.init({
+console.log("OneSignal object:", OneSignal);
 
-        appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+console.log("getUserId:", typeof OneSignal.getUserId);
 
-        safari_web_id: "你的 Safari ID"
-
-    });
-
-    console.log("初始化完成");
-
-    const id = await OneSignal.getUserId();
-
-    console.log("Player ID =", id);
+console.log("isPushNotificationsEnabled:",
+    typeof OneSignal.isPushNotificationsEnabled);
 
 });
-
 </script>
 </head>
 
@@ -182,7 +180,7 @@ OneSignal.push(async function () {
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-const workerUrl = 'https://crowdtest8r.ctakwah.workers.dev/';
+const workerUrl = 'https://crowdtest8.ctakwah.workers.dev/';
 const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
 
 const map = L.map('map').setView([22.3, 114.2], 11);
@@ -242,22 +240,27 @@ fetch(`${workerUrl}?lat=${lat}&lon=${lon}`)
 const alertDiv = document.getElementById('rain-alert');
 console.log("API 回傳資料：", data);
 
+// 1. 動態更新實時天文台氣溫（若 Worker 內包含數據）
+if (data && typeof data.temperature === "number") {
+document.getElementById('pill-temp').innerText = `${Math.round(data.temperature)}°`;
+}
+
 // 2. 混合雙向容錯機制：如果 Worker 有天文台圖標則使用，否則保留給 Tomorrow.io 判定
 const logoContainer = document.getElementById('pill-logo');
-if (data && data.hko && data.hko.weatherIcon) {
-const imgUrl = `https://www.hko.gov.hk/images/wxicon/pic${data.hko.weatherIcon}.png`;
+if (data && data.weatherIcon) {
+const imgUrl = `https://www.hko.gov.hk/images/wxicon/pic${data.weatherIcon}.png`;
 const imgCheck = new Image();
 imgCheck.src = imgUrl;
 imgCheck.onload = function() {
 logoContainer.innerHTML = `<img src="${imgUrl}" alt="HKO Icon">`;
 };
 imgCheck.onerror = function() {
-if(logoContainer.innerText === "⏳") logoContainer.innerText = (data.hko.immediateRain > 0.5) ? "🌧️" : "☁️";
+if(logoContainer.innerText === "⏳") logoContainer.innerText = (data.immediateRain > 0.5) ? "🌧️" : "☁️";
 };
 }
 
-if (data && data.hko) {
-if (data.hko.immediateRain > 0.5) {
+if (data && typeof data.immediateRain === "number") {
+if (data.immediateRain > 0.5) {
 alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
 if (rainStatus === 0) {
 speak("⚠️ 你所在的位置將會有雨");
@@ -318,16 +321,16 @@ for (let i = 0; i < hours.length; i++) {
 const rain = hours[i].values.rainIntensity || 0;
 if (rain >= 3) {
 if (i === 0) {
-msg = "🌧 一小時內可能有雨";
+    msg = "🌧 一小時內可能有雨";
 }
 else if (i === 1) {
-msg = "🌧 一小時內可能有雨";
+    msg = "🌧 一小時內可能有雨";
 }
 else if (i === 2) {
-msg = "🌧 兩小時內可能有雨";
+    msg = "🌧 兩小時內可能有雨";
 }
 else {
-msg = "🌧 約六小時內可能有雨";
+    msg = "🌧 約六小時內可能有雨";
 }
 break;
 }
@@ -344,29 +347,6 @@ function speak(text) {
 const msg = new SpeechSynthesisUtterance(text);
 msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
-}
-
-async function registerLocation(playerId, lat, lon) {
-
-    const res = await fetch(
-        workerUrl + "registerLocation",
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                playerId,
-                lat,
-                lon
-            })
-        }
-    );
-
-    const result = await res.json();
-
-    console.log("registerLocation:", result);
-
 }
 
 function sendPush() {
@@ -393,7 +373,6 @@ large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
 }
 
 function initLocation() {
-console.log("===== initLocation 開始 =====");
 if (!navigator.geolocation) {
 alert("此瀏覽器不支援定位功能");
 const fallbackLat = 22.3, fallbackLon = 114.2;
@@ -404,33 +383,10 @@ fetchTomorrowAI(fallbackLat, fallbackLon);
 return;
 }
 navigator.geolocation.getCurrentPosition(
-async pos => {
-console.log("===== 已進入 getCurrentPosition =====");
+pos => {
 const lat = pos.coords.latitude;
 const lon = pos.coords.longitude;
 console.log("✅ 取得定位：", lat, lon);
-console.log("===== 準備取得 OneSignal Player ID =====");
-
-OneSignal.getUserId()
-.then(function(playerId) {
-
-    console.log("===== 已取得 Player ID =====");
-    console.log(playerId);
-
-    if (!playerId) {
-        console.log("❌ Player ID 為空");
-        return;
-    }
-
-    registerLocation(playerId, lat, lon);
-
-})
-.catch(function(err) {
-
-    console.error("❌ getUserId 失敗", err);
-
-});
-
 map.setView([lat, lon], 13);
 setMarker(lat, lon);
 fetchForecast(lat, lon);
