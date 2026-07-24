@@ -119,6 +119,21 @@ OneSignal.init({
 appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
 safari_web_id: "🔑 換成你的 Safari Web ID"
 });
+
+OneSignal.on("subscriptionChange", function (isSubscribed) {
+
+        console.log("======== subscriptionChange ========");
+
+        console.log(isSubscribed);
+
+        OneSignal.getUserId().then(function(id){
+
+            console.log("Player ID:", id);
+
+        });
+
+    });
+
 });
 </script>
 </head>
@@ -332,6 +347,29 @@ msg.lang = 'zh-HK';
 speechSynthesis.speak(msg);
 }
 
+async function registerLocation(playerId, lat, lon) {
+
+    const res = await fetch(
+        workerUrl + "registerLocation",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                playerId,
+                lat,
+                lon
+            })
+        }
+    );
+
+    const result = await res.json();
+
+    console.log("registerLocation:", result);
+
+}
+
 function sendPush() {
 const REST_API_KEY = "os_v2_app_rabedtomivecbnpmuerwwdr6tciiske3mk5ez3mancrg7qmdy275ruzqq3c623gckamggtnnaqow5hyvghfdfbhhcbq2llehcl6jwki";
 
@@ -356,6 +394,7 @@ large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
 }
 
 function initLocation() {
+console.log("===== initLocation 開始 =====");
 if (!navigator.geolocation) {
 alert("此瀏覽器不支援定位功能");
 const fallbackLat = 22.3, fallbackLon = 114.2;
@@ -366,10 +405,33 @@ fetchTomorrowAI(fallbackLat, fallbackLon);
 return;
 }
 navigator.geolocation.getCurrentPosition(
-pos => {
+async pos => {
+console.log("===== 已進入 getCurrentPosition =====");
 const lat = pos.coords.latitude;
 const lon = pos.coords.longitude;
 console.log("✅ 取得定位：", lat, lon);
+console.log("===== 準備取得 OneSignal Player ID =====");
+
+OneSignal.getUserId()
+.then(function(playerId) {
+
+    console.log("===== 已取得 Player ID =====");
+    console.log(playerId);
+
+    if (!playerId) {
+        console.log("❌ Player ID 為空");
+        return;
+    }
+
+    registerLocation(playerId, lat, lon);
+
+})
+.catch(function(err) {
+
+    console.error("❌ getUserId 失敗", err);
+
+});
+
 map.setView([lat, lon], 13);
 setMarker(lat, lon);
 fetchForecast(lat, lon);
