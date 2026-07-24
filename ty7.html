@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>AI 風暴路徑預測系統 | ECMWF AIFS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --bg: #0b1220;
+    --panel: #121b2e;
+    --panel-border: #223252;
+    --text: #dfe8f5;
+    --text-dim: #8fa3c2;
+    --accent: #4fd1ff;
+    --warn: #ffb020;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --sans: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body{ font-family: var(--sans); background: var(--bg); color: var(--text); overflow: hidden; }
+  #map{ position: absolute; inset: 0; background: var(--bg); }
+  .panel{
+    background: rgba(18, 27, 46, 0.92);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  #title-panel{ position: absolute; top: 16px; left: 16px; z-index: 1000; padding: 14px 18px; max-width: 300px; }
+  #title-panel h1{ margin: 0 0 4px 0; font-size: 16px; font-weight: 700; letter-spacing: 0.02em; color: var(--text); }
+  #title-panel .subtitle{ font-family: var(--mono); font-size: 11px; color: var(--text-dim); letter-spacing: 0.03em; }
+  #stat-row{ margin-top: 10px; display: flex; gap: 14px; font-family: var(--mono); }
+  #stat-row .stat{ font-size: 11px; color: var(--text-dim); }
+  #stat-row .stat b{ display: block; font-size: 15px; color: var(--accent); font-weight: 700; }
+  #refresh-btn{
+    margin-top: 10px; width: 100%; background: transparent; border: 1px solid var(--panel-border);
+    color: var(--text-dim); border-radius: 6px; padding: 6px 8px; font-size: 11px; font-family: var(--mono); cursor: pointer;
+  }
+  #refresh-btn:hover{ border-color: var(--accent); color: var(--accent); }
+  #legend-panel{ position: absolute; bottom: 20px; left: 16px; z-index: 1000; padding: 12px 16px; font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+  #legend-panel .legend-title{ font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
+  #legend-gradient{ width: 180px; height: 10px; border-radius: 4px; background: linear-gradient(90deg, #ff2d55, #ff9500, #ffd60a, #34c759); margin-bottom: 4px; }
+  #legend-scale{ display: flex; justify-content: space-between; width: 180px; }
+  #legend-node-types{ margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--panel-border); display: flex; flex-direction: column; gap: 6px; }
+  #legend-node-types .node-row{ display: flex; align-items: center; gap: 8px; }
+  #legend-node-types .dot{ width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  #legend-node-types .dot.native{ background: var(--accent); border: 2px solid #fff; }
+  #legend-node-types .dot.interp{ background: var(--accent); opacity: 0.35; border: 1px dashed #ffffff99; }
+  #legend-intensity{ margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--panel-border); display: flex; flex-direction: column; gap: 6px; }
+  #legend-intensity .intensity-row{ display: flex; align-items: center; gap: 8px; }
+  #legend-intensity .swatch{ width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  .cyclone-icon{ display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 6px rgba(0,0,0,0.6)); }
+  .cyclone-icon svg{ animation: cyclone-spin 3.2s linear infinite; transform-origin: center; }
+  @keyframes cyclone-spin{ from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  #slider-panel{
+    position: absolute; bottom: 20px; right: 16px; left: 320px; z-index: 1000;
+    padding: 10px 18px; display: flex; align-items: center; gap: 12px;
+  }
+  #slider-panel input[type=range]{ flex: 1; accent-color: var(--accent); }
+  #slider-time{ font-family: var(--mono); font-size: 12px; color: var(--accent); min-width: 150px; text-align: right; }
+  #play-btn{
+    background: transparent; border: 1px solid var(--panel-border); color: var(--text);
+    border-radius: 6px; width: 30px; height: 30px; cursor: pointer; font-size: 13px; flex-shrink: 0;
+  }
+  #play-btn:hover{ border-color: var(--accent); color: var(--accent); }
+
+  .leaflet-popup-content-wrapper{ background: #0f1a2e; color: var(--text); border-radius: 8px; border: 1px solid var(--panel-border); }
+  .leaflet-popup-tip{ background: #0f1a2e; }
+  .track-popup .time{ font-family: var(--mono); font-size: 10px; color: var(--text-dim); letter-spacing: 0.03em; margin-bottom: 4px; }
+  .track-popup .pressure{ font-family: var(--mono); font-size: 20px; font-weight: 700; }
+  .track-popup .pressure-label{ font-size: 10px; color: var(--text-dim); margin-left: 4px; font-weight: 400; }
+  .track-popup .badge{ display: inline-block; margin-top: 6px; padding: 2px 7px; border-radius: 4px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.05em; }
+  .track-popup .badge.native{ background: rgba(79, 209, 255, 0.15); color: var(--accent); border: 1px solid rgba(79, 209, 255, 0.4); }
+  .track-popup .badge.interp{ background: rgba(143, 163, 194, 0.12); color: var(--text-dim); border: 1px solid var(--panel-border); }
+
+  #status-banner{
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1500;
+    padding: 10px 18px; display: none; align-items: center; gap: 10px;
+    max-width: min(520px, 80vw); font-family: var(--mono); font-size: 12px;
+  }
+  #status-banner.loading{ color: var(--text); }
+  #status-banner.warn{ color: var(--warn); border-color: var(--warn); }
+  #status-banner.error{ color: #ff6b6b; border-color: #ff6b6b; }
+  #status-spinner{
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--panel-border); border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin{ to { transform: rotate(360deg); } }
+  #status-text{ flex: 1; }
+  #status-retry{
+    background: transparent; border: 1px solid currentColor; color: inherit;
+    border-radius: 6px; padding: 4px 10px; font-size: 11px; font-family: var(--mono);
+    cursor: pointer; display: none; flex-shrink: 0;
+  }
+  #status-retry:hover{ opacity: 0.8; }
+
+  #diagnostic-panel{
+    position: absolute; top: 70px; left: 50%; transform: translateX(-50%); z-index: 1400;
+    padding: 10px 16px; max-width: min(520px, 80vw); font-family: var(--mono); font-size: 11px;
+    color: var(--text-dim); display: none; line-height: 1.6;
+  }
+  #diagnostic-panel b{ color: var(--warn); }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="title-panel" class="panel">
+  <h1>AI 風暴路徑預測</h1>
+  <div class="subtitle">ECMWF AIFS 0.25° · 單次請求版</div>
+  <div id="stat-row">
+    <div class="stat">原生節點<b id="stat-count">–</b></div>
+    <div class="stat">最低氣壓<b id="stat-min">–</b></div>
+    <div class="stat">時間跨度<b id="stat-span">–</b></div>
+  </div>
+  <button id="refresh-btn">↻ 重新抓取最新資料</button>
+</div>
+
+<div id="legend-panel" class="panel">
+  <div class="legend-title">海平面氣壓 (hPa)</div>
+  <div id="legend-gradient"></div>
+  <div id="legend-scale">
+    <span id="legend-min">–</span>
+    <span id="legend-max">–</span>
+  </div>
+  <div id="legend-node-types">
+    <div class="node-row"><span class="dot native"></span>原生節點 (AIFS 6H 實際輸出)</div>
+    <div class="node-row"><span class="dot interp"></span>內插點 (視覺平滑，非實際資料)</div>
+  </div>
+  <div id="legend-intensity">
+    <div class="intensity-row"><span class="swatch" style="background:#8fa3c2"></span>熱帶低氣壓 (35+ km/h)</div>
+    <div class="intensity-row"><span class="swatch" style="background:#ffd60a"></span>熱帶風暴 (63+ km/h)</div>
+    <div class="intensity-row"><span class="swatch" style="background:#ff9500"></span>強烈熱帶風暴 (88+ km/h)</div>
+    <div class="intensity-row"><span class="swatch" style="background:#ff2d55"></span>颱風 (118+ km/h)</div>
+  </div>
+</div>
+
+<div id="slider-panel" class="panel" style="display:none;">
+  <button id="play-btn">▶</button>
+  <input type="range" id="time-slider" min="0" max="0" step="1" value="0" />
+  <span id="slider-time">–</span>
+</div>
+
+<div id="status-banner" class="panel">
+  <div id="status-spinner"></div>
+  <span id="status-text">正在初始化…</span>
+  <button id="status-retry">重試</button>
+</div>
+
+<div id="diagnostic-panel" class="panel"></div>
+
+<script>
+/* ============================================================
+   CONFIG
+
+   關鍵設計: 網格點數必須 ≤ MAX_GRID_POINTS，才能一次 fetch 打完，
+   徹底避免分批 + 429 限流的問題。gridStep 用 computeFittingGridStep()
+   自動算出來，不手動猜一個數字 —— 用 2.5 或 3.0 度在這個範圍
+   (30° x 35°) 下其實會產生 195 / 143 個點，遠超過 50，所以改成
+   自動計算實際能滿足 ≤50 點的最小間距 (在這個範圍下算出來是 5.5 度)。
+   ============================================================ */
+const MAX_GRID_POINTS = 50;
+
+const CONFIG = {
+  apiUrl: 'https://api.open-meteo.com/v1/forecast',
+  model: 'ecmwf_aifs025',
+  latMin: 5, latMax: 35,
+  lonMin: 105, lonMax: 140,
+  gridStep: null,               // null = 由 computeFittingGridStep() 自動計算
+  forecastDays: 7,
+  requestTimeoutMs: 30000,
+  maxRetries: 5,
+  nativeStepHours: 6,
+  windThresholdKmh: 35,
+  pressureThresholdHpa: 1005,
+  neighborhoodSize: 3,           // 網格變稀疏 (5.5°) 後，5x5 鄰域跨距過大已無意義，改用 3x3
+  interpolateIntervalMinutes: 60,
+};
+
+function computeFittingGridStep(latMin, latMax, lonMin, lonMax, maxPoints) {
+  const latRange = latMax - latMin;
+  const lonRange = lonMax - lonMin;
+  const candidates = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 8, 9, 10];
+  for (const step of candidates) {
+    const latCount = Math.round(latRange / step) + 1;
+    const lonCount = Math.round(lonRange / step) + 1;
+    if (latCount * lonCount <= maxPoints) {
+      console.log(`[網格] 自動計算 gridStep=${step}° → ${latCount}×${lonCount}=${latCount * lonCount} 點 (≤${maxPoints})`);
+      return step;
+    }
+  }
+  console.warn('[網格] 候選間距都無法滿足點數上限，使用最大候選值');
+  return candidates[candidates.length - 1];
+}
+
+CONFIG.gridStep = computeFittingGridStep(CONFIG.latMin, CONFIG.latMax, CONFIG.lonMin, CONFIG.lonMax, MAX_GRID_POINTS);
+
+const STORM_INTENSITY_THRESHOLDS_KMH = {
+  tropical_depression: 41,
+  tropical_storm: 63,
+  severe_tropical_storm: 88,
+  typhoon: 118,
+};
+
+function classifyStormIntensity(windSpeedKmh) {
+  if (windSpeedKmh == null) return 'unknown';
+  if (windSpeedKmh >= STORM_INTENSITY_THRESHOLDS_KMH.typhoon) return 'typhoon';
+  if (windSpeedKmh >= STORM_INTENSITY_THRESHOLDS_KMH.severe_tropical_storm) return 'severe_tropical_storm';
+  if (windSpeedKmh >= STORM_INTENSITY_THRESHOLDS_KMH.tropical_storm) return 'tropical_storm';
+  if (windSpeedKmh >= STORM_INTENSITY_THRESHOLDS_KMH.tropical_depression) return 'tropical_depression';
+  return 'below_depression';
+}
+
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+function parseUTC(isoNoZ) { return new Date(isoNoZ.endsWith('Z') ? isoNoZ : isoNoZ + 'Z'); }
+
+/* ============================================================
+   第一層: 網格工具 (單一請求版，不再需要分批)
+   ============================================================ */
+
+function buildGrid(latMin, latMax, lonMin, lonMax, step) {
+  const lats = [], lons = [];
+  const latSteps = Math.round((latMax - latMin) / step);
+  const lonSteps = Math.round((lonMax - lonMin) / step);
+  for (let i = 0; i <= latSteps; i++) {
+    const lat = Math.round((latMin + i * step) * 1e4) / 1e4;
+    for (let j = 0; j <= lonSteps; j++) {
+      const lon = Math.round((lonMin + j * step) * 1e4) / 1e4;
+      lats.push(lat);
+      lons.push(lon);
+    }
+  }
+  return { lats, lons };
+}
+
+function buildParams(lats, lons, config) {
+  return new URLSearchParams({
+    latitude: lats.join(','),
+    longitude: lons.join(','),
+    hourly: 'pressure_msl,wind_speed_10m',
+    models: config.model,
+    forecast_days: String(config.forecastDays),
+    timezone: 'UTC',
+  });
+}
+
+/* ============================================================
+   第二層: 單一請求 + 429 退避重試
+   (網格點數已控制在 MAX_GRID_POINTS 以內，所以整個抓取階段
+   只會發出「一個」HTTP 請求，沒有分批、沒有併發，
+   從根本上避免短時間內密集打 API 觸發限流)
+   ============================================================ */
+
+function timeoutReject(ms, label) {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`[${label}] 請求逾時 (${ms}ms)`)), ms);
+  });
+}
+
+async function fetchSingleRequestWithRetry(params, label, config) {
+  const url = `${config.apiUrl}?${params.toString()}`;
+  console.log(`[抓取] ${label} → ${url}`);
+  for (let attempt = 0; attempt < config.maxRetries; attempt++) {
+    let resp;
+    try {
+      resp = await Promise.race([fetch(url), timeoutReject(config.requestTimeoutMs, label)]);
+    } catch (err) {
+      const wait = Math.min(20000, 2 ** attempt * 1000) + Math.random() * 1000;
+      console.warn(`[${label}] 連線錯誤 (${err})，${(wait / 1000).toFixed(1)}s 後重試`);
+      await sleep(wait);
+      continue;
+    }
+
+    if (resp.status === 429) {
+      const text = await resp.text();
+      const isMinutelyLimit = /minute/i.test(text);
+      const wait = isMinutelyLimit ? 65000 + Math.random() * 5000 : Math.min(30000, 2 ** attempt * 1000) + Math.random() * 1000;
+      console.warn(`[${label}] 429 Too Many Requests (${text.slice(0, 120)})，${(wait / 1000).toFixed(0)}s 後重試`);
+      await sleep(wait);
+      continue;
+    }
+    if (resp.status >= 500) {
+      const wait = Math.min(20000, 2 ** attempt * 1000) + Math.random() * 1000;
+      console.warn(`[${label}] 伺服器錯誤 HTTP ${resp.status}，${(wait / 1000).toFixed(1)}s 後重試`);
+      await sleep(wait);
+      continue;
+    }
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`[${label}] HTTP ${resp.status}: ${text.slice(0, 300)}`);
+    }
+
+    const data = await resp.json();
+    return Array.isArray(data) ? data : [data];
+  }
+  throw new Error(`[${label}] 已超過最大重試次數 (${config.maxRetries})，放棄請求`);
+}
+
+async function fetchEcmwfGridAsync(config, onProgress) {
+  const { lats, lons } = buildGrid(config.latMin, config.latMax, config.lonMin, config.lonMax, config.gridStep);
+  console.log(`[抓取] 端點: ${config.apiUrl} (models=${config.model})`);
+  console.log(`[抓取] 網格點總數: ${lats.length} (gridStep=${config.gridStep}°) → 單一請求打完，不分批`);
+
+  if (onProgress) onProgress(0, 1);
+  const results = await fetchSingleRequestWithRetry(buildParams(lats, lons, config), '單一請求', config);
+  if (onProgress) onProgress(1, 1);
+
+  console.log(`%c[診斷] 完整原始回應:`, 'color: #ffd60a; font-weight: bold;', results);
+  if (results[0] && results[0].hourly) {
+    console.log('[診斷] hourly 物件實際欄位名稱:', Object.keys(results[0].hourly));
+  } else {
+    console.warn('[診斷] 回應物件裡沒有 hourly 欄位，請檢查 API 回應格式!', results[0]);
+  }
+
+  console.log(`[抓取] 完成，共取得 ${results.length} 個網格點的回應`);
+  return results;
+}
+
+/* ============================================================
+   第三層: 資料整理與風暴路徑分析 (含動態欄位相容 + 診斷輸出)
+   ============================================================ */
+
+// 動態相容 hourly 變數的 key 名稱:
+// 依序嘗試「原始名稱」→「帶模型後綴的名稱」→「任何以該變數名開頭的欄位」，
+// 三種情況都涵蓋，不管 Open-Meteo 這次到底用哪種命名都能正確解析。
+function findHourlyArray(hourly, baseName, modelName) {
+  const arr = hourly[baseName]
+    || hourly[`${baseName}_${modelName}`]
+    || hourly[Object.keys(hourly).find(k => k.startsWith(baseName))];
+  return Array.isArray(arr) ? arr : [];
+}
+
+function toValidNumber(v) {
+  return (typeof v === 'number' && Number.isFinite(v)) ? v : null;
+}
+
+function toFlatRecords(results, config) {
+  const records = [];
+  for (const point of results) {
+    const lat = point.latitude;
+    const lon = point.longitude;
+    const hourly = point.hourly || {};
+    const times = hourly.time || [];
+    const mslp = findHourlyArray(hourly, 'pressure_msl', config.model);
+    const wind = findHourlyArray(hourly, 'wind_speed_10m', config.model);
+    for (let i = 0; i < times.length; i++) {
+      records.push({
+        latitude: lat,
+        longitude: lon,
+        time: times[i],
+        pressure_msl: toValidNumber(mslp[i]),
+        wind_speed_10m: toValidNumber(wind[i]),
+      });
+    }
+  }
+  console.log(`[診斷] toFlatRecords: 共攤平出 ${records.length} 筆逐小時資料`);
+  return records;
+}
+
+function filterNativeTimesteps(records, stepHours) {
+  if (!records.length) return records;
+  const times = [...new Set(records.map(r => r.time))].sort();
+  const base = parseUTC(times[0]).getTime();
+  const nativeTimes = new Set();
+  for (const t of times) {
+    const deltaHours = (parseUTC(t).getTime() - base) / 3600000;
+    if (Math.abs(deltaHours - Math.round(deltaHours / stepHours) * stepHours) < 1e-6) nativeTimes.add(t);
+  }
+  const filtered = records.filter(r => nativeTimes.has(r.time));
+  console.log(`[診斷] 原生節點篩選: ${times.length} 個時間點 → ${nativeTimes.size} 個原生節點, ${records.length} 筆 → ${filtered.length} 筆`);
+  return filtered;
+}
+
+function gridIndexKey(lat, lon, config) {
+  const latIdx = Math.round((lat - config.latMin) / config.gridStep);
+  const lonIdx = Math.round((lon - config.lonMin) / config.gridStep);
+  return `${latIdx},${lonIdx}`;
+}
+
+function trackLowPressureCenters(records, config) {
+  const native = filterNativeTimesteps(records, config.nativeStepHours);
+
+  let globalMin = null;
+  for (const r of native) {
+    if (r.pressure_msl == null) continue;
+    if (!globalMin || r.pressure_msl < globalMin.pressure_msl) globalMin = r;
+  }
+  if (globalMin) {
+    console.log(
+      `%c[診斷] Min Pressure found: ${globalMin.pressure_msl} hPa`,
+      'color: #ff9500; font-weight: bold;',
+      `@ (${globalMin.latitude}, ${globalMin.longitude})，時間 ${globalMin.time}，風速 ${globalMin.wind_speed_10m} km/h`
+    );
+  } else {
+    console.warn('[診斷] 找不到任何有效的 pressure_msl 數值，資料本身可能是空的');
+  }
+
+  const byTime = new Map();
+  for (const r of native) {
+    if (r.pressure_msl == null) continue;
+    if (!byTime.has(r.time)) byTime.set(r.time, new Map());
+    byTime.get(r.time).set(gridIndexKey(r.latitude, r.longitude, config), r);
+  }
+
+  const radius = Math.floor(config.neighborhoodSize / 2);
+  let countPassPressure = 0, countLocalMin = 0, countWindOk = 0;
+
+  const track = [];
+  for (const [t, grid] of byTime) {
+    let best = null;
+
+    for (const [key, r] of grid) {
+      if (r.pressure_msl >= config.pressureThresholdHpa) continue;
+      countPassPressure++;
+
+      const [latIdx, lonIdx] = key.split(',').map(Number);
+      let isLocalMin = true;
+      for (let di = -radius; di <= radius && isLocalMin; di++) {
+        for (let dj = -radius; dj <= radius; dj++) {
+          if (di === 0 && dj === 0) continue;
+          const neighbor = grid.get(`${latIdx + di},${lonIdx + dj}`);
+          if (neighbor && neighbor.pressure_msl < r.pressure_msl) { isLocalMin = false; break; }
+        }
+      }
+      if (!isLocalMin) continue;
+      countLocalMin++;
+
+      let windOk = r.wind_speed_10m != null && r.wind_speed_10m >= config.windThresholdKmh;
+      if (!windOk) {
+        for (let di = -radius; di <= radius && !windOk; di++) {
+          for (let dj = -radius; dj <= radius; dj++) {
+            const neighbor = grid.get(`${latIdx + di},${lonIdx + dj}`);
+            if (neighbor && neighbor.wind_speed_10m != null && neighbor.wind_speed_10m >= config.windThresholdKmh) { windOk = true; break; }
+          }
+        }
+      }
+      if (!windOk) continue;
+      countWindOk++;
+
+      if (!best || r.pressure_msl < best.pressure_msl) best = r;
+    }
+
+    if (best) {
+      track.push({
+        time: t, lat: best.latitude, lng: best.longitude,
+        min_pressure: best.pressure_msl, max_wind_speed: best.wind_speed_10m,
+        intensity: classifyStormIntensity(best.wind_speed_10m),
+      });
+    }
+  }
+
+  console.log(
+    `[診斷] 篩選漏斗: 氣壓<${config.pressureThresholdHpa}hPa 通過 ${countPassPressure} 點 ` +
+    `→ 局部極小值通過 ${countLocalMin} 點 → 風速≥${config.windThresholdKmh}km/h 通過 ${countWindOk} 點 ` +
+    `→ 最終路徑 ${track.length} 個時間節點`
+  );
+
+  track.sort((a, b) => a.time.localeCompare(b.time));
+  return track;
+}
+
+function interpolateTrack(track, intervalMinutes) {
+  if (track.length < 2) return track.map(p => ({ ...p, interpolated: false }));
+  const result = [];
+  for (let i = 0; i < track.length - 1; i++) {
+    const a = track[i], b = track[i + 1];
+    const tA = parseUTC(a.time).getTime();
+    const tB = parseUTC(b.time).getTime();
+    const totalMinutes = (tB - tA) / 60000;
+    const steps = Math.max(1, Math.floor(totalMinutes / intervalMinutes));
+    result.push({ ...a, interpolated: false });
+    for (let s = 1; s < steps; s++) {
+      const ratio = s / steps;
+      const tInterp = tA + (tB - tA) * ratio;
+      const interpWind = a.max_wind_speed + (b.max_wind_speed - a.max_wind_speed) * ratio;
+      result.push({
+        time: new Date(tInterp).toISOString().slice(0, 16),
+        lat: a.lat + (b.lat - a.lat) * ratio,
+        lng: a.lng + (b.lng - a.lng) * ratio,
+        min_pressure: a.min_pressure + (b.min_pressure - a.min_pressure) * ratio,
+        max_wind_speed: interpWind,
+        intensity: classifyStormIntensity(interpWind),
+        interpolated: true,
+      });
+    }
+  }
+  result.push({ ...track[track.length - 1], interpolated: false });
+  return result;
+}
+
+/* ============================================================
+   第四層: 地圖渲染
+   ============================================================ */
+
+let map, mapInitialized = false;
+let currentLayers = [];
+let boundingBoxLayer = null;
+
+function ensureMap() {
+  if (mapInitialized) return;
+  map = L.map('map', { zoomControl: false }).setView([20, 122], 4);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19,
+  }).addTo(map);
+  mapInitialized = true;
+}
+
+function drawBoundingBox(config) {
+  if (boundingBoxLayer) { map.removeLayer(boundingBoxLayer); }
+  boundingBoxLayer = L.rectangle(
+    [[config.latMin, config.lonMin], [config.latMax, config.lonMax]],
+    { color: '#4fd1ff', weight: 1, dashArray: '4,4', fill: false, opacity: 0.5 }
+  ).addTo(map);
+  map.fitBounds(boundingBoxLayer.getBounds(), { padding: [20, 20] });
+}
+
+function clearLayers() {
+  currentLayers.forEach(layer => map.removeLayer(layer));
+  currentLayers = [];
+}
+
+function renderRawPressureField(records, config) {
+  ensureMap();
+  clearLayers();
+  drawBoundingBox(config);
+  document.getElementById('slider-panel').style.display = 'none';
+
+  const native = filterNativeTimesteps(records, config.nativeStepHours);
+  if (!native.length) return;
+
+  const firstTime = [...new Set(native.map(r => r.time))].sort()[0];
+  const snapshot = native.filter(r => r.time === firstTime && r.pressure_msl != null);
+  if (!snapshot.length) return;
+
+  const pressures = snapshot.map(r => r.pressure_msl);
+  const pMin = Math.min(...pressures);
+  const pMax = Math.max(...pressures);
+
+  function colorFor(p) {
+    const ratio = pMax === pMin ? 0.5 : (p - pMin) / (pMax - pMin);
+    const stops = [{ r: 255, g: 45, b: 85 }, { r: 255, g: 149, b: 0 }, { r: 255, g: 214, b: 10 }, { r: 52, g: 199, b: 89 }];
+    const scaled = ratio * (stops.length - 1);
+    const i = Math.min(Math.floor(scaled), stops.length - 2);
+    const t = scaled - i;
+    const c1 = stops[i], c2 = stops[i + 1];
+    return `rgb(${Math.round(c1.r + (c2.r - c1.r) * t)},${Math.round(c1.g + (c2.g - c1.g) * t)},${Math.round(c1.b + (c2.b - c1.b) * t)})`;
+  }
+
+  const rawGroup = L.layerGroup().addTo(map);
+  currentLayers.push(rawGroup);
+  snapshot.forEach(r => {
+    L.circleMarker([r.latitude, r.longitude], {
+      radius: 5, color: 'rgba(255,255,255,0.4)', weight: 1, fillColor: colorFor(r.pressure_msl), fillOpacity: 0.85,
+    }).bindTooltip(`${r.pressure_msl.toFixed(1)} hPa / ${r.wind_speed_10m != null ? r.wind_speed_10m.toFixed(0) : '–'} km/h`)
+      .addTo(rawGroup);
+  });
+
+  document.getElementById('stat-count').textContent = '0';
+  document.getElementById('stat-min').textContent = pMin.toFixed(1) + ' hPa';
+  document.getElementById('stat-span').textContent = formatTime(firstTime, true) + ' (第一個原生節點)';
+  document.getElementById('legend-min').textContent = pMin.toFixed(0);
+  document.getElementById('legend-max').textContent = pMax.toFixed(0);
+}
+
+function initTrack(data, config) {
+  ensureMap();
+  clearLayers();
+  drawBoundingBox(config);
+  document.getElementById('slider-panel').style.display = 'flex';
+
+  const sorted = [...data]
+    .map(d => ({ ...d, interpolated: d.interpolated === true }))
+    .sort((a, b) => parseUTC(a.time) - parseUTC(b.time));
+
+  const nativePoints = sorted.filter(d => !d.interpolated);
+  const pressures = nativePoints.length ? nativePoints.map(d => d.min_pressure) : sorted.map(d => d.min_pressure);
+  const pMin = Math.min(...pressures);
+  const pMax = Math.max(...pressures);
+
+  function pressureColor(p) {
+    const ratio = pMax === pMin ? 0.5 : (p - pMin) / (pMax - pMin);
+    const stops = [{ r: 255, g: 45, b: 85 }, { r: 255, g: 149, b: 0 }, { r: 255, g: 214, b: 10 }, { r: 52, g: 199, b: 89 }];
+    const scaled = ratio * (stops.length - 1);
+    const i = Math.min(Math.floor(scaled), stops.length - 2);
+    const t = scaled - i;
+    const c1 = stops[i], c2 = stops[i + 1];
+    return `rgb(${Math.round(c1.r + (c2.r - c1.r) * t)},${Math.round(c1.g + (c2.g - c1.g) * t)},${Math.round(c1.b + (c2.b - c1.b) * t)})`;
+  }
+
+  const INTENSITY_COLOR = {
+    tropical_depression: '#8fa3c2', tropical_storm: '#ffd60a', severe_tropical_storm: '#ff9500',
+    typhoon: '#ff2d55', unknown: '#8fa3c2', below_depression: '#5a6b8a',
+  };
+  const INTENSITY_LABEL = {
+    tropical_depression: '熱帶低氣壓', tropical_storm: '熱帶風暴', severe_tropical_storm: '強烈熱帶風暴',
+    typhoon: '颱風', unknown: '強度未知', below_depression: '低壓區',
+  };
+  function intensityOf(d) {
+    if (d.intensity) return d.intensity;
+    const w = d.max_wind_speed;
+    if (w == null) return 'unknown';
+    if (w >= 118) return 'typhoon';
+    if (w >= 88) return 'severe_tropical_storm';
+    if (w >= 63) return 'tropical_storm';
+    if (w >= 41) return 'tropical_depression';
+    return 'below_depression';
+  }
+
+  function catmullRomPoint(p0, p1, p2, p3, t) {
+    const t2 = t * t, t3 = t2 * t;
+    const f = (a0, a1, a2, a3) => 0.5 * ((2 * a1) + (-a0 + a2) * t + (2 * a0 - 5 * a1 + 4 * a2 - a3) * t2 + (-a0 + 3 * a1 - 3 * a2 + a3) * t3);
+    return { lat: f(p0.lat, p1.lat, p2.lat, p3.lat), lng: f(p0.lng, p1.lng, p2.lng, p3.lng), min_pressure: f(p0.min_pressure, p1.min_pressure, p2.min_pressure, p3.min_pressure) };
+  }
+  function buildSmoothCurve(points, segmentsPerGap = 12) {
+    if (points.length < 3) return points;
+    const dense = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i - 1] || points[i];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[i + 2] || p2;
+      for (let s = 0; s < segmentsPerGap; s++) dense.push(catmullRomPoint(p0, p1, p2, p3, s / segmentsPerGap));
+    }
+    dense.push(points[points.length - 1]);
+    return dense;
+  }
+
+  const smoothCurve = buildSmoothCurve(sorted, 12);
+  const segmentGroup = L.layerGroup().addTo(map);
+  currentLayers.push(segmentGroup);
+  for (let i = 0; i < smoothCurve.length - 1; i++) {
+    const a = smoothCurve[i], b = smoothCurve[i + 1];
+    const avgP = (a.min_pressure + b.min_pressure) / 2;
+    L.polyline([[a.lat, a.lng], [b.lat, b.lng]], { color: pressureColor(avgP), weight: 4, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }).addTo(segmentGroup);
+  }
+
+  const markerGroup = L.layerGroup().addTo(map);
+  currentLayers.push(markerGroup);
+  const markers = sorted.map((d) => {
+    const isMin = !d.interpolated && d.min_pressure === pMin;
+    const radius = d.interpolated ? 4 : (isMin ? 9 : 6);
+    const marker = L.circleMarker([d.lat, d.lng], {
+      radius, color: d.interpolated ? 'rgba(255,255,255,0.5)' : '#ffffff',
+      weight: d.interpolated ? 1 : (isMin ? 2 : 1), dashArray: d.interpolated ? '2,2' : null,
+      fillColor: pressureColor(d.min_pressure), fillOpacity: d.interpolated ? 0.45 : 0.95,
+    }).addTo(markerGroup);
+
+    const timeLabel = formatTime(d.time);
+    const badgeHtml = d.interpolated ? '<span class="badge interp">內插點 · 視覺平滑</span>' : '<span class="badge native">原生節點 · AIFS 6H</span>';
+    const intensityKey = intensityOf(d);
+    const intensityHtml = `<span class="badge native" style="background:${INTENSITY_COLOR[intensityKey]}22;border-color:${INTENSITY_COLOR[intensityKey]}66;color:${INTENSITY_COLOR[intensityKey]}">${INTENSITY_LABEL[intensityKey]}</span>`;
+    const windHtml = d.max_wind_speed != null ? `<div class="time">風速 ${d.max_wind_speed.toFixed(0)} km/h</div>` : '';
+    marker.bindPopup(`
+      <div class="track-popup">
+        <div class="time">${timeLabel}</div>
+        <div class="pressure">${d.min_pressure.toFixed(1)}<span class="pressure-label">hPa</span></div>
+        <div class="time">${d.lat.toFixed(2)}°N, ${d.lng.toFixed(2)}°E</div>
+        ${windHtml}
+        ${intensityHtml} ${badgeHtml}
+      </div>
+    `, { closeButton: false, offset: [0, -4] });
+    marker.on('mouseover', () => marker.openPopup());
+    marker.on('mouseout', () => marker.closePopup());
+    return marker;
+  });
+
+  function cycloneDivIcon(intensityKey) {
+    const color = INTENSITY_COLOR[intensityKey] || INTENSITY_COLOR.unknown;
+    const size = intensityKey === 'typhoon' ? 34 : (intensityKey === 'severe_tropical_storm' ? 28 : 24);
+    const svg = `
+      <svg width="${size}" height="${size}" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="20" cy="20" r="4" fill="${color}"/>
+        <path d="M20 20 C 20 8, 32 6, 34 16 C 35 22, 28 24, 22 20" stroke="${color}" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M20 20 C 20 32, 8 34, 6 24 C 5 18, 12 16, 18 20" stroke="${color}" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M20 20 C 32 20, 34 8, 24 6 C 18 5, 16 12, 20 18" stroke="${color}" stroke-width="2.4" fill="none" stroke-linecap="round" opacity="0.7"/>
+      </svg>`;
+    return L.divIcon({ className: 'cyclone-icon', html: svg, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+  }
+
+  const cycloneMarker = L.marker([sorted[0].lat, sorted[0].lng], { icon: cycloneDivIcon(intensityOf(sorted[0])), zIndexOffset: 1000 }).addTo(map);
+  currentLayers.push(cycloneMarker);
+
+  const bounds = L.latLngBounds(sorted.map(d => [d.lat, d.lng]));
+  map.fitBounds(bounds, { padding: [60, 60] });
+
+  document.getElementById('stat-count').textContent = nativePoints.length;
+  document.getElementById('stat-min').textContent = pMin.toFixed(1) + ' hPa';
+  document.getElementById('stat-span').textContent = formatTime(sorted[0].time, true) + ' → ' + formatTime(sorted[sorted.length - 1].time, true);
+  document.getElementById('legend-min').textContent = pMin.toFixed(0);
+  document.getElementById('legend-max').textContent = pMax.toFixed(0);
+
+  const slider = document.getElementById('time-slider');
+  const sliderTime = document.getElementById('slider-time');
+  const playBtn = document.getElementById('play-btn');
+  slider.max = sorted.length - 1;
+  slider.value = 0;
+
+  function highlightIndex(idx) {
+    markers.forEach((m, i) => {
+      const d = sorted[i];
+      const isMin = !d.interpolated && d.min_pressure === pMin;
+      const baseWeight = d.interpolated ? 1 : (isMin ? 2 : 1);
+      const baseRadius = d.interpolated ? 4 : (isMin ? 9 : 6);
+      m.setStyle({ weight: i === idx ? 3 : baseWeight, radius: i === idx ? 11 : baseRadius });
+      if (i === idx) { m.openPopup(); map.panTo(m.getLatLng(), { animate: true }); } else { m.closePopup(); }
+    });
+    const current = sorted[idx];
+    cycloneMarker.setLatLng([current.lat, current.lng]);
+    cycloneMarker.setIcon(cycloneDivIcon(intensityOf(current)));
+    sliderTime.textContent = formatTime(current.time);
+  }
+
+  const newSlider = slider.cloneNode(true);
+  slider.parentNode.replaceChild(newSlider, slider);
+  newSlider.max = sorted.length - 1;
+  newSlider.addEventListener('input', (e) => highlightIndex(Number(e.target.value)));
+  highlightIndex(0);
+
+  const newPlayBtn = playBtn.cloneNode(true);
+  playBtn.parentNode.replaceChild(newPlayBtn, playBtn);
+  let playing = false;
+  let playTimer = null;
+  newPlayBtn.addEventListener('click', () => {
+    playing = !playing;
+    newPlayBtn.textContent = playing ? '❚❚' : '▶';
+    if (playing) {
+      playTimer = setInterval(() => {
+        let next = Number(newSlider.value) + 1;
+        if (next > Number(newSlider.max)) next = 0;
+        newSlider.value = next;
+        highlightIndex(next);
+      }, 1200);
+    } else {
+      clearInterval(playTimer);
+    }
+  });
+}
+
+function formatTime(iso, short = false) {
+  const d = parseUTC(iso);
+  if (isNaN(d.getTime())) return iso;
+  const pad = n => String(n).padStart(2, '0');
+  const datePart = `${d.getMonth() + 1}/${d.getDate()}`;
+  const timePart = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return short ? `${datePart} ${timePart}` : `${datePart} ${timePart} (UTC${d.getTimezoneOffset() <= 0 ? '+' : '-'}${Math.abs(d.getTimezoneOffset() / 60)})`;
+}
+
+/* ============================================================
+   第五層: 頁面啟動流程
+   ============================================================ */
+
+const statusBanner = document.getElementById('status-banner');
+const statusText = document.getElementById('status-text');
+const statusSpinner = document.getElementById('status-spinner');
+const statusRetry = document.getElementById('status-retry');
+const diagnosticPanel = document.getElementById('diagnostic-panel');
+
+function showStatus(kind, text, showRetry = false) {
+  statusBanner.style.display = 'flex';
+  statusBanner.className = 'panel ' + kind;
+  statusSpinner.style.display = kind === 'loading' ? 'block' : 'none';
+  statusText.textContent = text;
+  statusRetry.style.display = showRetry ? 'inline-block' : 'none';
+}
+function hideStatus() { statusBanner.style.display = 'none'; }
+function showDiagnostic(html) { diagnosticPanel.style.display = 'block'; diagnosticPanel.innerHTML = html; }
+function hideDiagnostic() { diagnosticPanel.style.display = 'none'; }
+
+async function runPipeline() {
+  ensureMap();
+  drawBoundingBox(CONFIG);
+  hideDiagnostic();
+
+  showStatus('loading', `正在抓取網格資料 (單一請求，${CONFIG.apiUrl.replace('https://api.open-meteo.com', '')}, models=${CONFIG.model})…`);
+  try {
+    const results = await fetchEcmwfGridAsync(CONFIG, () => {});
+
+    showStatus('loading', '正在分析風暴路徑…');
+    const records = toFlatRecords(results, CONFIG);
+
+    const validPressureCount = records.filter(r => r.pressure_msl != null).length;
+    const validWindCount = records.filter(r => r.wind_speed_10m != null).length;
+    console.log('有效氣壓筆數:', validPressureCount, '/', records.length);
+    console.log('有效風速筆數:', validWindCount, '/', records.length);
+    if (validPressureCount === 0) {
+      console.error(
+        '%c[診斷] 所有 pressure_msl 都是無效值！請展開上面的完整原始回應，' +
+        '檢查 hourly 物件底下實際的欄位名稱。',
+        'color:#ff6b6b;font-weight:bold;'
+      );
+    }
+
+    const track = trackLowPressureCenters(records, CONFIG);
+
+    if (track.length === 0) {
+      hideStatus();
+      renderRawPressureField(records, CONFIG);
+      showStatus('warn', '目前範圍內沒有偵測到符合風暴標準的路徑（已顯示原始氣壓場供比對）', true);
+      showDiagnostic(
+        `請打開瀏覽器 Console 查看詳細診斷日誌，包含：<br>` +
+        `· <b>有效氣壓筆數</b>：資料是否正確解析<br>` +
+        `· <b>Min Pressure found</b>：整個範圍/時間內讀到的實際最低氣壓與位置<br>` +
+        `· <b>篩選漏斗</b>：多少點通過氣壓門檻 → 局部極小值 → 風速門檻，可判斷卡在哪一關`
+      );
+      return;
+    }
+
+    const smooth = interpolateTrack(track, CONFIG.interpolateIntervalMinutes);
+    hideStatus();
+    initTrack(smooth, CONFIG);
+  } catch (err) {
+    console.error(err);
+    hideDiagnostic();
+    const shortMsg = String(err.message || err).slice(0, 120);
+    showStatus('error', `資料抓取失敗: ${shortMsg}（完整診斷請看 Console）`, true);
+  }
+}
+
+document.getElementById('status-retry').addEventListener('click', runPipeline);
+document.getElementById('refresh-btn').addEventListener('click', runPipeline);
+
+runPipeline();
+</script>
+
+</body>
+</html>
