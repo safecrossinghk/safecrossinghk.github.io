@@ -393,6 +393,31 @@ large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
 .catch(err => console.error("❌ 推播失敗", err));
 }
 
+async function registerLocation(playerId, lat, lon) {
+
+console.log("===== 開始 registerLocation =====");
+
+const response = await fetch(
+workerUrl + "/registerLocation",
+{
+method: "POST",
+headers: {
+"Content-Type": "application/json"
+},
+body: JSON.stringify({
+playerId,
+lat,
+lon
+})
+}
+);
+
+const result = await response.json();
+
+console.log("registerLocation:", result);
+
+}
+
 function initLocation() {
 console.log("===== initLocation 開始 =====");
 if (!navigator.geolocation) {
