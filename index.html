@@ -113,8 +113,17 @@ object-fit: contain;
 
 <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
 <script>
+window.addEventListener("load", async () => {
 
+    await OneSignal.init({
+        appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+        safari_web_id: "web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98"
+    });
 
+    console.log("初始化完成");
+    console.log("initialized =", OneSignal.initialized);
+
+});
 </script>
 </head>
 
