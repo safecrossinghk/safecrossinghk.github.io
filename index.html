@@ -449,14 +449,6 @@ if (!window.oneSignalReady) {
 
 }
 
-map.setView([lat, lon], 13);
-setMarker(lat, lon);
-fetchForecast(lat, lon);
-fetchTomorrowAI(lat, lon);
-},
-err => {
-console.warn("⚠️ 定位失敗，使用預設位置");
-const fallbackLat = 22.3, fallbackLon = 114.2;
 map.setView([fallbackLat, fallbackLon], 11);
 setMarker(fallbackLat, fallbackLon);
 fetchForecast(fallbackLat, fallbackLon);
@@ -466,6 +458,7 @@ fetchTomorrowAI(fallbackLat, fallbackLon);
 );
 }
 
+// iOS 提示框只顯示一次
 function showIosPromptOnce() {
 if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
 if (!localStorage.getItem("iosPromptShown")) {
@@ -478,21 +471,28 @@ localStorage.setItem("iosPromptShown", "1");
 }
 }
 
+// ✅ 全裝置共用提示框（只顯示一次）
 function showCustomPrompt() {
 if (localStorage.getItem("subscribedToRainAlert")) return;
+
 document.getElementById("customPrompt").style.display = "block";
+
 document.getElementById("subscribeBtn").onclick = function() {
 OneSignal.push(function() {
-OneSignal.showNativePrompt();
+OneSignal.showNativePrompt(); // 🔔 觸發 OneSignal 系統級提示框
 });
 document.getElementById("customPrompt").style.display = "none";
-localStorage.setItem("subscribedToRainAlert", "1");
+localStorage.setItem("subscribedToRainAlert", "1"); // ✅ 記錄已訂閱
 };
+
 document.getElementById("closeCustomBtn").onclick = function() {
 document.getElementById("customPrompt").style.display = "none";
 };
 }
 
+initLocation();
+showIosPromptOnce();
+showCustomPrompt();
 </script>
 </body>
 </html>
