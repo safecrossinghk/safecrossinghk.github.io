@@ -123,7 +123,8 @@ OneSignalDeferred.push(async function (OneSignal) {
 
         appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
 
-        safari_web_id: "🔑 換成你的 Safari Web ID",
+        safari_web_id:
+        "web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98",
 
         notifyButton: {
             enable: false
@@ -412,16 +413,25 @@ const lon = pos.coords.longitude;
 console.log("✅ 取得定位：", lat, lon);
 console.log("===== 準備取得 OneSignal Player ID =====");
 
-const playerId = OneSignal.User.PushSubscription.id;
+OneSignal.getUserId()
+.then(function(playerId) {
 
-console.log("===== 已取得 Player ID =====");
-console.log(playerId);
+    console.log("===== 已取得 Player ID =====");
+    console.log(playerId);
 
-if (!playerId) {
-    console.log("❌ Player ID 為空");
-} else {
+    if (!playerId) {
+        console.log("❌ Player ID 為空");
+        return;
+    }
+
     registerLocation(playerId, lat, lon);
-}
+
+})
+.catch(function(err) {
+
+    console.error("❌ getUserId 失敗", err);
+
+});
 
 map.setView([lat, lon], 13);
 setMarker(lat, lon);
