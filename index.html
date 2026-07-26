@@ -121,22 +121,30 @@ window.oneSignalReady = false;
 
 window.OneSignalDeferred.push(async function (OneSignal) {
 
-await OneSignal.init({
+    try {
 
-appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+        await OneSignal.init({
 
-safari_web_id:
-"web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98",
+            appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
 
-notifyButton: {
-enable: false
-}
+            safari_web_id:
+            "web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98",
 
-});
+            notifyButton: {
+                enable: false
+            }
 
-window.oneSignalReady = true;
+        });
 
-console.log("✅ OneSignal 初始化完成");
+        window.oneSignalReady = true;
+
+        console.log("✅ OneSignal 初始化完成");
+
+    } catch(err){
+
+        console.error("❌ OneSignal 初始化失敗", err);
+
+    }
 
 });
 
