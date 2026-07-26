@@ -416,17 +416,37 @@ return;
 }
 navigator.geolocation.getCurrentPosition(
 async pos => {
-console.log("===== 已進入 getCurrentPosition =====");
-const lat = pos.coords.latitude;
-const lon = pos.coords.longitude;
-console.log("✅ 取得定位：", lat, lon);
 console.log("===== 準備取得 OneSignal Player ID =====");
 
-/*
- * Part 1
- * 暫時不取得 Player ID
- * 先確保 HKO、Tomorrow.io、地圖恢復
- */
+// 新版 v16
+
+if (!window.oneSignalReady) {
+
+    console.log("⌛ OneSignal 尚未完成初始化");
+
+} else {
+
+    const playerId = OneSignal.User.PushSubscription.id;
+
+    console.log("===== 已取得 Player ID =====");
+    console.log(playerId);
+
+    if (!playerId) {
+
+        console.log("❌ Player ID 為空");
+
+    } else {
+
+        registerLocation(playerId, lat, lon);
+
+    }
+
+}
+
+map.setView([lat, lon], 13);
+setMarker(lat, lon);
+fetchForecast(lat, lon);
+fetchTomorrowAI(lat, lon);
 
 map.setView([lat, lon], 13);
 
