@@ -138,12 +138,6 @@ window.OneSignalDeferred.push(async function (OneSignal) {
 
     console.log("✅ OneSignal 初始化完成");
 
-    initLocation();
-
-    showIosPromptOnce();
-
-    showCustomPrompt();
-
 });
 </script>
 </head>
@@ -492,6 +486,28 @@ document.getElementById("closeCustomBtn").onclick = function() {
 document.getElementById("customPrompt").style.display = "none";
 };
 }
+
+window.addEventListener("load", async function () {
+
+    console.log("===== 頁面完成載入 =====");
+
+    while (!window.oneSignalReady) {
+
+        console.log("等待 OneSignal...");
+
+        await new Promise(r => setTimeout(r, 100));
+
+    }
+
+    console.log("===== 開始初始化 =====");
+
+    initLocation();
+
+    showIosPromptOnce();
+
+    showCustomPrompt();
+
+});
 
 </script>
 </body>
