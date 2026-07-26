@@ -416,6 +416,12 @@ return;
 }
 navigator.geolocation.getCurrentPosition(
 async pos => {
+console.log("===== 已進入 getCurrentPosition =====");
+
+const lat = pos.coords.latitude;
+const lon = pos.coords.longitude;
+
+console.log("✅ 取得定位：", lat, lon);
 console.log("===== 準備取得 OneSignal Player ID =====");
 
 // 新版 v16
@@ -446,14 +452,6 @@ if (!window.oneSignalReady) {
 map.setView([lat, lon], 13);
 setMarker(lat, lon);
 fetchForecast(lat, lon);
-fetchTomorrowAI(lat, lon);
-
-map.setView([lat, lon], 13);
-
-setMarker(lat, lon);
-
-fetchForecast(lat, lon);
-
 fetchTomorrowAI(lat, lon);
 },
 err => {
