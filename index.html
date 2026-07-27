@@ -111,32 +111,17 @@ object-fit: contain;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="香港降雨預報">
 
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-
+<script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async></script>
 <script>
-
-window.OneSignalDeferred = window.OneSignalDeferred || [];
-
-window.oneSignalReady = false;
-
-window.OneSignalDeferred.push(async function (OneSignal) {
+window.addEventListener("load", async () => {
 
     await OneSignal.init({
-
         appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
-
-        safari_web_id:
-        "web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98",
-
-        notifyButton: {
-            enable: false
-        }
-
+        safari_web_id: "web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98"
     });
 
-    window.oneSignalReady = true;
-
-    console.log("✅ OneSignal 初始化完成");
+    console.log("初始化完成");
+    console.log("initialized =", OneSignal.initialized);
 
 });
 </script>
@@ -397,6 +382,31 @@ large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
 .catch(err => console.error("❌ 推播失敗", err));
 }
 
+async function registerLocation(playerId, lat, lon) {
+
+console.log("===== 開始 registerLocation =====");
+
+const response = await fetch(
+workerUrl + "/registerLocation",
+{
+method: "POST",
+headers: {
+"Content-Type": "application/json"
+},
+body: JSON.stringify({
+playerId,
+lat,
+lon
+})
+}
+);
+
+const result = await response.json();
+
+console.log("registerLocation:", result);
+
+}
+
 function initLocation() {
 console.log("===== initLocation 開始 =====");
 if (!navigator.geolocation) {
@@ -411,37 +421,30 @@ return;
 navigator.geolocation.getCurrentPosition(
 async pos => {
 console.log("===== 已進入 getCurrentPosition =====");
-
 const lat = pos.coords.latitude;
 const lon = pos.coords.longitude;
-
 console.log("✅ 取得定位：", lat, lon);
 console.log("===== 準備取得 OneSignal Player ID =====");
 
-// 新版 v16
-
-if (!window.oneSignalReady) {
-
-    console.log("⌛ OneSignal 尚未完成初始化");
-
-} else {
-
-    const playerId = OneSignal.User.PushSubscription.id;
+OneSignal.getUserId()
+.then(function(playerId) {
 
     console.log("===== 已取得 Player ID =====");
     console.log(playerId);
 
     if (!playerId) {
-
         console.log("❌ Player ID 為空");
-
-    } else {
-
-        registerLocation(playerId, lat, lon);
-
+        return;
     }
 
-}
+    registerLocation(playerId, lat, lon);
+
+})
+.catch(function(err) {
+
+    console.error("❌ getUserId 失敗", err);
+
+});
 
 map.setView([lat, lon], 13);
 setMarker(lat, lon);
@@ -487,28 +490,9 @@ document.getElementById("customPrompt").style.display = "none";
 };
 }
 
-window.addEventListener("load", async function () {
-
-    console.log("===== 頁面完成載入 =====");
-
-    while (!window.oneSignalReady) {
-
-        console.log("等待 OneSignal...");
-
-        await new Promise(r => setTimeout(r, 100));
-
-    }
-
-    console.log("===== 開始初始化 =====");
-
-    initLocation();
-
-    showIosPromptOnce();
-
-    showCustomPrompt();
-
-});
-
+initLocation();
+showIosPromptOnce();
+showCustomPrompt();
 </script>
 </body>
 </html>
