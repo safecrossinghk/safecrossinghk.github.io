@@ -194,10 +194,20 @@ window.OneSignalDeferred.push(async (OneSignal) => {
 const workerUrl = 'https://crowdtest8r.ctakwah.workers.dev/';
 const TOMORROW_API_KEY = "Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
 
-const map = L.map('map').setView([22.3, 114.2], 11);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
+let map;
+let marker;
+function initMap() {
+
+    map = L.map('map').setView([22.3, 114.2], 11);
+
+    L.tileLayer(
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+            attribution: '&copy; OpenStreetMap contributors'
+        }
+    ).addTo(map);
+
+}
 
 // 🌦️ 定義地圖右上角精簡白色膠囊元件
 const WeatherControl = L.Control.extend({
@@ -212,7 +222,15 @@ L.DomEvent.disableClickPropagation(div);
 return div;
 }
 });
-map.addControl(new WeatherControl());
+function initMap() {
+
+    map = ...
+
+    L.tileLayer(...).addTo(map);
+
+    map.addControl(new WeatherControl());
+
+}
 
 let marker;
 let rainStatus = 0; // 0 = 無雨，1 = 已推送過
@@ -495,15 +513,13 @@ window.addEventListener("load", async function () {
 
     console.log("===== 頁面完成載入 =====");
 
+    initMap();
+
     while (!window.oneSignalReady) {
 
-        console.log("等待 OneSignal...");
-
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r,100));
 
     }
-
-    console.log("===== 開始初始化 =====");
 
     initLocation();
 
