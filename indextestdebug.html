@@ -157,6 +157,23 @@ window.OneSignalDeferred.push(async (OneSignal) => {
 
 <div id="rain-alert">⏳ 正在讀取預報資料...</div>
 
+<div id="debugBox"
+style="
+margin:10px;
+padding:8px;
+background:#111;
+color:#00ff00;
+font-size:12px;
+font-family:monospace;
+text-align:left;
+white-space:pre-wrap;
+height:180px;
+overflow-y:auto;
+border-radius:6px;
+">
+Debug...
+</div>
+
 <div id="customPrompt" class="promptBox" style="display:none;">
 📢 歡迎使用《香港降雨預報》<br>
 👉 你可以訂閱通知，即時收到降雨提示。<br>
@@ -197,11 +214,11 @@ function debug(msg) {
 
     const box = document.getElementById("debugBox");
 
-    if (box) {
+    if (!box) return;
 
-        box.innerHTML += "<br>" + msg;
+    box.innerHTML += "<br>" + msg;
 
-    }
+    box.scrollTop = box.scrollHeight;
 
 }
 
@@ -493,6 +510,7 @@ document.getElementById("customPrompt").style.display = "none";
 }
 
 window.addEventListener("load", async function () {
+debug("① Page Loaded");
 
     console.log("===== 頁面完成載入 =====");
 
