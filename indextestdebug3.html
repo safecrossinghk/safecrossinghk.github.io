@@ -537,19 +537,10 @@ window.addEventListener("load", async function () {
 
     debug("② map ok");
 
-    while (!window.oneSignalReady) {
-        await new Promise(r => setTimeout(r,100));
-    }
-
-    debug("③ onesignal ok");
-
+    // 暫時唔等 OneSignal
     initLocation();
 
-    debug("④ initLocation finished");
-
-    showIosPromptOnce();
-
-    showCustomPrompt();
+    debug("③ initLocation");
 
 });
 
