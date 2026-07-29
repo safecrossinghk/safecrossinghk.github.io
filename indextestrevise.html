@@ -280,7 +280,6 @@ if (data.hko.immediateRain > 0.5) {
 alertDiv.innerText = `⚠️ 你所在的位置將會有雨`;
 if (rainStatus === 0) {
 speak("⚠️ 你所在的位置將會有雨");
-sendPush();
 rainStatus = 1;
 }
 } else {
@@ -386,29 +385,6 @@ async function registerLocation(playerId, lat, lon) {
 
     console.log("registerLocation:", result);
 
-}
-
-function sendPush() {
-const REST_API_KEY = "os_v2_app_rabedtomivecbnpmuerwwdr6tciiske3mk5ez3mancrg7qmdy275ruzqq3c623gckamggtnnaqow5hyvghfdfbhhcbq2llehcl6jwki";
-
-fetch("https://onesignal.com/api/v1/notifications", {
-method: "POST",
-headers: {
-"Content-Type": "application/json; charset=utf-8",
-"Authorization": "Basic " + REST_API_KEY
-},
-body: JSON.stringify({
-app_id: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
-included_segments: ["Subscribed Users"],
-headings: { "en": "⚠️ 降雨提示" },
-contents: { "en": "你所在的位置將會有雨" },
-url: "https://safecrossinghk.github.io",
-large_icon: "https://cdn-icons-png.flaticon.com/512/1146/1146869.png"
-})
-})
-.then(res => res.json())
-.then(response => console.log("✅ 推播已送出", response))
-.catch(err => console.error("❌ 推播失敗", err));
 }
 
 function initLocation() {
