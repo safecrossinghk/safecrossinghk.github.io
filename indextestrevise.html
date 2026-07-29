@@ -198,14 +198,16 @@ let map;
 let marker;
 function initMap() {
 
-    map = L.map('map').setView([22.3, 114.2], 11);
+    map = L.map('map').setView([22.3,114.2],11);
 
     L.tileLayer(
         'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         {
-            attribution: '&copy; OpenStreetMap contributors'
+            attribution:'&copy; OpenStreetMap contributors'
         }
     ).addTo(map);
+
+    map.addControl(new WeatherControl());
 
 }
 
@@ -222,15 +224,6 @@ L.DomEvent.disableClickPropagation(div);
 return div;
 }
 });
-function initMap() {
-
-    map = ...
-
-    L.tileLayer(...).addTo(map);
-
-    map.addControl(new WeatherControl());
-
-}
 
 let marker;
 let rainStatus = 0; // 0 = 無雨，1 = 已推送過
