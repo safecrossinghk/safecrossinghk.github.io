@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant-HK">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="安全過路 HK" />
+    <title>安全過路 HK｜LSK001 測試</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/icon.svg" />
+    <link rel="stylesheet" href="./src/styles.css" />
+    <script type="module" src="./src/main.js"></script>
+  </head>
+  <body>
+    <main class="app-shell" data-app>
+      <section class="hero" aria-labelledby="app-title">
+        <p class="eyebrow">第一步：PWA 基本架構及首頁 UI</p>
+        <h1 id="app-title">安全過路 HK</h1>
+        <p class="hero__summary">支援 Windows、Android 及 iPhone Safari／PWA 的行人過路燈週期記錄工具。</p>
+      </section>
+
+      <section class="card junction-card" aria-labelledby="junction-title">
+        <div>
+          <p class="label">測試路口</p>
+          <h2 id="junction-title">荔枝角道東行 × 長荔街</h2>
+          <p class="road-id">ROAD_ID：<strong>LSK001</strong></p>
+        </div>
+        <span class="status-pill" data-install-state>可安裝 PWA</span>
+      </section>
+
+      <section class="card action-card" aria-labelledby="action-title">
+        <p class="label">位置狀態</p>
+        <h2 id="action-title">等待下一步加入 GPS 30 米範圍判斷</h2>
+        <p class="muted">第一版將只在進入指定範圍後啟用以下大型按鈕；本步只建立靜態 UI。</p>
+        <button class="signal-button" type="button" disabled aria-describedby="button-note">
+          剛剛轉燈
+        </button>
+        <p id="button-note" class="note">下一步才會連接定位、Cloudflare Worker、D1 及倒數統計 API。</p>
+      </section>
+    </main>
+  </body>
+</html>
