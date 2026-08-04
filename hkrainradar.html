@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港雨量雷達地圖</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #0a0a0a;
+    font-family: -apple-system, "Segoe UI", "PingFang HK", "Microsoft JhengHei", sans-serif;
+  }
+  #map {
+    width: 100%;
+    height: 100%;
+  }
+  #controls {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 1000;
+    background: rgba(20, 20, 20, 0.85);
+    color: #eee;
+    padding: 12px 16px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    font-size: 14px;
+    min-width: 220px;
+    backdrop-filter: blur(4px);
+  }
+  #controls h3 {
+    margin: 0 0 8px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+  }
+  #controls label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  #opacitySlider {
+    width: 100%;
+    accent-color: #4aa8ff;
+  }
+  #timestampLabel {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #aaa;
+  }
+  #statusLabel {
+    font-size: 12px;
+    color: #f88;
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="controls">
+  <h3>雨量雷達圖層</h3>
+  <label for="opacitySlider">
+    <span>透明度</span>
+    <span id="opacityValue">70%</span>
+  </label>
+  <input type="range" id="opacitySlider" min="0" max="100" value="70">
+  <div id="timestampLabel">雷達時間：載入中...</div>
+  <div id="statusLabel"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // 初始化地圖，中心設在香港
+  const map = L.map('map', {
+    center: [22.3193, 114.1694],
+    zoom: 9,
+    zoomControl: true
+  });
+
+  // 暗色調底圖 CartoDB Dark Matter
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(map);
+
+  let radarLayer = null;
+
+  // 格式化時間戳記為可讀字串（本地時間）
+  function formatTimestamp(unixTime) {
+    const date = new Date(unixTime * 1000);
+    return date.toLocaleString('zh-HK', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  // 透過 RainViewer API 取得最新的雷達圖層資訊並疊加到地圖上
+  async function loadRadarLayer() {
+    const statusLabel = document.getElementById('statusLabel');
+    const timestampLabel = document.getElementById('timestampLabel');
+    try {
+      const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+      if (!response.ok) throw new Error('API 回應失敗：' + response.status);
+      const data = await response.json();
+
+      const radarFrames = data.radar && data.radar.past;
+      if (!radarFrames || radarFrames.length === 0) {
+        throw new Error('找不到雷達圖層資料');
+      }
+
+      // 使用最新一幀（past 陣列最後一個元素）
+      const latestFrame = radarFrames[radarFrames.length - 1];
+      const tileUrlTemplate = data.host + latestFrame.path + '/256/{z}/{x}/{y}/2/1_1.png';
+
+      const initialOpacity = document.getElementById('opacitySlider').value / 100;
+
+      if (radarLayer) {
+        map.removeLayer(radarLayer);
+      }
+
+      radarLayer = L.tileLayer(tileUrlTemplate, {
+        tileSize: 256,
+        opacity: initialOpacity,
+        zIndex: 500,
+        attribution: '雷達資料來源：<a href="https://www.rainviewer.com/">RainViewer</a>'
+      }).addTo(map);
+
+      timestampLabel.textContent = '雷達時間：' + formatTimestamp(latestFrame.time);
+      statusLabel.textContent = '';
+    } catch (err) {
+      console.error(err);
+      statusLabel.textContent = '雷達圖層載入失敗：' + err.message;
+      timestampLabel.textContent = '雷達時間：無法取得';
+    }
+  }
+
+  // 透明度滑桿事件
+  const slider = document.getElementById('opacitySlider');
+  const opacityValueLabel = document.getElementById('opacityValue');
+  slider.addEventListener('input', () => {
+    const value = slider.value;
+    opacityValueLabel.textContent = value + '%';
+    if (radarLayer) {
+      radarLayer.setOpacity(value / 100);
+    }
+  });
+
+  // 初始載入雷達圖層，並每 10 分鐘自動更新一次
+  loadRadarLayer();
+  setInterval(loadRadarLayer, 10 * 60 * 1000);
+</script>
+
+</body>
+</html>
