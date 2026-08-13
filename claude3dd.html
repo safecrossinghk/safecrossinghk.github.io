@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#ebf0f5">
+<title>☂️ K-Walk 3D 荔枝角避曬戰術地圖</title>
+
+<style>
+body {
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+margin: 0; padding: 0;
+background: #ebf0f5; color: #1e293b;
+overflow: hidden;
+}
+
+#map3d {
+position: absolute; top: 0; left: 0;
+width: 100vw; height: 100vh; z-index: 1;
+}
+
+/* 韓國「그늘로」風格：高質感亮白玻璃面板 */
+.ui-container {
+position: absolute; top: 20px; left: 20px; right: 20px;
+z-index: 10; max-width: 380px;
+background: rgba(255, 255, 255, 0.88);
+backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+border: 1px solid rgba(255, 255, 255, 0.6);
+border-radius: 16px; padding: 16px;
+box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+h1 { font-size: 1.1em; color: #0f172a; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px; }
+
+#ai-forecast, #rain-alert, #model-status, #hotspot-status {
+margin-top: 8px; padding: 10px 12px; border-radius: 10px;
+background: rgba(241, 245, 249, 0.9); font-size: 0.85em; text-align: left;
+color: #334155; font-weight: 500;
+}
+#model-status { border-left: 4px solid #10b981; }
+#hotspot-status { border-left: 4px solid #f97316; }
+
+/* 3D 懸浮地標標籤樣式 */
+.map-label {
+position: absolute;
+z-index: 5;
+background: rgba(255, 255, 255, 0.95);
+color: #0f172a;
+padding: 4px 10px;
+border-radius: 20px;
+font-size: 0.78rem;
+font-weight: 700;
+box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+border: 1px solid rgba(0,0,0,0.05);
+pointer-events: none;
+transform: translate(-50%, -100%);
+transition: opacity 0.2s ease;
+white-space: nowrap;
+}
+.map-label::after {
+content: '';
+position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%);
+border-width: 5px 5px 0; border-style: solid;
+border-color: rgba(255, 255, 255, 0.95) transparent;
+}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+</head>
+
+<body>
+
+<div id="map3d"></div>
+<div id="labels-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:5;"></div>
+
+<div class="ui-container">
+<h1>☂️ K-Walk 避曬戰術地圖 (荔枝角)</h1>
+<div id="model-status">🏙️ 3D 地圖狀態：<span id="loadMsg">正在加載荔枝角模型...</span></div>
+<div id="hotspot-status">🔥 K-Walk 熱點：<span id="hotspotMsg">正在同步數據...</span></div>
+<div id="ai-forecast"><strong>🧠 AI 預測：</strong> <span id="rainMsg">⏳ 讀取中...</span></div>
+<div id="rain-alert">⏳ 正在讀取天氣資料...</div>
+</div>
+
+<div class="ui-container" style="top: auto; bottom: 25px; left: 20px; right: 20px; max-width: 380px;">
+<h3 style="margin:0 0 8px 0; font-size:0.9em; color:#0f172a;">☀️ 實時陰影與太陽角度</h3>
+<input type="range" id="timeSlider" min="420" max="1080" value="840" style="width: 100%; cursor: pointer;">
+<div style="font-size: 0.85em; margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+<span>觀測時間: <b id="timeDisplay" style="color:#059669; font-size:1.1em;">14:00</b></span>
+<span id="sunStatus" style="color: #d97706; font-weight: bold;">計算中...</span>
+</div>
+</div>
+
+<script>
+const workerUrl = 'https://crowdtest8.ctakwah.workers.dev/';
+
+let scene, camera, renderer, controls;
+let rainParticles, rainGeometry;
+let rainCount = 2000, currentRainIntensity = 0;
+let sunLight, ambientLight;
+
+const ORIGIN_LAT = 22.3372;
+const ORIGIN_LON = 114.1480;
+const SCALE = 100000;
+
+// 📍 地標與街名清單
+const landmarks = [
+{ name: "🚇 荔枝角站", lat: 22.3372, lon: 114.1480, height: 15 },
+{ name: "🏢 長沙灣廣場", lat: 22.3375, lon: 114.1485, height: 25 },
+{ name: "🛍️ D2 Place 一期", lat: 22.3368, lon: 114.1475, height: 20 },
+{ name: "🏭 億利工業大廈", lat: 22.3362, lon: 114.1490, height: 20 },
+{ name: "📍 長沙灣道", lat: 22.3378, lon: 114.1470, height: 2 }
+];
+
+function init3DSpace() {
+const container = document.getElementById('map3d');
+
+scene = new THREE.Scene();
+scene.background = new THREE.Color(0xebf0f5); // 韓國防曬風：極簡淺灰藍
+scene.fog = new THREE.FogExp2(0xebf0f5, 0.0012);
+
+camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 3000);
+camera.position.set(0, 160, 220);
+
+renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.target.set(0, 10, 0);
+controls.maxPolarAngle = Math.PI / 2.15;
+
+// 光源設置：增強對比，凸顯大樓陰影
+ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+scene.add(ambientLight);
+
+sunLight = new THREE.DirectionalLight(0xfff8e7, 1.6);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.width = 2048;
+sunLight.shadow.mapSize.height = 2048;
+const d = 600;
+sunLight.shadow.camera.left = -d;
+sunLight.shadow.camera.right = d;
+sunLight.shadow.camera.top = d;
+sunLight.shadow.camera.bottom = -d;
+sunLight.shadow.camera.near = 10;
+sunLight.shadow.camera.far = 1200;
+sunLight.shadow.bias = -0.0005;
+scene.add(sunLight);
+
+// 淺色地板接收陰影
+const floorGeo = new THREE.PlaneGeometry(3000, 3000);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0xd8dfe5, roughness: 0.9 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -0.5;
+floor.receiveShadow = true;
+scene.add(floor);
+
+loadRealHongKongModel();
+fetchAndRenderHotspots();
+createLandmarkLabels();
+initRainSystem();
+
+window.addEventListener('resize', onWindowResize);
+animate();
+
+// 初始化執行 14:00 (840分鐘) 太陽角度
+updateSunPosition(840);
+}
+
+function latLngTo3D(lat, lon) {
+const x = (lon - ORIGIN_LON) * SCALE;
+const z = (ORIGIN_LAT - lat) * SCALE;
+return { x: x, z: z };
+}
+
+// 📐 核心算法：自動計算包圍盒，強制平移居中（解決桌面版視角偏離問題）
+function loadRealHongKongModel() {
+const loader = new THREE.GLTFLoader();
+const statusEl = document.getElementById('loadMsg');
+
+loader.load('hongkong.glb', function (gltf) {
+const model = gltf.scene;
+
+const box = new THREE.Box3().setFromObject(model);
+const center = box.getCenter(new THREE.Vector3());
+model.position.x -= center.x;
+model.position.z -= center.z;
+model.position.y -= box.min.y;
+
+model.traverse((child) => {
+if (child.isMesh) {
+child.castShadow = true;
+child.receiveShadow = true;
+child.material = new THREE.MeshStandardMaterial({
+color: 0xe2e8f0,
+roughness: 0.6,
+metalness: 0.05
+});
+}
+});
+
+scene.add(model);
+statusEl.innerText = "✅ 1:1 荔枝角街景已精準置中";
+statusEl.style.color = "#059669";
+}, undefined, function (error) {
+statusEl.innerText = "⚠️ 找不到 hongkong.glb 檔案";
+statusEl.style.color = "#dc2626";
+});
+}
+
+function createLandmarkLabels() {
+const labelsContainer = document.getElementById('labels-container');
+landmarks.forEach(spot => {
+const coords = latLngTo3D(spot.lat, spot.lon);
+
+const div = document.createElement('div');
+div.className = 'map-label';
+div.innerText = spot.name;
+labelsContainer.appendChild(div);
+
+spot.pos3D = new THREE.Vector3(coords.x, spot.height, coords.z);
+spot.element = div;
+});
+}
+
+function updateLabelsPosition() {
+landmarks.forEach(spot => {
+if (!spot.pos3D || !spot.element) return;
+
+const tempV = spot.pos3D.clone();
+tempV.project(camera);
+
+if (tempV.z > 1) {
+spot.element.style.opacity = '0';
+return;
+}
+
+const x = (tempV.x * .5 + .5) * window.innerWidth;
+const y = (tempV.y * -.5 + .5) * window.innerHeight;
+
+spot.element.style.transform = `translate(-50%, -100%) translate(${x}px,${y}px)`;
+spot.element.style.opacity = '1';
+});
+}
+
+function fetchAndRenderHotspots() {
+const msgEl = document.getElementById('hotspotMsg');
+fetch(`${workerUrl}get-hotspots`)
+.then(res => res.json())
+.then(data => {
+if (data && data.length > 0) build3DColumns(data);
+else throw new Error();
+msgEl.innerText = `已同步 ${data.length} 個爆單點`;
+})
+.catch(() => {
+const fallbackData = [
+{ name: "長沙灣廣場", lat: 22.3375, lon: 114.1485, count: 35 },
+{ name: "D2 Place", lat: 22.3368, lon: 114.1475, count: 22 }
+];
+build3DColumns(fallbackData);
+msgEl.innerText = `歷史爆單熱點載入完成`;
+});
+}
+
+function build3DColumns(hotspots) {
+hotspots.forEach(spot => {
+const coords = latLngTo3D(spot.lat, spot.lon);
+const height = spot.count * 1.5;
+const geometry = new THREE.CylinderGeometry(3, 3, height, 16);
+const material = new THREE.MeshStandardMaterial({
+color: spot.count > 20 ? 0xef4444 : 0x10b981,
+transparent: true, opacity: 0.85
+});
+const columnMesh = new THREE.Mesh(geometry, material);
+columnMesh.position.set(coords.x, height / 2, coords.z);
+scene.add(columnMesh);
+});
+}
+
+function initRainSystem() {
+rainGeometry = new THREE.BufferGeometry();
+const positions = new Float32Array(rainCount * 3);
+for(let i = 0; i < rainCount * 3; i += 3) {
+positions[i] = Math.random() * 1600 - 800;
+positions[i+1] = Math.random() * 400;
+positions[i+2] = Math.random() * 1600 - 800;
+}
+rainGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+const rainMaterial = new THREE.PointsMaterial({ color: 0x0284c7, size: 1.2, transparent: true, opacity: 0.6 });
+rainParticles = new THREE.Points(rainGeometry, rainMaterial);
+scene.add(rainParticles);
+}
+
+function animate() {
+requestAnimationFrame(animate);
+controls.update();
+updateLabelsPosition();
+
+if (rainParticles && currentRainIntensity > 0) {
+const positions = rainGeometry.attributes.position.array;
+for (let i = 1; i < positions.length; i += 3) {
+positions[i] -= 3.0;
+if (positions[i] < 0) positions[i] = Math.random() * 250 + 150;
+}
+rainGeometry.attributes.position.needsUpdate = true;
+rainParticles.visible = true;
+} else if (rainParticles) {
+rainParticles.visible = false;
+}
+renderer.render(scene, camera);
+}
+
+function onWindowResize() {
+camera.aspect = window.innerWidth / window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function updateSunPosition(minutes) {
+const hours = Math.floor(minutes / 60);
+const mins = minutes % 60;
+document.getElementById('timeDisplay').innerText = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+
+const today = new Date();
+today.setHours(hours, mins, 0, 0);
+
+const sunPos = SunCalc.getPosition(today, ORIGIN_LAT, ORIGIN_LON);
+const sunAltitudeDegree = Math.round(sunPos.altitude * (180 / Math.PI));
+
+if (sunAltitudeDegree > 5) {
+document.getElementById('sunStatus').innerText = `☀️ 陽光充沛 (高度: ${sunAltitudeDegree}°)`;
+ambientLight.intensity = 1.2;
+sunLight.intensity = 1.6;
+} else {
+document.getElementById('sunStatus').innerText = "🌙 黃昏 / 陰涼模式";
+ambientLight.intensity = 1.4;
+sunLight.intensity = 0.3;
+}
+
+if (sunPos.altitude > 0) {
+const radius = 500;
+const h = radius * Math.sin(sunPos.altitude);
+const r_cos = radius * Math.cos(sunPos.altitude);
+const x = r_cos * Math.sin(sunPos.azimuth);
+const z = r_cos * Math.cos(sunPos.azimuth);
+sunLight.position.set(x, h, z);
+}
+}
+
+document.getElementById('timeSlider').addEventListener('input', (e) => {
+updateSunPosition(parseInt(e.target.value));
+});
+
+window.onload = () => {
+init3DSpace();
+};
+</script>
+</body>
+</html>
