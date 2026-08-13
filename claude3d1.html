@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>陰影戰術地圖 (韓系極簡風)</title>
+<style>
+body {
+margin: 0;
+padding: 0;
+overflow: hidden;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+background-color: #eaeaea;
+}
+#webgl-container, #css-container {
+position: absolute;
+top: 0;
+left: 0;
+width: 100vw;
+height: 100vh;
+}
+#css-container {
+pointer-events: none; /* 將滑鼠點擊與拖曳事件透傳給底層 3D 控制器 */
+}
+
+/* 韓系風格 UI 面板 */
+.ui-panel {
+position: absolute;
+top: 16px;
+left: 16px;
+z-index: 100;
+background: rgba(255, 255, 255, 0.88);
+backdrop-filter: blur(10px);
+padding: 16px 20px;
+border-radius: 18px;
+box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+color: #374151;
+width: 260px;
+}
+.ui-panel h2 {
+margin: 0 0 8px 0;
+font-size: 15px;
+font-weight: 700;
+color: #111827;
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+.badge {
+background: #E5E7EB;
+color: #4B5563;
+font-size: 11px;
+padding: 2px 8px;
+border-radius: 12px;
+font-weight: 500;
+}
+.time-display {
+font-size: 26px;
+font-weight: 800;
+color: #10B981;
+margin-bottom: 6px;
+}
+input[type=range] {
+width: 100%;
+accent-color: #10B981;
+cursor: pointer;
+}
+.info-row {
+font-size: 12px;
+color: #6B7280;
+margin-top: 8px;
+display: flex;
+justify-content: space-between;
+}
+
+/* 💡 平貼在地面上的文字標籤樣式 */
+.ground-label {
+color: #4B5563;
+font-size: 13px;
+font-weight: 700;
+white-space: nowrap;
+user-select: none;
+background: rgba(255, 255, 255, 0.65);
+padding: 2px 8px;
+border-radius: 4px;
+border: 1px solid rgba(209, 213, 219, 0.6);
+box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+</style>
+
+<!-- 引入必要函式庫: Three.js, OrbitControls, CSS3DRenderer, SunCalc -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS3DRenderer.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.8.0/suncalc.min.js"></script>
+</head>
+<body>
+
+<div id="webgl-container"></div>
+<div id="css-container"></div>
+
+<!-- 操作 UI 控制面板 -->
+<div class="ui-panel">
+<h2>陰影戰術地圖 <span class="badge">荔枝角</span></h2>
+<div class="time-display" id="time-text">14:00</div>
+<input type="range" id="time-slider" min="6" max="19" step="0.1" value="14">
+<div class="info-row">
+<span>太陽仰角: <b id="altitude-text">0°</b></span>
+<span>方位角: <b id="azimuth-text">0°</b></span>
+</div>
+</div>
+
+<script>
+// --- 1. 初始化 WebGL & CSS3D 渲染器 ---
+const webglContainer = document.getElementById('webgl-container');
+const cssContainer = document.getElementById('css-container');
+
+// WebGL 渲染器 (負責 3D 大樓與柔和陰影)
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 高品質柔和陰影
+
+// 💡 韓系風格關鍵：影視級色調與低曝光度設定（避免白光過曝）
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.75;
+webglContainer.appendChild(renderer.domElement);
+
+// CSS3D 渲染器 (負責將 HTML 文字平貼在地面)
+const cssRenderer = new THREE.CSS3DRenderer();
+cssRenderer.setSize(window.innerWidth, window.innerHeight);
+cssContainer.appendChild(cssRenderer.domElement);
+
+// 建立場景與鏡頭
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#EAEAEA'); // 淡灰米色背景
+
+const cssScene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(60, 80, 100);
+
+// 鏡頭控制 (OrbitControls)
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI / 2 - 0.02; // 限制視角不能穿過地面
+controls.target.set(0, 0, 0);
+
+// --- 2. 光源系統 (韓系柔和日光 + 環境光) ---
+// 環境光：數值調高使陰影暗部保持軟和的灰調，不致死黑
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+scene.add(ambientLight);
+
+// 太陽光（平行光）
+const sunLight = new THREE.DirectionalLight(0xfffaed, 0.85);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.width = 2048;
+sunLight.shadow.mapSize.height = 2048;
+sunLight.shadow.camera.near = 10;
+sunLight.shadow.camera.far = 300;
+
+const d = 100;
+sunLight.shadow.camera.left = -d;
+sunLight.shadow.camera.right = d;
+sunLight.shadow.camera.top = d;
+sunLight.shadow.camera.bottom = -d;
+sunLight.shadow.bias = -0.0005; // 避免陰影出現條紋瑕疵
+
+scene.add(sunLight);
+
+// --- 3. 韓系極簡風格材質 ---
+const groundMaterial = new THREE.MeshStandardMaterial({
+color: 0xE5E7EB, // 馬路/地面淺灰色
+roughness: 0.95,
+metalness: 0.05
+});
+
+const buildingMaterial = new THREE.MeshStandardMaterial({
+color: 0xF3F4F6, // 建築牆體極淺灰白
+roughness: 0.85,
+metalness: 0.05
+});
+
+// --- 4. 建立 3D 地圖場景 (以荔枝角商業區為例) ---
+// 地面 Plane
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(250, 250), groundMaterial);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// 大樓建立函式
+function createBuilding(x, z, width, depth, height) {
+const geo = new THREE.BoxGeometry(width, height, depth);
+const mesh = new THREE.Mesh(geo, buildingMaterial);
+mesh.position.set(x, height / 2, z);
+mesh.castShadow = true;
+mesh.receiveShadow = true;
+scene.add(mesh);
+return mesh;
+}
+
+// 生成示範大樓群 (D2 Place, 億利, 長沙灣廣場等)
+createBuilding(-20, -15, 30, 25, 35); // D2 Place 一期
+createBuilding(25, -15, 35, 25, 45); // D2 Place 二期
+createBuilding(-20, 25, 28, 30, 40); // 億利工業中心
+createBuilding(25, 25, 32, 28, 50); // 長沙灣廣場
+
+// --- 5. 💡 平貼地面的文字標籤技術實作 ---
+function createGroundLabel(text, x, z) {
+const div = document.createElement('div');
+div.className = 'ground-label';
+div.textContent = text;
+
+const labelObject = new THREE.CSS3DObject(div);
+// 關鍵設定：將 X 軸旋轉 -90 度 (-Math.PI / 2)，使其完全躺平在地面
+labelObject.rotation.x = -Math.PI / 2;
+// Y 軸設為 0.08，略高於地面，防止與地面發生 Z-fighting 畫面閃爍
+labelObject.position.set(x, 0.08, z);
+
+cssScene.add(labelObject);
+return labelObject;
+}
+
+// 在地面上放置街名與大廈標籤
+createGroundLabel('長沙灣道 Cheung Sha Wan Rd', 0, 3);
+createGroundLabel('長順街 Cheung Shun St', 0, -32);
+createGroundLabel('D2 Place One', -20, -15);
+createGroundLabel('D2 Place Two', 25, -15);
+createGroundLabel('億利工業中心', -20, 25);
+createGroundLabel('長沙灣廣場', 25, 25);
+
+// --- 6. SunCalc 太陽方位與角度演算 ---
+const LAT = 22.3372; // 荔枝角緯度
+const LNG = 114.1480; // 荔枝角經度
+
+function updateSunPosition(decimalHour) {
+const now = new Date();
+const hours = Math.floor(decimalHour);
+const minutes = Math.floor((decimalHour - hours) * 60);
+now.setHours(hours, minutes, 0, 0);
+
+// 時間顯示格式化
+const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+document.getElementById('time-text').textContent = formattedTime;
+
+// 使用 SunCalc 計算實時太陽仰角與方位角
+const sunPos = SunCalc.getPosition(now, LAT, LNG);
+const altitude = sunPos.altitude; // 仰角 (Rad)
+const azimuth = sunPos.azimuth; // 方位角 (Rad)
+
+// 更新 UI 文字
+document.getElementById('altitude-text').textContent = `${(altitude * (180 / Math.PI)).toFixed(1)}°`;
+document.getElementById('azimuth-text').textContent = `${(azimuth * (180 / Math.PI)).toFixed(1)}°`;
+
+// 將天文角度轉換為 Three.js 3D 空間座標
+const radius = 150;
+const x = radius * Math.cos(altitude) * Math.sin(azimuth);
+const y = radius * Math.sin(altitude);
+const z = radius * Math.cos(altitude) * Math.cos(azimuth);
+
+sunLight.position.set(x, Math.max(y, 2), z);
+
+// 動態調控不同時間的光照強度
+if (altitude < 0) {
+sunLight.intensity = 0.05; // 夜間
+} else {
+sunLight.intensity = Math.min(0.85, Math.sin(altitude) * 1.2);
+}
+}
+
+// 滑桿監聽
+const timeSlider = document.getElementById('time-slider');
+timeSlider.addEventListener('input', (e) => {
+updateSunPosition(parseFloat(e.target.value));
+});
+
+// 預設載入下午 14:00 太陽角度
+updateSunPosition(14);
+
+// --- 7. 畫面縮放響應與 Render Loop ---
+window.addEventListener('resize', () => {
+camera.aspect = window.innerWidth / window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+cssRenderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// 動畫循環 (雙 Scene 同步渲染)
+function animate() {
+requestAnimationFrame(animate);
+controls.update();
+
+renderer.render(scene, camera);
+cssRenderer.render(cssScene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>
