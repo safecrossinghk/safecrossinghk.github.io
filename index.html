@@ -833,15 +833,10 @@ lon
 
 try {
 
-debug(
-"🌧️ 開始向 Worker 查詢 HKO + Tomorrow.io"
-);
-
-
 const response =
 await fetch(
 
-`${workerUrl}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
+`${workerUrl}?lat=${lat}&lon=${lon}`
 
 );
 
@@ -863,11 +858,6 @@ await response.json();
 console.log(
 "Worker API 回傳資料：",
 data
-);
-
-
-debug(
-"✅ Worker 已回傳資料"
 );
 
 
@@ -1014,71 +1004,66 @@ document.getElementById(
 9. Tomorrow.io AI 預報
 ===================================================== */
 
-if (
-data &&
-data.tomorrow
+async function fetchTomorrowAI(
+lat,
+lon
 ) {
 
+try {
+
+const url =
+`https://api.tomorrow.io/v4/weather/forecast` +
+`?location=${lat},${lon}` +
+`&timesteps=1h` +
+`&apikey=${TOMORROW_API_KEY}`;
+
+
+const response =
+await fetch(url);
+
+
+if (!response.ok) {
+
+throw new Error(
+"Tomorrow.io HTTP " +
+response.status
+);
+
+}
+
+
+const data =
+await response.json();
+
+
+console.log(
+"Tomorrow.io:",
+data
+);
+
+
 if (
-data.tomorrow.rainExpected
+!data.timelines ||
+!data.timelines.hourly
 ) {
-
-document.getElementById(
-"rainMsg"
-).innerText =
-data.tomorrow.message
-||
-"🌧 約六小時內可能有雨";
-
-}
-else {
-
-document.getElementById(
-"rainMsg"
-).innerText =
-"☀️ 未來六小時暫時無明顯降雨";
-
-}
-
-}
-else {
 
 document.getElementById(
 "rainMsg"
 ).innerText =
 "⚠️ AI 預報暫時不可用";
 
-}
 
-}
-catch (err) {
-
-console.error(
-"Worker 預報錯誤:",
-err
-);
-
-
-debug(
-"❌ Worker 查詢失敗: " +
-err.message
-);
-
-
-document.getElementById(
-"rain-alert"
-).innerText =
-"⚠️ 系統繁忙，請稍後再試";
-
-
-document.getElementById(
-"rainMsg"
-).innerText =
-"⚠️ AI 預報暫時不可用";
+return;
 
 }
 
-}
+
+const hourly =
+data.timelines.hourly;
+
+
+const currentHourData =
+hourly[0];
 
 
 /* ==========================================
@@ -1168,65 +1153,96 @@ pillTempEl.innerText =
 }
 
 
-/* =================================================
-Tomorrow.io
-================================================= */
+/* ==========================================
+六小時 AI 預測
+========================================== */
 
-if (
-data &&
-data.tomorrow
+const hours =
+hourly.slice(
+0,
+6
+);
+
+
+let msg =
+"☀️ 未來六小時暫時無明顯降雨";
+
+
+for (
+let i = 0;
+i < hours.length;
+i++
 ) {
 
-if (
-data.tomorrow.rainExpected
-) {
-
-document.getElementById(
-"rainMsg"
-).innerText =
-data.tomorrow.message
+const rain =
+hours[i]
+?.values
+?.rainIntensity
 ||
+0;
+
+
+if (
+rain >= 3
+) {
+
+if (
+i === 0
+) {
+
+msg =
+"🌧 一小時內可能有雨";
+
+}
+else if (
+i === 1
+) {
+
+msg =
+"🌧 一小時內可能有雨";
+
+}
+else if (
+i === 2
+) {
+
+msg =
+"🌧 兩小時內可能有雨";
+
+}
+else {
+
+msg =
 "🌧 約六小時內可能有雨";
 
 }
-else {
+
+
+break;
+
+}
+
+}
+
 
 document.getElementById(
 "rainMsg"
 ).innerText =
-"☀️ 未來六小時暫時無明顯降雨";
-
-}
-
-}
-else {
-
-document.getElementById(
-"rainMsg"
-).innerText =
-"⚠️ AI 預報暫時不可用";
-
-}
+msg;
 
 }
 catch (err) {
 
 console.error(
-"Worker 預報錯誤:",
+"Tomorrow.io 錯誤:",
 err
-);
-
-
-debug(
-"❌ Worker 查詢失敗: " +
-err.message
 );
 
 
 document.getElementById(
 "rainMsg"
 ).innerText =
-"⚠️ AI 預報暫時不可用";
+"⚠️ AI 預報讀取失敗";
 
 }
 
