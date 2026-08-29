@@ -160,10 +160,6 @@ border-radius: 5px;
 }
 
 
-/* =====================================================
-地圖右上角天氣膠囊
-===================================================== */
-
 .map-weather-pill {
 
 background: rgba(255,255,255,0.95);
@@ -237,10 +233,6 @@ object-fit: contain;
 }
 
 
-/* =====================================================
-Debug Box
-===================================================== */
-
 #debugBox {
 
 position: fixed;
@@ -282,7 +274,7 @@ PWA
 href="/manifest.json">
 
 <meta name="apple-mobile-web-app-capable"
-content="no">
+content="yes">
 
 <meta name="apple-mobile-web-app-status-bar-style"
 content="default">
@@ -323,27 +315,17 @@ async function(OneSignal) {
 try {
 
 console.log(
-"開始初始化 OneSignal"
+"========== OneSignal 初始化開始 =========="
 );
 
 
 await OneSignal.init({
 
-/*
-* 保留原有 App ID
-*/
-
 appId:
 "880241cd-cc45-4820-b5ec-a1236b0e3e98",
 
-
-/*
-* 保留原有 Safari Web ID
-*/
-
 safari_web_id:
 "web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98",
-
 
 notifyButton: {
 
@@ -358,7 +340,13 @@ window.oneSignalReady = true;
 
 
 console.log(
-"✅ OneSignal 初始化完成"
+"========== OneSignal 初始化完成 =========="
+);
+
+
+console.log(
+"Notification Permission:",
+OneSignal.Notifications.permission
 );
 
 
@@ -392,10 +380,6 @@ resolve(null);
 
 <body>
 
-
-<!-- =====================================================
-頁面
-===================================================== -->
 
 <h1>
 🌂 香港降雨預報
@@ -449,14 +433,14 @@ style="display:none;">
 
 
 <!-- =====================================================
-iOS 提示
+iOS Safari 提示
 ===================================================== -->
 
 <div id="iosPrompt"
 class="promptBox"
 style="display:none;">
 
-📱 如果你用 iPhone / iPad：
+📱 如果你使用 iPhone / iPad：
 <br>
 
 請先按 Safari 底部的
@@ -464,9 +448,12 @@ style="display:none;">
 按鈕
 <br>
 
-➜ 再揀
+➜ 再選擇
 <b>加入主畫面</b>
-才可收到推播通知。
+<br>
+
+加入主畫面後才可以使用 PWA 推播通知。
+
 <br>
 
 <button id="iosCloseBtn">
@@ -522,7 +509,6 @@ Tomorrow.io (AI 超前預測)
 </div>
 
 
-
 <!-- =====================================================
 Leaflet
 ===================================================== -->
@@ -530,7 +516,6 @@ Leaflet
 <script
 src="https://unpkg.com/leaflet/dist/leaflet.js">
 </script>
-
 
 
 <script>
@@ -541,22 +526,14 @@ src="https://unpkg.com/leaflet/dist/leaflet.js">
 
 
 /*
-* Cloudflare Worker
+* V4.2 Cloudflare Worker
+*
+* 注意：
+* HTML 不再直接呼叫 Tomorrow.io
 */
 
 const workerUrl =
 "https://crowdtest8r.ctakwah.workers.dev/";
-
-
-/*
-* 暫時按照你的要求：
-* Tomorrow.io 繼續直接由前端呼叫
-*
-* 第二階段才搬到 Worker Secret。
-*/
-
-const TOMORROW_API_KEY =
-"Eff94C5FCuRqlqWKPt0tXwHM1niZNEYh";
 
 
 let map = null;
@@ -565,12 +542,11 @@ let marker = null;
 
 
 /*
-* 0 = 沒有雨
-* 1 = 已經處於有雨狀態
+* 0 = 暫時無雨
+* 1 = 有雨
 */
 
 let rainStatus = 0;
-
 
 
 /* =====================================================
@@ -613,7 +589,9 @@ box.style.cssText =
 "text-align:left;";
 
 
-document.body.appendChild(box);
+document.body.appendChild(
+box
+);
 
 }
 
@@ -653,7 +631,6 @@ return false;
 };
 
 
-
 /* =====================================================
 4. Leaflet Weather Control
 ===================================================== */
@@ -663,7 +640,8 @@ L.Control.extend({
 
 options: {
 
-position: "topright"
+position:
+"topright"
 
 },
 
@@ -706,7 +684,6 @@ return div;
 }
 
 });
-
 
 
 /* =====================================================
@@ -770,7 +747,6 @@ L.marker(
 }
 
 
-
 /* =====================================================
 7. Tomorrow.io Weather Icon
 ===================================================== */
@@ -821,9 +797,124 @@ iconMap[code]
 }
 
 
+/* =====================================================
+8. 更新天氣膠囊
+===================================================== */
+
+function updateWeatherPill(
+data
+) {
+
+const pillTempEl =
+document.getElementById(
+"pill-temp"
+);
+
+
+const logoContainer =
+document.getElementById(
+"pill-logo"
+);
+
+
+/*
+* Tomorrow.io 溫度
+*/
+
+if (
+data &&
+data.tomorrow &&
+data.tomorrow.temperature
+!== undefined &&
+data.tomorrow.temperature
+!== null
+) {
+
+const temp =
+Math.round(
+data.tomorrow.temperature
+);
+
+
+pillTempEl.innerText =
+`${temp}°`;
+
+}
+
+
+/*
+* HKO Weather Icon
+*/
+
+if (
+data &&
+data.hko &&
+data.hko.weatherIcon
+) {
+
+const iconCode =
+data.hko.weatherIcon;
+
+
+const imgUrl =
+`https://www.hko.gov.hk/images/wxicon/pic${iconCode}.png`;
+
+
+const img =
+new Image();
+
+
+img.src =
+imgUrl;
+
+
+img.onload =
+function() {
+
+logoContainer.innerHTML =
+`<img src="${imgUrl}" alt="HKO Icon">`;
+
+};
+
+
+img.onerror =
+function() {
+
+if (
+data.tomorrow &&
+data.tomorrow.weatherCode
+!== undefined
+) {
+
+logoContainer.innerText =
+getWeatherIconByCode(
+data.tomorrow.weatherCode
+);
+
+}
+
+};
+
+}
+else if (
+data &&
+data.tomorrow &&
+data.tomorrow.weatherCode
+!== undefined
+) {
+
+logoContainer.innerText =
+getWeatherIconByCode(
+data.tomorrow.weatherCode
+);
+
+}
+
+}
+
 
 /* =====================================================
-8. HKO + Worker 查詢
+9. Worker 預報
 ===================================================== */
 
 async function fetchForecast(
@@ -833,10 +924,15 @@ lon
 
 try {
 
+debug(
+"🌧️ 開始向 Worker 查詢 HKO + Tomorrow.io"
+);
+
+
 const response =
 await fetch(
 
-`${workerUrl}?lat=${lat}&lon=${lon}`
+`${workerUrl}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
 
 );
 
@@ -861,78 +957,29 @@ data
 );
 
 
+debug(
+"✅ Worker 已回傳資料"
+);
+
+
+/*
+* 更新天氣膠囊
+*/
+
+updateWeatherPill(
+data
+);
+
+
+/* =================================================
+HKO
+================================================= */
+
 const alertDiv =
 document.getElementById(
 "rain-alert"
 );
 
-
-/* ==========================================
-HKO Weather Icon
-========================================== */
-
-const logoContainer =
-document.getElementById(
-"pill-logo"
-);
-
-
-if (
-data &&
-data.hko &&
-data.hko.weatherIcon
-) {
-
-const imgUrl =
-`https://www.hko.gov.hk/images/wxicon/pic${data.hko.weatherIcon}.png`;
-
-
-const imgCheck =
-new Image();
-
-
-imgCheck.src =
-imgUrl;
-
-
-imgCheck.onload =
-function() {
-
-logoContainer.innerHTML =
-`<img src="${imgUrl}" alt="HKO Icon">`;
-
-};
-
-
-imgCheck.onerror =
-function() {
-
-if (
-logoContainer.innerText
-===
-"⏳"
-) {
-
-logoContainer.innerText =
-(
-data.hko.immediateRain
-> 0.5
-)
-?
-"🌧️"
-:
-"☁️";
-
-}
-
-};
-
-}
-
-
-/* ==========================================
-HKO 雨量判斷
-========================================== */
 
 if (
 data &&
@@ -941,7 +988,8 @@ data.hko
 
 if (
 data.hko.immediateRain
-> 0.5
+>=
+0.5
 ) {
 
 alertDiv.innerText =
@@ -976,7 +1024,48 @@ rainStatus = 0;
 else {
 
 alertDiv.innerText =
-"⚠️ 系統繁忙，請稍後再試";
+"⚠️ HKO 資料暫時不可用";
+
+}
+
+
+/* =================================================
+Tomorrow.io
+================================================= */
+
+if (
+data &&
+data.tomorrow
+) {
+
+if (
+data.tomorrow.rainExpected
+) {
+
+document.getElementById(
+"rainMsg"
+).innerText =
+data.tomorrow.message
+||
+"🌧 約六小時內可能有雨";
+
+}
+else {
+
+document.getElementById(
+"rainMsg"
+).innerText =
+"☀️ 未來六小時暫時無明顯降雨";
+
+}
+
+}
+else {
+
+document.getElementById(
+"rainMsg"
+).innerText =
+"⚠️ AI 預報暫時不可用";
 
 }
 
@@ -984,8 +1073,14 @@ alertDiv.innerText =
 catch (err) {
 
 console.error(
-"讀取預報錯誤",
+"Worker 預報錯誤:",
 err
+);
+
+
+debug(
+"❌ Worker 查詢失敗: " +
+err.message
 );
 
 
@@ -994,260 +1089,15 @@ document.getElementById(
 ).innerText =
 "⚠️ 系統繁忙，請稍後再試";
 
-}
-
-}
-
-
-
-/* =====================================================
-9. Tomorrow.io AI 預報
-===================================================== */
-
-async function fetchTomorrowAI(
-lat,
-lon
-) {
-
-try {
-
-const url =
-`https://api.tomorrow.io/v4/weather/forecast` +
-`?location=${lat},${lon}` +
-`&timesteps=1h` +
-`&apikey=${TOMORROW_API_KEY}`;
-
-
-const response =
-await fetch(url);
-
-
-if (!response.ok) {
-
-throw new Error(
-"Tomorrow.io HTTP " +
-response.status
-);
-
-}
-
-
-const data =
-await response.json();
-
-
-console.log(
-"Tomorrow.io:",
-data
-);
-
-
-if (
-!data.timelines ||
-!data.timelines.hourly
-) {
 
 document.getElementById(
 "rainMsg"
 ).innerText =
 "⚠️ AI 預報暫時不可用";
 
-
-return;
-
-}
-
-
-const hourly =
-data.timelines.hourly;
-
-
-const currentHourData =
-hourly[0];
-
-
-/* ==========================================
-實時天氣圖標
-========================================== */
-
-if (
-currentHourData &&
-currentHourData.values &&
-currentHourData.values.weatherCode
-!==
-undefined
-) {
-
-const code =
-currentHourData
-.values
-.weatherCode;
-
-
-const logoContainer =
-document.getElementById(
-"pill-logo"
-);
-
-
-/*
-* 如果 HKO 圖片未成功載入，
-* 才使用 Tomorrow.io icon
-*/
-
-if (
-logoContainer
-.getElementsByTagName(
-"img"
-)
-.length
-===
-0
-) {
-
-logoContainer.innerText =
-getWeatherIconByCode(
-code
-);
-
 }
 
 }
-
-
-/* ==========================================
-溫度
-========================================== */
-
-const pillTempEl =
-document.getElementById(
-"pill-temp"
-);
-
-
-if (
-(
-pillTempEl.innerText
-===
-"--°"
-)
-&&
-currentHourData &&
-currentHourData.values &&
-currentHourData.values.temperature
-!==
-undefined
-) {
-
-const currentTemp =
-Math.round(
-currentHourData
-.values
-.temperature
-);
-
-
-pillTempEl.innerText =
-`${currentTemp}°`;
-
-}
-
-
-/* ==========================================
-六小時 AI 預測
-========================================== */
-
-const hours =
-hourly.slice(
-0,
-6
-);
-
-
-let msg =
-"☀️ 未來六小時暫時無明顯降雨";
-
-
-for (
-let i = 0;
-i < hours.length;
-i++
-) {
-
-const rain =
-hours[i]
-?.values
-?.rainIntensity
-||
-0;
-
-
-if (
-rain >= 3
-) {
-
-if (
-i === 0
-) {
-
-msg =
-"🌧 一小時內可能有雨";
-
-}
-else if (
-i === 1
-) {
-
-msg =
-"🌧 一小時內可能有雨";
-
-}
-else if (
-i === 2
-) {
-
-msg =
-"🌧 兩小時內可能有雨";
-
-}
-else {
-
-msg =
-"🌧 約六小時內可能有雨";
-
-}
-
-
-break;
-
-}
-
-}
-
-
-document.getElementById(
-"rainMsg"
-).innerText =
-msg;
-
-}
-catch (err) {
-
-console.error(
-"Tomorrow.io 錯誤:",
-err
-);
-
-
-document.getElementById(
-"rainMsg"
-).innerText =
-"⚠️ AI 預報讀取失敗";
-
-}
-
-}
-
 
 
 /* =====================================================
@@ -1285,7 +1135,6 @@ err
 }
 
 
-
 /* =====================================================
 11. registerLocation
 ===================================================== */
@@ -1297,6 +1146,11 @@ lon
 ) {
 
 try {
+
+debug(
+"📍 正在向 Worker 登記位置"
+);
+
 
 const res =
 await fetch(
@@ -1335,6 +1189,16 @@ lon
 );
 
 
+if (!res.ok) {
+
+throw new Error(
+"registerLocation HTTP " +
+res.status
+);
+
+}
+
+
 const result =
 await res.json();
 
@@ -1345,6 +1209,23 @@ result
 );
 
 
+if (
+result.success
+) {
+
+debug(
+"✅ 位置已登記到 Worker"
+);
+
+}
+else {
+
+debug(
+"❌ Worker 登記位置失敗"
+);
+
+}
+
 }
 catch (err) {
 
@@ -1353,23 +1234,24 @@ console.error(
 err
 );
 
-}
+
+debug(
+"❌ registerLocation 失敗: " +
+err.message
+);
 
 }
 
+}
 
 
 /* =====================================================
-12. 取得 OneSignal Player ID
+12. 取得 OneSignal Subscription ID
 ===================================================== */
 
 async function getOneSignalPlayerId() {
 
 try {
-
-/*
-* 等待 OneSignal 初始化
-*/
 
 const OneSignal =
 await window.oneSignalInitPromise;
@@ -1381,15 +1263,10 @@ console.warn(
 "⚠️ OneSignal 尚未可用"
 );
 
-
 return null;
 
 }
 
-
-/*
-* v16 API
-*/
 
 const playerId =
 OneSignal
@@ -1399,7 +1276,7 @@ OneSignal
 
 
 console.log(
-"OneSignal Player ID:",
+"OneSignal Subscription ID:",
 playerId
 );
 
@@ -1410,7 +1287,7 @@ return playerId || null;
 catch (err) {
 
 console.error(
-"取得 OneSignal Player ID 失敗:",
+"取得 OneSignal Subscription ID 失敗:",
 err
 );
 
@@ -1419,12 +1296,65 @@ return null;
 
 }
 
+
+/* =====================================================
+13. 等待 OneSignal Subscription
+===================================================== */
+
+async function waitForOneSignalSubscription(
+OneSignal,
+maxSeconds = 15
+) {
+
+for (
+let i = 0;
+i < maxSeconds;
+i++
+) {
+
+const playerId =
+OneSignal
+.User
+.PushSubscription
+.id;
+
+
+if (playerId) {
+
+console.log(
+"✅ OneSignal Subscription ID 已取得:",
+playerId
+);
+
+
+return playerId;
+
 }
 
 
+await new Promise(
+resolve =>
+setTimeout(
+resolve,
+1000
+)
+);
+
+}
+
+
+console.warn(
+"⚠️ 等待 OneSignal Subscription 超時"
+);
+
+
+return null;
+
+}
+
 
 /* =====================================================
-13. 定位
+14. 定位
 ===================================================== */
 
 async function initLocation() {
@@ -1475,12 +1405,6 @@ fallbackLon
 );
 
 
-fetchTomorrowAI(
-fallbackLat,
-fallbackLon
-);
-
-
 resolve();
 
 return;
@@ -1512,13 +1436,24 @@ lon
 );
 
 
-/* ==================================
+debug(
+"📍 定位成功: " +
+lat +
+" , " +
+lon
+);
+
+
+/* =========================================
 第一部分：
-先更新畫面
-================================== */
+立即取得 Worker 預報
+========================================= */
 
 map.setView(
-[lat,lon],
+[
+lat,
+lon
+],
 13
 );
 
@@ -1529,33 +1464,19 @@ lon
 );
 
 
-/*
-* HKO
-*/
-
 fetchForecast(
 lat,
 lon
 );
 
 
-/*
-* Tomorrow.io
-*/
-
-fetchTomorrowAI(
-lat,
-lon
-);
-
-
-/* ==================================
+/* =========================================
 第二部分：
-OneSignal
-================================== */
+檢查 OneSignal
+========================================= */
 
 console.log(
-"===== 準備取得 OneSignal Player ID ====="
+"===== 準備檢查 OneSignal ====="
 );
 
 
@@ -1563,18 +1484,15 @@ const playerId =
 await getOneSignalPlayerId();
 
 
-if (!playerId) {
+if (playerId) {
 
 console.log(
-"⚠️ 暫時沒有 Player ID"
+"✅ 已有 OneSignal Subscription"
 );
 
-}
-else {
 
-console.log(
-"✅ Player ID:",
-playerId
+debug(
+"🔔 OneSignal 已訂閱"
 );
 
 
@@ -1582,6 +1500,18 @@ await registerLocation(
 playerId,
 lat,
 lon
+);
+
+}
+else {
+
+console.log(
+"ℹ️ 目前沒有 OneSignal Subscription"
+);
+
+
+debug(
+"🔔 尚未訂閱推播"
 );
 
 }
@@ -1597,6 +1527,11 @@ function(err) {
 console.warn(
 "⚠️ 定位失敗，使用預設位置",
 err
+);
+
+
+debug(
+"⚠️ 定位失敗，使用預設位置"
 );
 
 
@@ -1629,12 +1564,6 @@ fallbackLon
 );
 
 
-fetchTomorrowAI(
-fallbackLat,
-fallbackLon
-);
-
-
 resolve();
 
 },
@@ -1662,21 +1591,40 @@ maximumAge:
 }
 
 
-
 /* =====================================================
-14. iOS PWA 提示
+15. iOS Safari / PWA 判斷
 ===================================================== */
 
-function showIosPromptOnce() {
+function isIOSDevice() {
 
-const isIOS =
-/iPhone|iPad|iPod/i
+return /iPhone|iPad|iPod/i
 .test(
 navigator.userAgent
 );
 
+}
 
-if (!isIOS) {
+
+function isStandalonePWA() {
+
+return (
+window.navigator.standalone === true
+||
+window.matchMedia(
+"(display-mode: standalone)"
+).matches
+);
+
+}
+
+
+/* =====================================================
+16. iOS 提示
+===================================================== */
+
+function showIosPromptOnce() {
+
+if (!isIOSDevice()) {
 
 return;
 
@@ -1684,26 +1632,12 @@ return;
 
 
 /*
-* 判斷是否已經是 PWA
-*/
-
-const isStandalone =
-window.navigator.standalone
-===
-true
-||
-window.matchMedia(
-"(display-mode: standalone)"
-).matches;
-
-
-/*
-* 如果已經在主畫面開啟，
-* 不再顯示提示。
+* 如果已經是 PWA
+* 不再顯示「加入主畫面」提示
 */
 
 if (
-isStandalone
+isStandalonePWA()
 ) {
 
 return;
@@ -1712,14 +1646,30 @@ return;
 
 
 if (
-!localStorage.getItem(
+localStorage.getItem(
 "iosPromptShown"
 )
 ) {
 
+return;
+
+}
+
+
+const prompt =
 document.getElementById(
 "iosPrompt"
-).style.display =
+);
+
+
+if (!prompt) {
+
+return;
+
+}
+
+
+prompt.style.display =
 "block";
 
 
@@ -1728,9 +1678,7 @@ document.getElementById(
 ).onclick =
 function() {
 
-document.getElementById(
-"iosPrompt"
-).style.display =
+prompt.style.display =
 "none";
 
 
@@ -1743,49 +1691,12 @@ localStorage.setItem(
 
 }
 
-}
-
-
 
 /* =====================================================
-15. OneSignal 自訂訂閱提示
+17. OneSignal 訂閱狀態檢查
 ===================================================== */
 
-async function showCustomPrompt() {
-
-/*
-* 已經處理過就不再顯示
-*/
-
-if (
-localStorage.getItem(
-"subscribedToRainAlert"
-)
-) {
-
-return;
-
-}
-
-
-const prompt =
-document.getElementById(
-"customPrompt"
-);
-
-
-prompt.style.display =
-"block";
-
-
-/* ================================================
-訂閱
-================================================ */
-
-document.getElementById(
-"subscribeBtn"
-).onclick =
-async function() {
+async function checkSubscriptionState() {
 
 try {
 
@@ -1795,10 +1706,81 @@ await window.oneSignalInitPromise;
 
 if (!OneSignal) {
 
-alert(
-"⚠️ OneSignal 尚未準備完成，請稍後再試。"
+return null;
+
+}
+
+
+const playerId =
+OneSignal
+.User
+.PushSubscription
+.id;
+
+
+const permission =
+OneSignal
+.Notifications
+.permission;
+
+
+console.log(
+"OneSignal permission:",
+permission
 );
 
+
+console.log(
+"OneSignal Subscription ID:",
+playerId
+);
+
+
+if (playerId) {
+
+debug(
+"🔔 OneSignal Subscription ID 已存在"
+);
+
+}
+else {
+
+debug(
+"🔔 OneSignal 尚未有 Subscription ID"
+);
+
+}
+
+
+return playerId || null;
+
+}
+catch (err) {
+
+console.error(
+"檢查 OneSignal 訂閱狀態失敗:",
+err
+);
+
+
+return null;
+
+}
+
+
+/* =====================================================
+18. OneSignal 自訂訂閱提示
+===================================================== */
+
+async function showCustomPrompt() {
+
+const prompt =
+document.getElementById(
+"customPrompt"
+);
+
+
+if (!prompt) {
 
 return;
 
@@ -1806,10 +1788,99 @@ return;
 
 
 /*
-* OneSignal v16
-*
-* 由 SDK 顯示原生通知授權提示
+* 如果已經有 Subscription ID，
+* 不需要顯示訂閱提示
 */
+
+const existingPlayerId =
+await checkSubscriptionState();
+
+
+if (existingPlayerId) {
+
+prompt.style.display =
+"none";
+
+return;
+
+}
+
+
+/*
+* iOS 非 PWA：
+* 提示先加入主畫面
+*/
+
+if (
+isIOSDevice()
+&&
+!isStandalonePWA()
+) {
+
+prompt.style.display =
+"none";
+
+return;
+
+}
+
+
+/*
+* 顯示自訂訂閱提示
+*/
+
+prompt.style.display =
+"block";
+
+
+/* =================================================
+訂閱按鈕
+================================================= */
+
+document.getElementById(
+"subscribeBtn"
+).onclick =
+async function() {
+
+const button =
+document.getElementById(
+"subscribeBtn"
+);
+
+
+try {
+
+button.disabled =
+true;
+
+
+button.innerText =
+"正在訂閱...";
+
+
+const OneSignal =
+await window.oneSignalInitPromise;
+
+
+if (!OneSignal) {
+
+throw new Error(
+"OneSignal 尚未準備完成"
+);
+
+}
+
+
+/*
+* iOS PWA / Android / Chrome
+*
+* 要求通知權限
+*/
+
+console.log(
+"===== 開始要求通知權限 ====="
+);
+
 
 await OneSignal
 .Notifications
@@ -1817,49 +1888,67 @@ await OneSignal
 
 
 console.log(
-"✅ 已要求通知權限"
+"Notification Permission:",
+OneSignal
+.Notifications
+.permission
 );
 
 
 /*
-* 等待 Push Subscription
+* 如果使用者拒絕
 */
 
-let playerId =
-null;
-
-
-for (
-let i = 0;
-i < 10;
-i++
-) {
-
-playerId =
-OneSignal
-.User
-.PushSubscription
-.id;
-
-
 if (
-playerId
+OneSignal
+.Notifications
+.permission
+!==
+true
 ) {
 
-break;
-
-}
-
-
-await new Promise(
-r =>
-setTimeout(
-r,
-1000
-)
+throw new Error(
+"通知權限未獲得"
 );
 
 }
+
+
+/*
+* 明確要求 Push Subscription Opt In
+*/
+
+try {
+
+await OneSignal
+.User
+.PushSubscription
+.optIn();
+
+console.log(
+"✅ PushSubscription optIn 完成"
+);
+
+}
+catch (optInError) {
+
+console.warn(
+"PushSubscription optIn:",
+optInError
+);
+
+}
+
+
+/*
+* 等待 Subscription ID
+*/
+
+const playerId =
+await waitForOneSignalSubscription(
+OneSignal,
+15
+);
 
 
 console.log(
@@ -1868,54 +1957,80 @@ playerId
 );
 
 
+if (!playerId) {
+
+throw new Error(
+"訂閱成功但尚未取得 Subscription ID"
+);
+
+}
+
+
 /*
-* 記錄狀態
+* 訂閱真正成功
 */
 
-if (
-playerId
-) {
-
-localStorage.setItem(
-"subscribedToRainAlert",
-"1"
+debug(
+"🔔 OneSignal 訂閱成功"
 );
 
 
 /*
-* 如果已經取得定位，
-* 再將位置註冊到 Worker
+* 再取得定位
 */
 
 if (
 navigator.geolocation
 ) {
 
-navigator.geolocation
-.getCurrentPosition(
-function(pos) {
+navigator.geolocation.getCurrentPosition(
 
-registerLocation(
+async function(pos) {
 
+const lat =
+pos.coords.latitude;
+
+
+const lon =
+pos.coords.longitude;
+
+
+await registerLocation(
 playerId,
+lat,
+lon
+);
 
-pos.coords.latitude,
+},
 
-pos.coords.longitude
+function(err) {
+
+console.warn(
+"訂閱後取得定位失敗:",
+err
+);
+
+}
 
 );
 
 }
-);
 
-}
 
-}
-
+/*
+* 成功後才關閉提示
+*/
 
 prompt.style.display =
 "none";
 
+
+button.disabled =
+false;
+
+
+button.innerText =
+"訂閱通知";
 
 }
 catch (err) {
@@ -1926,18 +2041,33 @@ err
 );
 
 
-alert(
-"⚠️ 通知訂閱暫時未完成，請稍後再試。"
+debug(
+"❌ OneSignal 訂閱失敗: " +
+err.message
 );
+
+
+alert(
+"⚠️ 通知訂閱暫時未完成。\n\n" +
+"請確認已允許通知權限，然後再試一次。"
+);
+
+
+button.disabled =
+false;
+
+
+button.innerText =
+"重新訂閱";
 
 }
 
 };
 
 
-/* ================================================
+/* =================================================
 稍後再說
-================================================ */
+================================================= */
 
 document.getElementById(
 "closeCustomBtn"
@@ -1952,9 +2082,8 @@ prompt.style.display =
 }
 
 
-
 /* =====================================================
-16. 頁面 Load
+19. 頁面 Load
 ===================================================== */
 
 window.addEventListener(
@@ -1966,10 +2095,6 @@ debug(
 );
 
 
-/* ============================================
-地圖
-============================================ */
-
 initMap();
 
 
@@ -1978,9 +2103,11 @@ debug(
 );
 
 
-/* ============================================
-定位
-============================================ */
+/*
+* 先定位
+*
+* 不等待 OneSignal
+*/
 
 await initLocation();
 
@@ -1990,34 +2117,31 @@ debug(
 );
 
 
-/* ============================================
-iOS 提示
-============================================ */
+/*
+* iOS Safari 顯示加入主畫面提示
+*/
 
 showIosPromptOnce();
 
 
 /*
-* 不立即強制跳 OneSignal，
-* 稍後顯示自訂提示。
+* 等 OneSignal 自己完成初始化
 *
-* 讓使用者先看到網站。
+* 然後再檢查是否已經訂閱
 */
 
 setTimeout(
-function() {
+async function() {
 
-showCustomPrompt();
+await showCustomPrompt();
 
 },
 1500
 );
 
-}
-);
+});
 
 </script>
-
 
 </body>
 
