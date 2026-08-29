@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#f0f8ff">
-  <title>香港降雨預報</title>
+  <title>🌧️ 香港降雨預報</title>
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
@@ -172,16 +172,16 @@
 
 <body>
 
-  <h1>香港降雨預報</h1>
+  <h1>🌂 香港降雨預報</h1>
 
   <div id="map"></div>
 
   <div id="ai-forecast">
-    <strong>AI 超前預測</strong>
-    <div id="rainMsg">正在載入...</div>
+    <strong>🧠 AI 超前預測</strong>
+    <div id="rainMsg">⏳ 正在載入...</div>
   </div>
 
-  <div id="rain-alert">正在讀取預報資料...</div>
+  <div id="rain-alert">⏳ 正在讀取預報資料...</div>
 
   <!-- OneSignal 訂閱提示 -->
   <div id="customPrompt" class="promptBox" style="display:none;">
@@ -342,17 +342,17 @@
         const alertDiv = document.getElementById("rain-alert");
         if (data && data.hko) {
           if (data.hko.immediateRain >= 0.5) {
-            alertDiv.innerText = "你所在的位置將會有雨";
+            alertDiv.innerText = "⚠️ 你所在的位置將會有雨";
             if (rainStatus === 0) {
-              speak("你所在的位置將會有雨");
+              speak("⚠️ 你所在的位置將會有雨");
               rainStatus = 1;
             }
           } else {
-            alertDiv.innerText = "你所在的位置暫時無雨";
+            alertDiv.innerText = "☁️ 你所在的位置暫時無雨";
             rainStatus = 0;
           }
         } else {
-          alertDiv.innerText = "HKO 資料暫時不可用";
+          alertDiv.innerText = "⚠️ 系統繁忙，請稍後再試";
         }
 
         if (data && data.tomorrow) {
@@ -362,13 +362,13 @@
             document.getElementById("rainMsg").innerText = "未來六小時暫時無明顯降雨";
           }
         } else {
-          document.getElementById("rainMsg").innerText = "AI 預報暫時不可用";
+          document.getElementById("rainMsg").innerText = "⚠️ 系統繁忙，請稍後再試";
         }
       } catch (err) {
         console.error("Worker 預報錯誤:", err);
         debug("Worker 查詢失敗: " + err.message);
-        document.getElementById("rain-alert").innerText = "系統繁忙，請稍後再試";
-        document.getElementById("rainMsg").innerText = "AI 預報暫時不可用";
+        document.getElementById("rain-alert").innerText = "⚠️ 系統繁忙，請稍後再試";
+        document.getElementById("rainMsg").innerText = "⚠️ 系統繁忙，請稍後再試";
       }
     }
 
