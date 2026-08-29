@@ -2117,23 +2117,24 @@ debug(
 );
 
 
-/*
-* iOS Safari 顯示加入主畫面提示
-*/
+/* ============================================
+iOS 提示
+============================================ */
 
 showIosPromptOnce();
 
 
 /*
-* 等 OneSignal 自己完成初始化
+* 不立即強制跳 OneSignal，
+* 稍後顯示自訂提示。
 *
-* 然後再檢查是否已經訂閱
+* 讓使用者先看到網站。
 */
 
 setTimeout(
-async function() {
+function() {
 
-await showCustomPrompt();
+showCustomPrompt();
 
 },
 1500
@@ -2143,6 +2144,7 @@ await showCustomPrompt();
 );
 
 </script>
+
 
 </body>
 
