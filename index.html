@@ -166,10 +166,10 @@ display: none !important;
 
   <div id="ai-forecast">
     <strong>🧠 AI 超前預測</strong>
-    <div id="rainMsg">⏳ 正在載入...</div>
+    <div id="rainMsg">正在載入...</div>
   </div>
 
-  <div id="rain-alert">⏳ 正在讀取預報資料...</div>
+  <div id="rain-alert">正在讀取預報資料...</div>
 
   <!-- OneSignal 訂閱提示 -->
   <div id="customPrompt" class="promptBox" style="display:none;">
@@ -239,26 +239,17 @@ display: none !important;
     4. Leaflet Weather Control
     ===================================================== */
     const WeatherControl = L.Control.extend({
-options: { position: 'topright' },
-onAdd: function(map) {
-const div = L.DomUtil.create('div', 'map-weather-pill');
-div.innerHTML = `
-<span class="pill-temp" id="pill-temp">--°</span>
-<span class="pill-logo" id="pill-logo">⏳</span>
-`;
-L.DomEvent.disableClickPropagation(div);
-return div;
-}
-});
-map.addControl(new WeatherControl());
-
-let marker;
-let rainStatus = 0; // 0 = 無雨，1 = 已推送過
-
-function setMarker(lat, lon) {
-if (marker) map.removeLayer(marker);
-marker = L.marker([lat, lon]).addTo(map);
-}
+      options: { position: "topright" },
+      onAdd: function(map) {
+        const div = L.DomUtil.create("div", "map-weather-pill");
+        div.innerHTML = `
+          <span class="pill-temp" id="pill-temp">--°</span>
+          <span class="pill-logo" id="pill-logo"></span>
+        `;
+        L.DomEvent.disableClickPropagation(div);
+        return div;
+      }
+    });
 
     /* =====================================================
     5. 初始化地圖
