@@ -274,13 +274,24 @@ display: none !important;
     7. Tomorrow.io Weather Icon
     ===================================================== */
     function getWeatherIconByCode(code) {
-      const iconMap = {
-        0: "", 1000: "", 1100: "", 1101: "", 1102: "", 1001: "",
-        2000: "", 2100: "", 4000: "", 4001: "", 4200: "", 4201: "",
-        5000: "", 8000: ""
-      };
-      return (iconMap[code] || "");
-    }
+const iconMap = {
+0: "☀️", // Unknown -> 晴
+1000: "☀️", // Clear, Sunny
+1100: "🌤️", // Mostly Clear
+1101: "⛅", // Partly Cloudy
+1102: "🌥️", // Mostly Cloudy
+1001: "☁️", // Cloudy
+2000: "🌫️", // Fog
+2100: "🌫️", // Light Fog
+4000: "🌧️", // Drizzle
+4001: "🌧️", // Rain
+4200: "🌧️", // Light Rain
+4201: "🌧️", // Heavy Rain
+5000: "🌨️", // Snow
+8000: "⛈️" // Thunderstorm
+};
+return iconMap[code] || "🌤️";
+}
 
     /* =====================================================
     8. 更新天氣膠囊
