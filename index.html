@@ -239,17 +239,26 @@ display: none !important;
     4. Leaflet Weather Control
     ===================================================== */
     const WeatherControl = L.Control.extend({
-      options: { position: "topright" },
-      onAdd: function(map) {
-        const div = L.DomUtil.create("div", "map-weather-pill");
-        div.innerHTML = `
-          <span class="pill-temp" id="pill-temp">--°</span>
-          <span class="pill-logo" id="pill-logo"></span>
-        `;
-        L.DomEvent.disableClickPropagation(div);
-        return div;
-      }
-    });
+options: { position: 'topright' },
+onAdd: function(map) {
+const div = L.DomUtil.create('div', 'map-weather-pill');
+div.innerHTML = `
+<span class="pill-temp" id="pill-temp">--°</span>
+<span class="pill-logo" id="pill-logo">⏳</span>
+`;
+L.DomEvent.disableClickPropagation(div);
+return div;
+}
+});
+map.addControl(new WeatherControl());
+
+let marker;
+let rainStatus = 0; // 0 = 無雨，1 = 已推送過
+
+function setMarker(lat, lon) {
+if (marker) map.removeLayer(marker);
+marker = L.marker([lat, lon]).addTo(map);
+}
 
     /* =====================================================
     5. 初始化地圖
@@ -274,13 +283,24 @@ display: none !important;
     7. Tomorrow.io Weather Icon
     ===================================================== */
     function getWeatherIconByCode(code) {
-      const iconMap = {
-        0: "", 1000: "", 1100: "", 1101: "", 1102: "", 1001: "",
-        2000: "", 2100: "", 4000: "", 4001: "", 4200: "", 4201: "",
-        5000: "", 8000: ""
-      };
-      return (iconMap[code] || "");
-    }
+const iconMap = {
+0: "☀️", // Unknown -> 晴
+1000: "☀️", // Clear, Sunny
+1100: "🌤️", // Mostly Clear
+1101: "⛅", // Partly Cloudy
+1102: "🌥️", // Mostly Cloudy
+1001: "☁️", // Cloudy
+2000: "🌫️", // Fog
+2100: "🌫️", // Light Fog
+4000: "🌧️", // Drizzle
+4001: "🌧️", // Rain
+4200: "🌧️", // Light Rain
+4201: "🌧️", // Heavy Rain
+5000: "🌨️", // Snow
+8000: "⛈️" // Thunderstorm
+};
+return iconMap[code] || "🌤️";
+}
 
     /* =====================================================
     8. 更新天氣膠囊
