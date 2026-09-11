@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>中秋賞月天氣預報</title>
+<!-- 引入 SunCalc 用於計算月相與月出時間 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+<style>
+body { background-color: #0b1d3a; color: #fff; font-family: sans-serif; text-align: center; padding: 2rem; }
+.card { background: rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; max-width: 400px; margin: 0 auto; backdrop-filter: blur(10px); }
+.score { font-size: 3rem; color: #f39c12; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="card">
+<h2 id="location">📍 載入位置中...</h2>
+<div class="score" id="score">-- 分</div>
+<p id="status-text">正在分析賞月條件...</p>
+<hr style="border-color: rgba(255,255,255,0.2);">
+<p>☁️ 總雲量：<span id="cloud">--</span>%</p>
+<p>🌕 月亮光照度：<span id="moon-fraction">--</span>%</p>
+<p>🌙 今日月出時間：<span id="moonrise">--:--</span></p>
+</div>
+
+<script>
+async function getMoonForecast(lat, lon) {
+try {
+// 1. 呼叫 Open-Meteo 免費天氣 API
+const response = await fetch(
+`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=cloudcover,precipitation`
+);
+const data = await response.json();
+
+// 取得當前雲量 %
+const currentHour = new Date().getHours();
+const cloudCover = data.hourly.cloudcover[currentHour] || 0;
+const precipitation = data.hourly.precipitation[currentHour] || 0;
+
+// 2. 使用 SunCalc 計算月相與月出時間
+const now = new Date();
+const moonIllum = SunCalc.getMoonIllumination(now);
+const moonTimes = SunCalc.getMoonTimes(now, lat, lon);
+
+// 3. 計算賞月指數 (0 - 100)
+let score = 100 - cloudCover;
+if (precipitation > 0) score -= 50; // 有雨扣大分
+score = Math.max(0, Math.min(100, Math.round(score)));
+
+// 4. 更新 UI
+document.getElementById('location').innerText = `📍 當前位置賞月預報`;
+document.getElementById('score').innerText = `${score} 分`;
+document.getElementById('cloud').innerText = cloudCover;
+document.getElementById('moon-fraction').innerText = Math.round(moonIllum.fraction * 100);
+
+const moonriseStr = moonTimes.moonrise
+? moonTimes.moonrise.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+: "已升起 / 今日無";
+document.getElementById('moonrise').innerText = moonriseStr;
+
+// 文案建議
+let advice = "";
+if (score >= 80) advice = "🌕 皓月當空，非常適合肉眼賞月與拍照！";
+else if (score >= 50) advice = "⛅ 彩雲追月，月亮時隱時現，需要稍微等待。";
+else advice = "🌧️ 雲層較厚或有雨，建議開啟線上賞月模式。";
+document.getElementById('status-text').innerText = advice;
+
+} catch (err) {
+console.error("數據獲取失敗:", err);
+document.getElementById('status-text').innerText = "無法獲取天氣數據，請稍後再試。";
+}
+}
+
+// 自動獲取使用者位置 (預設設為香港維港座標)
+if (navigator.geolocation) {
+navigator.geolocation.getCurrentPosition(
+(pos) => getMoonForecast(pos.coords.latitude, pos.coords.longitude),
+() => getMoonForecast(22.2988, 114.1722) // 拒絕授權時的 fallback
+);
+} else {
+getMoonForecast(22.2988, 114.1722);
+}
+</script>
+</body>
+</html>
