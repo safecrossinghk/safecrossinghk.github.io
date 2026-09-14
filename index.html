@@ -33,111 +33,113 @@ defer>
 </script>
 
 <style>
-    body {
-      font-family: "Helvetica Neue", sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f0f8ff;
-      color: #333;
-      text-align: center;
-    }
 
-    h1 {
-      font-size: 1.4em;
-      margin: 1em 0 0.5em;
-    }
+body {
+font-family: "Helvetica Neue", sans-serif;
+margin: 0;
+padding: 0;
+background: #f0f8ff;
+color: #333;
+text-align: center;
+}
 
-    #map {
-      height: 300px;
-      margin: 0 10px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      position: relative;
-    }
+h1 {
+font-size: 1.4em;
+margin: 1em 0 0.5em;
+}
 
-    #ai-forecast {
-      margin: 1em;
-      padding: 1em;
-      border: 2px solid #0077cc;
-      border-radius: 8px;
-      background: #fff;
-      text-align: left;
-    }
+#map {
+height: 300px;
+margin: 0 10px;
+border-radius: 8px;
+border: 1px solid #ccc;
+position: relative;
+}
 
-    #rain-alert {
-      margin: 1em;
-      font-size: 1.2em;
-      font-weight: bold;
-      line-height: 1.8em;
-      white-space: pre-line;
-    }
+#ai-forecast {
+margin: 1em;
+padding: 1em;
+border: 2px solid #0077cc;
+border-radius: 8px;
+background: #fff;
+text-align: left;
+}
 
-    #footer-text {
-      margin: 1.5em;
-      font-size: 0.9em;
-      color: #555;
-      line-height: 1.6em;
-    }
+#rain-alert {
+margin: 1em;
+font-size: 1.2em;
+font-weight: bold;
+line-height: 1.8em;
+white-space: pre-line;
+}
 
-    .promptBox {
-      position: fixed;
-      bottom: 20px;
-      left: 10%;
-      right: 10%;
-      background: #fff3cd;
-      color: #333;
-      border: 1px solid #ffeeba;
-      padding: 15px;
-      border-radius: 10px;
-      font-size: 0.95em;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      z-index: 9999;
-    }
+#footer-text {
+margin: 1.5em;
+font-size: 0.9em;
+color: #555;
+line-height: 1.6em;
+}
 
-    .promptBox button {
-      margin-top: 10px;
-      padding: 6px 12px;
-      background: #0077cc;
-      color: white;
-      border: none;
-      border-radius: 5px;
-    }
+.promptBox {
+position: fixed;
+bottom: 20px;
+left: 10%;
+right: 10%;
+background: #fff3cd;
+color: #333;
+border: 1px solid #ffeeba;
+padding: 15px;
+border-radius: 10px;
+font-size: 0.95em;
+box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+z-index: 9999;
+}
 
-    .map-weather-pill {
-      background: rgba(255,255,255,0.95);
-      border: 1px solid rgba(0,0,0,0.15);
-      border-radius: 30px;
-      padding: 5px 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      pointer-events: auto;
-      margin-top: 10px !important;
-      margin-right: 10px !important;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
+.promptBox button {
+margin-top: 10px;
+padding: 6px 12px;
+background: #0077cc;
+color: white;
+border: none;
+border-radius: 5px;
+}
 
-    .pill-temp {
-      font-size: 15px;
-      font-weight: bold;
-      color: #111;
-    }
+.map-weather-pill {
+background: rgba(255,255,255,0.95);
+border: 1px solid rgba(0,0,0,0.15);
+border-radius: 30px;
+padding: 5px 12px;
+box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+display: flex;
+align-items: center;
+gap: 6px;
+pointer-events: auto;
+margin-top: 10px !important;
+margin-right: 10px !important;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
 
-    .pill-logo {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      min-width: 22px;
-      height: 22px;
-    }
+.pill-temp {
+font-size: 15px;
+font-weight: bold;
+color: #111;
+}
 
-    .pill-logo img {
-      width: 22px;
-      height: 22px;
-      object-fit: contain;
-    }
+.pill-logo {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+font-size: 16px;
+min-width: 22px;
+height: 22px;
+}
+
+.pill-logo img {
+width: 22px;
+height: 22px;
+object-fit: contain;
+}
+
 
 /* ===============================
 重新載入按鈕
@@ -165,12 +167,18 @@ transition: transform 0.1s ease;
 transform: scale(0.97);
 }
 
-/* Debug 永遠不顯示 */
+
+/* ===============================
+OneSignal 測試 Debug
+暫時顯示，方便 Android 查看狀態
+=============================== */
+
 #debugBox {
-display: none !important;
+display: block !important;
 }
 
 </style>
+
 
 <!-- ===============================
 OneSignal 初始化
@@ -178,29 +186,43 @@ OneSignal 初始化
 
 <script>
 
-window.OneSignalDeferred = window.OneSignalDeferred || [];
+window.OneSignalDeferred =
+window.OneSignalDeferred || [];
+
 window.oneSignalReady = false;
 
-window.oneSignalInitPromise = new Promise((resolve) => {
+window.oneSignalInitPromise =
+new Promise((resolve) => {
 
-window.OneSignalDeferred.push(async function(OneSignal) {
+window.OneSignalDeferred.push(
+async function(OneSignal) {
 
 try {
 
-console.log("========== OneSignal 初始化開始 ==========");
+console.log(
+"========== OneSignal 初始化開始 =========="
+);
 
 await OneSignal.init({
-appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+
+appId:
+"880241cd-cc45-4820-b5ec-a1236b0e3e98",
+
 safari_web_id:
 "web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98",
+
 notifyButton: {
 enable: false
 }
+
 });
 
 window.oneSignalReady = true;
 
-console.log("========== OneSignal 初始化完成 ==========");
+console.log(
+"========== OneSignal 初始化完成 =========="
+);
+
 console.log(
 "Notification Permission:",
 OneSignal.Notifications.permission
@@ -259,7 +281,9 @@ AI 預測
 即時雨勢
 =============================== -->
 
-<div id="rain-alert">正在讀取預報資料...</div>
+<div id="rain-alert">
+正在讀取預報資料...
+</div>
 
 
 <!-- ===============================
@@ -387,27 +411,6 @@ let rainStatus = 0;
 2. CounterAPI 設定
 ===================================================== */
 
-/*
-你的 CounterAPI：
-
-Workspace:
-hong-kong-rain
-
-Counter:
-hk-rain-page-views
-
-⚠️ 請把 YOUR_COUNTERAPI_BROWSER_TOKEN
-替換成你自己在 CounterAPI 建立的
-Browser/Public token。
-
-建議該 Token 只給：
-Write
-
-不需要：
-Read
-Admin
-*/
-
 const COUNTER_WORKSPACE =
 "hong-kong-rain";
 
@@ -426,11 +429,6 @@ async function initCounter() {
 
 try {
 
-/*
-如果 Token 尚未填入，
-不影響網站其他功能。
-*/
-
 if (
 !COUNTER_BROWSER_TOKEN ||
 COUNTER_BROWSER_TOKEN ===
@@ -445,10 +443,6 @@ return;
 
 }
 
-
-/*
-等待 CounterAPI Browser SDK 載入
-*/
 
 let retry = 0;
 
@@ -477,7 +471,8 @@ return;
 }
 
 
-const counter = new Counter({
+const counter =
+new Counter({
 
 workspace:
 COUNTER_WORKSPACE,
@@ -490,12 +485,6 @@ timeout: 8000
 });
 
 
-/*
-每次開啟／重新載入網站 +1
-
-不會把數字顯示在首頁。
-*/
-
 const result =
 await counter.up(COUNTER_NAME);
 
@@ -507,11 +496,6 @@ result.value
 
 
 } catch (err) {
-
-/*
-Counter 出錯不能影響
-香港降雨預報本身。
-*/
 
 console.warn(
 "CounterAPI 計數失敗:",
@@ -530,7 +514,9 @@ err
 function debug(text) {
 
 let box =
-document.getElementById("debugBox");
+document.getElementById(
+"debugBox"
+);
 
 if (!box) {
 
@@ -603,7 +589,6 @@ options: {
 position: "topright"
 },
 
-
 onAdd: function(map) {
 
 const div =
@@ -611,7 +596,6 @@ L.DomUtil.create(
 "div",
 "map-weather-pill"
 );
-
 
 div.innerHTML = `
 
@@ -629,13 +613,11 @@ id="pill-logo"
 
 `;
 
-
 L.DomEvent.disableClickPropagation(div);
 
 return div;
 
 }
-
 });
 
 
@@ -674,15 +656,6 @@ new WeatherControl()
 /* =====================================================
 8. Marker
 ===================================================== */
-
-/*
-保持原本藍色定位 Marker。
-
-暫時不加入：
-「你的位置」
-位置名稱
-其他 Label
-*/
 
 function setMarker(lat, lon) {
 
@@ -806,13 +779,11 @@ data.hko.weatherIcon;
 const imgUrl =
 `https://www.hko.gov.hk/images/wxicon/pic${iconCode}.png`;
 
-
 const img =
 new Image();
 
 img.src =
 imgUrl;
-
 
 img.onload =
 function() {
@@ -821,7 +792,6 @@ logoContainer.innerHTML =
 `<img src="${imgUrl}" alt="HKO Icon">`;
 
 };
-
 
 img.onerror =
 function() {
@@ -839,7 +809,6 @@ data.tomorrow.weatherCode
 }
 
 };
-
 
 } else if (
 data &&
@@ -909,7 +878,6 @@ document.getElementById(
 "rain-alert"
 );
 
-
 const rainMsg =
 document.getElementById(
 "rainMsg"
@@ -933,29 +901,12 @@ data.hko.immediateRain
 
 if (isRaining) {
 
-/*
-HKO 顯示：
-你所在的位置有雨
-*/
-
 alertDiv.innerText =
 "⚠️ 你所在的位置有雨";
-
-
-/*
-AI 預測區：
-有雨時不再顯示 Tomorrow.io
-原本的 AI 預測文字。
-*/
 
 rainMsg.innerText =
 "未有AI預報資料";
 
-
-/*
-避免每次重新取得資料
-都重複播放語音。
-*/
 
 if (rainStatus === 0) {
 
@@ -970,21 +921,11 @@ rainStatus = 1;
 
 } else {
 
-/*
-沒有即時雨
-*/
-
 alertDiv.innerText =
 "☁️ 你所在的位置暫時無雨";
 
-
 rainStatus = 0;
 
-
-/*
-只有無雨時才顯示
-Tomorrow.io AI 預測。
-*/
 
 if (
 data &&
@@ -1120,12 +1061,16 @@ headers: {
 
 body:
 JSON.stringify({
+
 playerId:
 playerId,
+
 lat:
 lat,
+
 lon:
 lon
+
 })
 
 }
@@ -1186,7 +1131,10 @@ err.message
 
 
 /* =====================================================
-14. 取得 OneSignal Subscription ID
+14. 取得 OneSignal Subscription
+重要：
+現在不再只檢查 ID。
+必須同時確認 optedIn === true。
 ===================================================== */
 
 async function getOneSignalPlayerId() {
@@ -1211,21 +1159,76 @@ return null;
 const playerId =
 OneSignal.User.PushSubscription.id;
 
+const optedIn =
+OneSignal.User.PushSubscription.optedIn;
+
+const permission =
+OneSignal.Notifications.permission;
+
 
 console.log(
 "OneSignal Subscription ID:",
 playerId
 );
 
+console.log(
+"OneSignal optedIn:",
+optedIn
+);
 
-return playerId || null;
+console.log(
+"OneSignal permission:",
+permission
+);
+
+
+/*
+顯示給 Android 測試用。
+*/
+
+debug(
+"OneSignal Subscription ID: " +
+(playerId || "無")
+);
+
+debug(
+"OneSignal optedIn: " +
+optedIn
+);
+
+debug(
+"Notification Permission: " +
+permission
+);
+
+
+/*
+只有真正 optedIn 才當作已訂閱。
+*/
+
+if (
+playerId &&
+optedIn === true
+) {
+
+return playerId;
+
+}
+
+
+return null;
 
 
 } catch (err) {
 
 console.error(
-"取得 OneSignal Subscription ID 失敗:",
+"取得 OneSignal Subscription 狀態失敗:",
 err
+);
+
+debug(
+"取得 OneSignal 狀態失敗: " +
+err.message
 );
 
 return null;
@@ -1237,6 +1240,10 @@ return null;
 
 /* =====================================================
 15. 等待 OneSignal Subscription
+重要：
+必須同時等到：
+1. Subscription ID
+2. optedIn === true
 ===================================================== */
 
 async function waitForOneSignalSubscription(
@@ -1253,13 +1260,66 @@ i++
 const playerId =
 OneSignal.User.PushSubscription.id;
 
+const optedIn =
+OneSignal.User.PushSubscription.optedIn;
 
-if (playerId) {
+
+const permission =
+OneSignal.Notifications.permission;
+
+
+console.log(
+"等待 OneSignal：",
+{
+playerId:
+playerId,
+
+optedIn:
+optedIn,
+
+permission:
+permission
+}
+);
+
+
+/*
+只要真正訂閱成功：
+ID 存在
++
+optedIn === true
+*/
+
+if (
+playerId &&
+optedIn === true
+) {
 
 console.log(
 "OneSignal Subscription ID 已取得:",
 playerId
 );
+
+console.log(
+"OneSignal optedIn:",
+optedIn
+);
+
+
+debug(
+"OneSignal 訂閱狀態：已訂閱"
+);
+
+debug(
+"Subscription ID: " +
+playerId
+);
+
+debug(
+"optedIn: " +
+optedIn
+);
+
 
 return playerId;
 
@@ -1276,6 +1336,11 @@ setTimeout(resolve, 1000)
 
 console.warn(
 "等待 OneSignal Subscription 超時"
+);
+
+
+debug(
+"等待 OneSignal 訂閱超時"
 );
 
 
@@ -1397,6 +1462,12 @@ console.log(
 );
 
 
+/*
+現在 getOneSignalPlayerId()
+只有在 optedIn === true
+時才會回傳 ID。
+*/
+
 const playerId =
 await getOneSignalPlayerId();
 
@@ -1404,12 +1475,12 @@ await getOneSignalPlayerId();
 if (playerId) {
 
 console.log(
-"已有 OneSignal Subscription"
+"已有 OneSignal 真正訂閱"
 );
 
 
 debug(
-"OneSignal 已訂閱"
+"OneSignal：已訂閱"
 );
 
 
@@ -1423,12 +1494,12 @@ lon
 } else {
 
 console.log(
-"目前沒有 OneSignal Subscription"
+"目前沒有有效的 OneSignal Subscription"
 );
 
 
 debug(
-"尚未訂閱推播"
+"OneSignal：未訂閱"
 );
 
 }
@@ -1494,14 +1565,13 @@ timeout:
 
 maximumAge:
 300000
+
 }
 
 );
 
 }
 );
-
-}
 
 
 /* =====================================================
@@ -1585,6 +1655,8 @@ localStorage.setItem(
 
 /* =====================================================
 19. OneSignal 訂閱狀態
+重要：
+回傳完整狀態，而不是只回傳 ID。
 ===================================================== */
 
 async function checkSubscriptionState() {
@@ -1605,6 +1677,8 @@ return null;
 const playerId =
 OneSignal.User.PushSubscription.id;
 
+const optedIn =
+OneSignal.User.PushSubscription.optedIn;
 
 const permission =
 OneSignal.Notifications.permission;
@@ -1622,22 +1696,56 @@ playerId
 );
 
 
-if (playerId) {
-
-debug(
-"OneSignal Subscription ID 已存在"
+console.log(
+"OneSignal optedIn:",
+optedIn
 );
 
-} else {
+
+/*
+Android 不需要 Console，
+直接在網頁 Debug 區查看。
+*/
 
 debug(
-"OneSignal 尚未有 Subscription ID"
+"========== OneSignal 狀態 =========="
 );
 
-}
+debug(
+"Subscription ID: " +
+(playerId || "無")
+);
+
+debug(
+"optedIn: " +
+optedIn
+);
+
+debug(
+"Notification Permission: " +
+permission
+);
 
 
-return playerId || null;
+/*
+真正已訂閱：
+Subscription ID 存在
++
+optedIn === true
+*/
+
+return {
+
+playerId:
+playerId || null,
+
+optedIn:
+optedIn === true,
+
+permission:
+permission
+
+};
 
 
 } catch (err) {
@@ -1645,6 +1753,12 @@ return playerId || null;
 console.error(
 "檢查 OneSignal 訂閱狀態失敗:",
 err
+);
+
+
+debug(
+"檢查 OneSignal 狀態失敗: " +
+err.message
 );
 
 
@@ -1674,11 +1788,32 @@ return;
 }
 
 
-const existingPlayerId =
+const subscriptionState =
 await checkSubscriptionState();
 
 
-if (existingPlayerId) {
+/*
+只有真正 optedIn === true
+才隱藏黃色訂閱提示。
+
+這就是今次最重要的修改。
+*/
+
+if (
+subscriptionState &&
+subscriptionState.playerId &&
+subscriptionState.optedIn === true
+) {
+
+console.log(
+"OneSignal 已真正訂閱，隱藏提示"
+);
+
+
+debug(
+"結果：已訂閱 → 隱藏訂閱提示"
+);
+
 
 prompt.style.display =
 "none";
@@ -1687,6 +1822,38 @@ return;
 
 }
 
+
+/*
+如果有 Subscription ID，
+但 optedIn = false，
+代表有舊 Subscription，
+但目前並沒有真正訂閱。
+
+所以必須重新顯示黃色提示。
+*/
+
+if (
+subscriptionState &&
+subscriptionState.playerId &&
+subscriptionState.optedIn === false
+) {
+
+console.log(
+"存在 Subscription ID，但 optedIn=false"
+);
+
+
+debug(
+"結果：有舊 ID，但未訂閱 → 顯示重新訂閱提示"
+);
+
+}
+
+
+/*
+iOS 尚未加入主畫面：
+不顯示一般訂閱提示。
+*/
 
 if (
 isIOSDevice() &&
@@ -1743,12 +1910,23 @@ console.log(
 );
 
 
+debug(
+"開始要求通知權限..."
+);
+
+
 await OneSignal.Notifications
 .requestPermission();
 
 
 console.log(
 "Notification Permission:",
+OneSignal.Notifications.permission
+);
+
+
+debug(
+"Notification Permission: " +
 OneSignal.Notifications.permission
 );
 
@@ -1777,6 +1955,11 @@ console.log(
 );
 
 
+debug(
+"PushSubscription optIn 完成"
+);
+
+
 } catch (optInError) {
 
 console.warn(
@@ -1784,8 +1967,21 @@ console.warn(
 optInError
 );
 
+
+debug(
+"optIn 發生錯誤: " +
+optInError.message
+);
+
 }
 
+
+/*
+等待：
+Subscription ID
++
+optedIn === true
+*/
 
 const playerId =
 await waitForOneSignalSubscription(
@@ -1803,7 +1999,7 @@ playerId
 if (!playerId) {
 
 throw new Error(
-"訂閱成功但尚未取得 Subscription ID"
+"訂閱後尚未取得有效的 Subscription ID / optedIn=true"
 );
 
 }
@@ -1840,6 +2036,11 @@ function(err) {
 console.warn(
 "訂閱後取得定位失敗:",
 err
+);
+
+
+debug(
+"訂閱後定位失敗"
 );
 
 }
