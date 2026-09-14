@@ -486,6 +486,12 @@ const prompt = document.getElementById("customPrompt");
 if (!prompt) return;
 
 const subscriptionState = await checkSubscriptionState();
+
+debug(
+"OneSignal 狀態：" +
+JSON.stringify(subscriptionState)
+);
+
 if (subscriptionState?.playerId && subscriptionState?.optedIn) {
 prompt.style.display = "none";
 return;
