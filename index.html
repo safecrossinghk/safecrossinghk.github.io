@@ -9,10 +9,7 @@
 <title>🌧️ 香港降雨預報</title>
 
 <!-- Leaflet CSS -->
-<link
-rel="stylesheet"
-href="https://unpkg.com/leaflet/dist/leaflet.css"
-/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
 <!-- PWA -->
 <link rel="manifest" href="/manifest.json">
@@ -21,21 +18,14 @@ href="https://unpkg.com/leaflet/dist/leaflet.css"
 <meta name="apple-mobile-web-app-title" content="香港降雨預報">
 
 <!-- OneSignal Web SDK v16 -->
-<script
-src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-defer>
-</script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 
 <!-- CounterAPI Browser SDK -->
-<script
-src="https://cdn.jsdelivr.net/npm/counterapi/dist/counter.browser.min.js"
-defer>
-</script>
+<script src="https://cdn.jsdelivr.net/npm/counterapi/dist/counter.browser.min.js" defer></script>
 
 <style>
-
 body {
-font-family: "Helvetica Neue", sans-serif;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 margin: 0;
 padding: 0;
 background: #f0f8ff;
@@ -48,12 +38,16 @@ font-size: 1.4em;
 margin: 1em 0 0.5em;
 }
 
+/* 確保 #map 有明確高度及 display */
 #map {
 height: 300px;
+width: calc(100% - 20px);
 margin: 0 10px;
 border-radius: 8px;
 border: 1px solid #ccc;
 position: relative;
+box-sizing: border-box;
+display: block;
 }
 
 #ai-forecast {
@@ -116,7 +110,6 @@ gap: 6px;
 pointer-events: auto;
 margin-top: 10px !important;
 margin-right: 10px !important;
-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .pill-temp {
@@ -140,11 +133,6 @@ height: 22px;
 object-fit: contain;
 }
 
-
-/* ===============================
-重新載入按鈕
-=============================== */
-
 #reload-container {
 margin: 1.5em 0 0.8em;
 text-align: center;
@@ -160,2037 +148,395 @@ border: none;
 border-radius: 8px;
 cursor: pointer;
 box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-transition: transform 0.1s ease;
 }
 
 #reloadBtn:active {
 transform: scale(0.97);
 }
 
-
-/* ===============================
-OneSignal 測試 Debug
-暫時顯示，方便 Android 查看狀態
-=============================== */
-
 #debugBox {
 display: block !important;
 }
-
 </style>
 
-
-<!-- ===============================
-OneSignal 初始化
-=============================== -->
-
 <script>
-
-window.OneSignalDeferred =
-window.OneSignalDeferred || [];
-
+window.OneSignalDeferred = window.OneSignalDeferred || [];
 window.oneSignalReady = false;
 
-window.oneSignalInitPromise =
-new Promise((resolve) => {
-
-window.OneSignalDeferred.push(
-async function(OneSignal) {
-
+window.oneSignalInitPromise = new Promise((resolve) => {
+window.OneSignalDeferred.push(async function(OneSignal) {
 try {
-
-console.log(
-"========== OneSignal 初始化開始 =========="
-);
-
+console.log("========== OneSignal 初始化開始 ==========");
 await OneSignal.init({
-
-appId:
-"880241cd-cc45-4820-b5ec-a1236b0e3e98",
-
-safari_web_id:
-"web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98",
-
-notifyButton: {
-enable: false
-}
-
+appId: "880241cd-cc45-4820-b5ec-a1236b0e3e98",
+safari_web_id: "web.onesignal.auto.613528e9-2930-4b07-a098-5a9518822d98",
+notifyButton: { enable: false }
 });
-
 window.oneSignalReady = true;
-
-console.log(
-"========== OneSignal 初始化完成 =========="
-);
-
-console.log(
-"Notification Permission:",
-OneSignal.Notifications.permission
-);
-
+console.log("========== OneSignal 初始化完成 ==========");
 resolve(OneSignal);
-
 } catch (error) {
-
-console.error(
-"OneSignal 初始化失敗:",
-error
-);
-
+console.error("OneSignal 初始化失敗:", error);
 resolve(null);
-
 }
-
 });
-
 });
-
 </script>
-
 </head>
-
 
 <body>
 
 <h1>🌂 香港降雨預報</h1>
 
-
-<!-- ===============================
-地圖
-=============================== -->
-
+<!-- 地圖 -->
 <div id="map"></div>
 
-
-<!-- ===============================
-AI 預測
-=============================== -->
-
+<!-- AI 預測 -->
 <div id="ai-forecast">
-
 <strong>🧠 AI 超前預測</strong>
-
-<div id="rainMsg">
-正在載入...
+<div id="rainMsg">正在載入...</div>
 </div>
 
-</div>
+<!-- 即時雨勢 -->
+<div id="rain-alert">正在讀取預報資料...</div>
 
-
-<!-- ===============================
-即時雨勢
-=============================== -->
-
-<div id="rain-alert">
-正在讀取預報資料...
-</div>
-
-
-<!-- ===============================
-OneSignal 訂閱提示
-=============================== -->
-
-<div
-id="customPrompt"
-class="promptBox"
-style="display:none;"
->
-
+<!-- OneSignal 訂閱提示 -->
+<div id="customPrompt" class="promptBox" style="display:none;">
 📢 歡迎使用《香港降雨預報》<br>
-
 👉 你可以訂閱通知，即時收到降雨提示。<br>
-
-<button id="subscribeBtn">
-訂閱通知
-</button>
-
-<button id="closeCustomBtn">
-稍後再說
-</button>
-
+<button id="subscribeBtn">訂閱通知</button>
+<button id="closeCustomBtn">稍後再說</button>
 </div>
 
-
-<!-- ===============================
-iOS Safari / PWA 提示
-=============================== -->
-
-<div
-id="iosPrompt"
-class="promptBox"
-style="display:none;"
->
-
+<!-- iOS Safari / PWA 提示 -->
+<div id="iosPrompt" class="promptBox" style="display:none;">
 📱 如果你使用 iPhone / iPad：<br>
-
 請先按 Safari 底部的 <b>分享</b> 按鈕<br>
-
 ➜ 再選擇 <b>加入主畫面</b><br>
-
 加入主畫面後才可以使用 PWA 推播通知。<br>
-
-<button id="iosCloseBtn">
-知道了
-</button>
-
+<button id="iosCloseBtn">知道了</button>
 </div>
 
-
-<!-- ===============================
-Footer
-=============================== -->
-
+<!-- Footer -->
 <div id="footer-text">
-
 <p style="text-align:left; margin-bottom:1.5em;">
-
-《香港降雨預報》提供香港地區未來最多六小時的定點降雨預測，
-讓你了解目前及未來一段時間內身處位置附近的降雨情況。
-
+《香港降雨預報》提供香港地區未來最多六小時的定點降雨預測...
 </p>
-
-
-<p style="text-align:left; margin-bottom:1.5em;">
-
-使用網站時，請允許瀏覽器使用定位服務。
-系統會以你<strong>開啟網站時所在的位置</strong>作為降雨預報及推播通知的所在地。
-如前往其他地區，請重新開啟或重新載入網站，以更新所在地。
-<strong>目前推播通知暫不支援隨手機移動而自動更新位置。</strong>
-
-</p>
-
-
-<p style="text-align:left; margin-bottom:1.5em;">
-
-資料來源：香港天文台及 Tomorrow.io（AI 超前預測）。
-天氣預測可能受定位、天氣變化及資料更新等因素影響，
-實際情況或與預測有所差異，本網站資料僅供參考。
-
-</p>
-
 </div>
 
-
-<!-- ===============================
-重新載入
-=============================== -->
-
+<!-- 重新載入 -->
 <div id="reload-container">
-
-<button
-id="reloadBtn"
-type="button"
->
-🔄 重新載入
-</button>
-
+<button id="reloadBtn" type="button">🔄 重新載入</button>
 </div>
-
 
 <!-- Leaflet JS -->
-<script
-src="https://unpkg.com/leaflet/dist/leaflet.js">
-</script>
-
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-
-/* =====================================================
-1. 基本設定
-===================================================== */
-
-const workerUrl =
-"https://crowdtest8r.ctakwah.workers.dev/";
-
+const workerUrl = "https://crowdtest8r.ctakwah.workers.dev/";
 let map = null;
 let marker = null;
 let rainStatus = 0;
 
-
-/* =====================================================
-2. CounterAPI 設定
-===================================================== */
-
-const COUNTER_WORKSPACE =
-"hong-kong-rain";
-
-const COUNTER_NAME =
-"hk-rain-page-views";
-
-const COUNTER_BROWSER_TOKEN =
-"YOUR_COUNTERAPI_BROWSER_TOKEN";
-
-
-/* =====================================================
-3. CounterAPI 頁面瀏覽計數
-===================================================== */
-
-async function initCounter() {
-
-try {
-
-if (
-!COUNTER_BROWSER_TOKEN ||
-COUNTER_BROWSER_TOKEN ===
-"YOUR_COUNTERAPI_BROWSER_TOKEN"
-) {
-
-console.warn(
-"CounterAPI 尚未設定 Browser/Public token"
-);
-
-return;
-
-}
-
-
-let retry = 0;
-
-while (
-typeof Counter === "undefined" &&
-retry < 30
-) {
-
-await new Promise(
-resolve => setTimeout(resolve, 300)
-);
-
-retry++;
-
-}
-
-
-if (typeof Counter === "undefined") {
-
-console.warn(
-"CounterAPI SDK 載入失敗"
-);
-
-return;
-
-}
-
-
-const counter =
-new Counter({
-
-workspace:
-COUNTER_WORKSPACE,
-
-accessToken:
-COUNTER_BROWSER_TOKEN,
-
-timeout: 8000
-
-});
-
-
-const result =
-await counter.up(COUNTER_NAME);
-
-
-console.log(
-"CounterAPI Page Views:",
-result.value
-);
-
-
-} catch (err) {
-
-console.warn(
-"CounterAPI 計數失敗:",
-err
-);
-
-}
-
-}
-
-
-/* =====================================================
-4. Debug
-===================================================== */
-
+/* Debug 輔助 */
 function debug(text) {
-
-let box =
-document.getElementById(
-"debugBox"
-);
-
+let box = document.getElementById("debugBox");
 if (!box) {
-
-box =
-document.createElement("div");
-
-box.id =
-"debugBox";
-
-box.style.cssText =
-"position:fixed;" +
-"top:0;" +
-"left:0;" +
-"right:0;" +
-"max-height:260px;" +
-"overflow:auto;" +
-"background:#000;" +
-"color:#0f0;" +
-"font-size:12px;" +
-"z-index:99999;" +
-"padding:8px;" +
-"white-space:pre-wrap;" +
-"text-align:left;";
-
+box = document.createElement("div");
+box.id = "debugBox";
+box.style.cssText = "position:fixed;top:0;left:0;right:0;max-height:200px;overflow:auto;background:#000;color:#0f0;font-size:11px;z-index:99999;padding:6px;white-space:pre-wrap;text-align:left;";
 document.body.appendChild(box);
-
+}
+box.innerHTML += "<br>" + text;
 }
 
-box.innerHTML +=
-"<br>" + text;
-
-}
-
-
-/* =====================================================
-5. 全域 Error
-===================================================== */
-
-window.onerror =
-function(
-msg,
-url,
-line,
-col,
-error
-) {
-
-debug(
-"ERROR\n" +
-msg +
-"\nLine: " +
-line +
-"\nColumn: " +
-col
-);
-
+window.onerror = function(msg, url, line, col, error) {
+debug("ERROR: " + msg + " (Line: " + line + ")");
 return false;
-
 };
 
-
-/* =====================================================
-6. Leaflet Weather Control
-===================================================== */
-
-const WeatherControl =
-L.Control.extend({
-
-options: {
-position: "topright"
-},
-
+/* Leaflet Weather Control */
+const WeatherControl = L.Control.extend({
+options: { position: "topright" },
 onAdd: function(map) {
-
-const div =
-L.DomUtil.create(
-"div",
-"map-weather-pill"
-);
-
-div.innerHTML = `
-
-<span
-class="pill-temp"
-id="pill-temp"
->
---°
-</span>
-
-<span
-class="pill-logo"
-id="pill-logo"
-></span>
-
-`;
-
+const div = L.DomUtil.create("div", "map-weather-pill");
+div.innerHTML = `<span class="pill-temp" id="pill-temp">--°</span><span class="pill-logo" id="pill-logo"></span>`;
 L.DomEvent.disableClickPropagation(div);
-
 return div;
-
 }
 });
 
-
-/* =====================================================
-7. 初始化地圖
-===================================================== */
-
+/* 初始化地圖 (增加 invalidateSize 確保渲染) */
 function initMap() {
+if (map !== null) return;
 
-map =
-L.map("map")
-.setView(
-[22.3, 114.2],
-11
-);
+map = L.map("map").setView([22.3, 114.2], 11);
 
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+attribution: "&copy; OpenStreetMap contributors"
+}).addTo(map);
 
-L.tileLayer(
-"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-{
+map.addControl(new WeatherControl());
 
-attribution:
-"&copy; OpenStreetMap contributors"
-
+// 強制重新計算 Leaflet 地圖容器尺寸
+setTimeout(() => {
+map.invalidateSize();
+}, 200);
 }
-).addTo(map);
-
-
-map.addControl(
-new WeatherControl()
-);
-
-}
-
-
-/* =====================================================
-8. Marker
-===================================================== */
 
 function setMarker(lat, lon) {
-
-if (marker) {
-
-map.removeLayer(marker);
-
+if (marker) map.removeLayer(marker);
+marker = L.marker([lat, lon]).addTo(map);
 }
-
-marker =
-L.marker([lat, lon])
-.addTo(map);
-
-}
-
-
-/* =====================================================
-9. Tomorrow.io Weather Icon
-===================================================== */
 
 function getWeatherIconByCode(code) {
-
 const iconMap = {
-
-0:
-"☀️",
-
-1000:
-"☀️",
-
-1100:
-"🌤️",
-
-1101:
-"⛅",
-
-1102:
-"🌥️",
-
-1001:
-"☁️",
-
-2000:
-"🌫️",
-
-2100:
-"🌫️",
-
-4000:
-"🌧️",
-
-4001:
-"🌧️",
-
-4200:
-"🌧️",
-
-4201:
-"🌧️",
-
-5000:
-"🌨️",
-
-8000:
-"⛈️"
-
+0: "☀️", 1000: "☀️", 1100: "🌤️", 1101: "⛅", 1102: "🌥️",
+1001: "☁️", 2000: "🌫️", 2100: "🌫️", 4000: "🌧️", 4001: "🌧️",
+4200: "🌧️", 4201: "🌧️", 5000: "🌨️", 8000: "⛈️"
 };
-
-return (
-iconMap[code] ||
-"🌤️"
-);
-
+return iconMap[code] || "🌤️";
 }
-
-
-/* =====================================================
-10. 更新天氣膠囊
-===================================================== */
 
 function updateWeatherPill(data) {
+const pillTempEl = document.getElementById("pill-temp");
+const logoContainer = document.getElementById("pill-logo");
 
-const pillTempEl =
-document.getElementById(
-"pill-temp"
-);
-
-const logoContainer =
-document.getElementById(
-"pill-logo"
-);
-
-
-if (
-data &&
-data.tomorrow &&
-data.tomorrow.temperature !== undefined &&
-data.tomorrow.temperature !== null
-) {
-
-const temp =
-Math.round(
-data.tomorrow.temperature
-);
-
-pillTempEl.innerText =
-`${temp}°`;
-
+if (data?.tomorrow?.temperature !== undefined) {
+pillTempEl.innerText = `${Math.round(data.tomorrow.temperature)}°`;
 }
 
-
-if (
-data &&
-data.hko &&
-data.hko.weatherIcon
-) {
-
-const iconCode =
-data.hko.weatherIcon;
-
-const imgUrl =
-`https://www.hko.gov.hk/images/wxicon/pic${iconCode}.png`;
-
-const img =
-new Image();
-
-img.src =
-imgUrl;
-
-img.onload =
-function() {
-
-logoContainer.innerHTML =
-`<img src="${imgUrl}" alt="HKO Icon">`;
-
+if (data?.hko?.weatherIcon) {
+const imgUrl = `https://www.hko.gov.hk/images/wxicon/pic${data.hko.weatherIcon}.png`;
+const img = new Image();
+img.src = imgUrl;
+img.onload = () => logoContainer.innerHTML = `<img src="${imgUrl}" alt="HKO Icon">`;
+img.onerror = () => {
+if (data?.tomorrow?.weatherCode) {
+logoContainer.innerText = getWeatherIconByCode(data.tomorrow.weatherCode);
+}
 };
-
-img.onerror =
-function() {
-
-if (
-data.tomorrow &&
-data.tomorrow.weatherCode !== undefined
-) {
-
-logoContainer.innerText =
-getWeatherIconByCode(
-data.tomorrow.weatherCode
-);
-
+} else if (data?.tomorrow?.weatherCode) {
+logoContainer.innerText = getWeatherIconByCode(data.tomorrow.weatherCode);
+}
 }
 
-};
-
-} else if (
-data &&
-data.tomorrow &&
-data.tomorrow.weatherCode !== undefined
-) {
-
-logoContainer.innerText =
-getWeatherIconByCode(
-data.tomorrow.weatherCode
-);
-
-}
-
-}
-
-
-/* =====================================================
-11. Worker 預報
-===================================================== */
-
+/* 讀取 Worker 資料 */
 async function fetchForecast(lat, lon) {
-
 try {
+debug("開始向 Worker 查詢資料...");
+const fetchUrl = `${workerUrl}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
 
-debug(
-"開始向 Worker 查詢 HKO + Tomorrow.io"
-);
+const response = await fetch(fetchUrl, { method: "GET" });
+if (!response.ok) throw new Error("Worker HTTP " + response.status);
 
-
-const response =
-await fetch(
-`${workerUrl}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
-);
-
-
-if (!response.ok) {
-
-throw new Error(
-"Worker HTTP " +
-response.status
-);
-
-}
-
-
-const data =
-await response.json();
-
-
-console.log(
-"Worker API 回傳資料：",
-data
-);
-
-
-debug(
-"Worker 已回傳資料"
-);
-
+const data = await response.json();
+debug("Worker 已成功回傳資料");
 
 updateWeatherPill(data);
 
+const alertDiv = document.getElementById("rain-alert");
+const rainMsg = document.getElementById("rainMsg");
 
-const alertDiv =
-document.getElementById(
-"rain-alert"
-);
-
-const rainMsg =
-document.getElementById(
-"rainMsg"
-);
-
-
-/* =============================================
-HKO 即時降雨狀態
-============================================= */
-
-if (
-data &&
-data.hko
-) {
-
-const isRaining =
-Number(
-data.hko.immediateRain
-) >= 0.5;
-
-
+if (data && data.hko) {
+const isRaining = Number(data.hko.immediateRain) >= 0.5;
 if (isRaining) {
-
-alertDiv.innerText =
-"⚠️ 你所在的位置有雨";
-
-rainMsg.innerText =
-"未有AI預報資料";
-
-
-if (rainStatus === 0) {
-
-speak(
-"你所在的位置有雨"
-);
-
-}
-
+alertDiv.innerText = "⚠️ 你所在的位置有雨";
+rainMsg.innerText = "未有AI預報資料";
+if (rainStatus === 0) speak("你所在的位置有雨");
 rainStatus = 1;
-
-
 } else {
-
-alertDiv.innerText =
-"☁️ 你所在的位置暫時無雨";
-
+alertDiv.innerText = "☁️ 你所在的位置暫時無雨";
 rainStatus = 0;
-
-
-if (
-data &&
-data.tomorrow
-) {
-
-if (
-data.tomorrow.rainExpected
-) {
-
-rainMsg.innerText =
-data.tomorrow.message ||
-"約六小時內可能有雨";
-
-
+if (data.tomorrow) {
+rainMsg.innerText = data.tomorrow.rainExpected
+? (data.tomorrow.message || "約六小時內可能有雨")
+: "未來六小時暫時無明顯降雨";
 } else {
-
-rainMsg.innerText =
-"未來六小時暫時無明顯降雨";
-
+rainMsg.innerText = "⚠️ 暫無 Tomorrow.io 預報";
 }
-
-
+}
 } else {
-
-rainMsg.innerText =
-"⚠️ 系統繁忙，請稍後再試";
-
+alertDiv.innerText = "⚠️ 數據格式不匹配";
+rainMsg.innerText = "⚠️ 數據格式不匹配";
 }
-
-}
-
-
-} else {
-
-alertDiv.innerText =
-"⚠️ 系統繁忙，請稍後再試";
-
-rainMsg.innerText =
-"⚠️ 系統繁忙，請稍後再試";
-
-}
-
-
 } catch (err) {
-
-console.error(
-"Worker 預報錯誤:",
-err
-);
-
-
-debug(
-"Worker 查詢失敗: " +
-err.message
-);
-
-
-document.getElementById(
-"rain-alert"
-).innerText =
-"⚠️ 系統繁忙，請稍後再試";
-
-
-document.getElementById(
-"rainMsg"
-).innerText =
-"⚠️ 系統繁忙，請稍後再試";
-
+console.error("Worker 預報錯誤:", err);
+debug("Worker 查詢失敗: " + err.message);
+document.getElementById("rain-alert").innerText = "⚠️ 資料讀取失敗，請檢查網路網絡";
+document.getElementById("rainMsg").innerText = "⚠️ 無法取得 AI 預測數據";
 }
-
 }
-
-
-/* =====================================================
-12. 語音
-===================================================== */
 
 function speak(text) {
-
 try {
-
-const msg =
-new SpeechSynthesisUtterance(text);
-
-msg.lang =
-"zh-HK";
-
+const msg = new SpeechSynthesisUtterance(text);
+msg.lang = "zh-HK";
 speechSynthesis.speak(msg);
-
 } catch (err) {
-
-console.warn(
-"語音功能失敗:",
-err
-);
-
+console.warn("語音失敗:", err);
+}
 }
 
-}
-
-
-/* =====================================================
-13. registerLocation
-===================================================== */
-
-async function registerLocation(
-playerId,
-lat,
-lon
-) {
-
+async function registerLocation(playerId, lat, lon) {
 try {
-
-debug(
-"正在向 Worker 登記位置"
-);
-
-
-const res =
-await fetch(
-workerUrl +
-"registerLocation",
-{
-
-method:
-"POST",
-
-headers: {
-"Content-Type":
-"application/json"
-},
-
-body:
-JSON.stringify({
-
-playerId:
-playerId,
-
-lat:
-lat,
-
-lon:
-lon
-
-})
-
-}
-);
-
-
-if (!res.ok) {
-
-throw new Error(
-"registerLocation HTTP " +
-res.status
-);
-
-}
-
-
-const result =
-await res.json();
-
-
-console.log(
-"registerLocation:",
-result
-);
-
-
-if (result.success) {
-
-debug(
-"位置已登記到 Worker"
-);
-
-} else {
-
-debug(
-"Worker 登記位置失敗"
-);
-
-}
-
-
+const res = await fetch(workerUrl + "registerLocation", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({ playerId, lat, lon })
+});
+if (!res.ok) throw new Error("HTTP " + res.status);
+debug("位置已登記到 Worker");
 } catch (err) {
-
-console.error(
-"registerLocation 失敗:",
-err
-);
-
-
-debug(
-"registerLocation 失敗: " +
-err.message
-);
-
+debug("registerLocation 失敗: " + err.message);
 }
-
 }
-
-
-/* =====================================================
-14. 取得 OneSignal Subscription
-重要：
-現在不再只檢查 ID。
-必須同時確認 optedIn === true。
-===================================================== */
 
 async function getOneSignalPlayerId() {
-
 try {
+const OneSignal = await window.oneSignalInitPromise;
+if (!OneSignal) return null;
 
-const OneSignal =
-await window.oneSignalInitPromise;
+const playerId = OneSignal.User?.PushSubscription?.id;
+const optedIn = OneSignal.User?.PushSubscription?.optedIn;
 
-
-if (!OneSignal) {
-
-console.warn(
-"OneSignal 尚未可用"
-);
-
+if (playerId && optedIn === true) return playerId;
 return null;
-
-}
-
-
-const playerId =
-OneSignal.User.PushSubscription.id;
-
-const optedIn =
-OneSignal.User.PushSubscription.optedIn;
-
-const permission =
-OneSignal.Notifications.permission;
-
-
-console.log(
-"OneSignal Subscription ID:",
-playerId
-);
-
-console.log(
-"OneSignal optedIn:",
-optedIn
-);
-
-console.log(
-"OneSignal permission:",
-permission
-);
-
-
-/*
-顯示給 Android 測試用。
-*/
-
-debug(
-"OneSignal Subscription ID: " +
-(playerId || "無")
-);
-
-debug(
-"OneSignal optedIn: " +
-optedIn
-);
-
-debug(
-"Notification Permission: " +
-permission
-);
-
-
-/*
-只有真正 optedIn 才當作已訂閱。
-*/
-
-if (
-playerId &&
-optedIn === true
-) {
-
-return playerId;
-
-}
-
-
-return null;
-
-
 } catch (err) {
-
-console.error(
-"取得 OneSignal Subscription 狀態失敗:",
-err
-);
-
-debug(
-"取得 OneSignal 狀態失敗: " +
-err.message
-);
-
 return null;
-
 }
-
 }
-
-
-/* =====================================================
-15. 等待 OneSignal Subscription
-重要：
-必須同時等到：
-1. Subscription ID
-2. optedIn === true
-===================================================== */
-
-async function waitForOneSignalSubscription(
-OneSignal,
-maxSeconds = 15
-) {
-
-for (
-let i = 0;
-i < maxSeconds;
-i++
-) {
-
-const playerId =
-OneSignal.User.PushSubscription.id;
-
-const optedIn =
-OneSignal.User.PushSubscription.optedIn;
-
-
-const permission =
-OneSignal.Notifications.permission;
-
-
-console.log(
-"等待 OneSignal：",
-{
-playerId:
-playerId,
-
-optedIn:
-optedIn,
-
-permission:
-permission
-}
-);
-
-
-/*
-只要真正訂閱成功：
-ID 存在
-+
-optedIn === true
-*/
-
-if (
-playerId &&
-optedIn === true
-) {
-
-console.log(
-"OneSignal Subscription ID 已取得:",
-playerId
-);
-
-console.log(
-"OneSignal optedIn:",
-optedIn
-);
-
-
-debug(
-"OneSignal 訂閱狀態：已訂閱"
-);
-
-debug(
-"Subscription ID: " +
-playerId
-);
-
-debug(
-"optedIn: " +
-optedIn
-);
-
-
-return playerId;
-
-}
-
-
-await new Promise(
-resolve =>
-setTimeout(resolve, 1000)
-);
-
-}
-
-
-console.warn(
-"等待 OneSignal Subscription 超時"
-);
-
-
-debug(
-"等待 OneSignal 訂閱超時"
-);
-
-
-return null;
-
-}
-
-
-/* =====================================================
-16. 定位
-===================================================== */
 
 async function initLocation() {
-
-return new Promise(
-(resolve) => {
-
-console.log(
-"===== initLocation 開始 ====="
-);
-
+return new Promise((resolve) => {
+const fallbackLat = 22.3;
+const fallbackLon = 114.2;
 
 if (!navigator.geolocation) {
-
-alert(
-"此瀏覽器不支援定位功能"
-);
-
-
-const fallbackLat =
-22.3;
-
-const fallbackLon =
-114.2;
-
-
-map.setView(
-[
-fallbackLat,
-fallbackLon
-],
-11
-);
-
-
-setMarker(
-fallbackLat,
-fallbackLon
-);
-
-
-fetchForecast(
-fallbackLat,
-fallbackLon
-);
-
-
+alert("此瀏覽器不支援定位功能");
+map.setView([fallbackLat, fallbackLon], 11);
+setMarker(fallbackLat, fallbackLon);
+fetchForecast(fallbackLat, fallbackLon);
 resolve();
-
 return;
-
 }
-
 
 navigator.geolocation.getCurrentPosition(
-
 async function(pos) {
+const lat = pos.coords.latitude;
+const lon = pos.coords.longitude;
+debug("定位成功: " + lat + ", " + lon);
 
-console.log(
-"===== 已進入 getCurrentPosition ====="
-);
+map.setView([lat, lon], 13);
+setMarker(lat, lon);
+fetchForecast(lat, lon);
 
-
-const lat =
-pos.coords.latitude;
-
-const lon =
-pos.coords.longitude;
-
-
-console.log(
-"取得定位:",
-lat,
-lon
-);
-
-
-debug(
-"定位成功: " +
-lat +
-" , " +
-lon
-);
-
-
-map.setView(
-[
-lat,
-lon
-],
-13
-);
-
-
-setMarker(
-lat,
-lon
-);
-
-
-fetchForecast(
-lat,
-lon
-);
-
-
-console.log(
-"===== 準備檢查 OneSignal ====="
-);
-
-
-/*
-現在 getOneSignalPlayerId()
-只有在 optedIn === true
-時才會回傳 ID。
-*/
-
-const playerId =
-await getOneSignalPlayerId();
-
-
-if (playerId) {
-
-console.log(
-"已有 OneSignal 真正訂閱"
-);
-
-
-debug(
-"OneSignal：已訂閱"
-);
-
-
-await registerLocation(
-playerId,
-lat,
-lon
-);
-
-
-} else {
-
-console.log(
-"目前沒有有效的 OneSignal Subscription"
-);
-
-
-debug(
-"OneSignal：未訂閱"
-);
-
-}
-
-
+const playerId = await getOneSignalPlayerId();
+if (playerId) await registerLocation(playerId, lat, lon);
 resolve();
-
 },
-
-
 function(err) {
-
-console.warn(
-"定位失敗，使用預設位置",
-err
-);
-
-
-debug(
-"定位失敗，使用預設位置"
-);
-
-
-const fallbackLat =
-22.3;
-
-const fallbackLon =
-114.2;
-
-
-map.setView(
-[
-fallbackLat,
-fallbackLon
-],
-11
-);
-
-
-setMarker(
-fallbackLat,
-fallbackLon
-);
-
-
-fetchForecast(
-fallbackLat,
-fallbackLon
-);
-
-
+debug("定位失敗，使用預設位置");
+map.setView([fallbackLat, fallbackLon], 11);
+setMarker(fallbackLat, fallbackLon);
+fetchForecast(fallbackLat, fallbackLon);
 resolve();
-
 },
-
-
-{
-enableHighAccuracy:
-true,
-
-timeout:
-15000,
-
-maximumAge:
-300000
-
-}
-
+{ enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
 );
-
+});
 }
-);
-
-
-/* =====================================================
-17. iOS / PWA 判斷
-===================================================== */
 
 function isIOSDevice() {
-
-return /iPhone|iPad|iPod/i.test(
-navigator.userAgent
-);
-
+return /iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
-
 
 function isStandalonePWA() {
-
-return (
-window.navigator.standalone === true ||
-window.matchMedia(
-"(display-mode: standalone)"
-).matches
-);
-
+return (window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches);
 }
-
-
-/* =====================================================
-18. iOS 提示
-===================================================== */
 
 function showIosPromptOnce() {
-
-if (
-!isIOSDevice() ||
-isStandalonePWA() ||
-localStorage.getItem(
-"iosPromptShown"
-)
-) {
-
-return;
-
-}
-
-
-const prompt =
-document.getElementById(
-"iosPrompt"
-);
-
-
-if (!prompt) {
-
-return;
-
-}
-
-
-prompt.style.display =
-"block";
-
-
-document.getElementById(
-"iosCloseBtn"
-).onclick =
-function() {
-
-prompt.style.display =
-"none";
-
-localStorage.setItem(
-"iosPromptShown",
-"1"
-);
-
+if (!isIOSDevice() || isStandalonePWA() || localStorage.getItem("iosPromptShown")) return;
+const prompt = document.getElementById("iosPrompt");
+if (prompt) {
+prompt.style.display = "block";
+document.getElementById("iosCloseBtn").onclick = function() {
+prompt.style.display = "none";
+localStorage.setItem("iosPromptShown", "1");
 };
-
 }
-
-
-/* =====================================================
-19. OneSignal 訂閱狀態
-重要：
-回傳完整狀態，而不是只回傳 ID。
-===================================================== */
+}
 
 async function checkSubscriptionState() {
-
 try {
-
-const OneSignal =
-await window.oneSignalInitPromise;
-
-
-if (!OneSignal) {
-
-return null;
-
-}
-
-
-const playerId =
-OneSignal.User.PushSubscription.id;
-
-const optedIn =
-OneSignal.User.PushSubscription.optedIn;
-
-const permission =
-OneSignal.Notifications.permission;
-
-
-console.log(
-"OneSignal permission:",
-permission
-);
-
-
-console.log(
-"OneSignal Subscription ID:",
-playerId
-);
-
-
-console.log(
-"OneSignal optedIn:",
-optedIn
-);
-
-
-/*
-Android 不需要 Console，
-直接在網頁 Debug 區查看。
-*/
-
-debug(
-"========== OneSignal 狀態 =========="
-);
-
-debug(
-"Subscription ID: " +
-(playerId || "無")
-);
-
-debug(
-"optedIn: " +
-optedIn
-);
-
-debug(
-"Notification Permission: " +
-permission
-);
-
-
-/*
-真正已訂閱：
-Subscription ID 存在
-+
-optedIn === true
-*/
-
+const OneSignal = await window.oneSignalInitPromise;
+if (!OneSignal) return null;
 return {
-
-playerId:
-playerId || null,
-
-optedIn:
-optedIn === true,
-
-permission:
-permission
-
+playerId: OneSignal.User?.PushSubscription?.id || null,
+optedIn: OneSignal.User?.PushSubscription?.optedIn === true,
+permission: OneSignal.Notifications?.permission
 };
-
-
 } catch (err) {
-
-console.error(
-"檢查 OneSignal 訂閱狀態失敗:",
-err
-);
-
-
-debug(
-"檢查 OneSignal 狀態失敗: " +
-err.message
-);
-
-
 return null;
-
 }
-
 }
-
-
-/* =====================================================
-20. OneSignal 自訂訂閱提示
-===================================================== */
 
 async function showCustomPrompt() {
+const prompt = document.getElementById("customPrompt");
+if (!prompt) return;
 
-const prompt =
-document.getElementById(
-"customPrompt"
-);
-
-
-if (!prompt) {
-
+const subscriptionState = await checkSubscriptionState();
+if (subscriptionState?.playerId && subscriptionState?.optedIn) {
+prompt.style.display = "none";
 return;
-
 }
 
-
-const subscriptionState =
-await checkSubscriptionState();
-
-
-/*
-只有真正 optedIn === true
-才隱藏黃色訂閱提示。
-
-這就是今次最重要的修改。
-*/
-
-if (
-subscriptionState &&
-subscriptionState.playerId &&
-subscriptionState.optedIn === true
-) {
-
-console.log(
-"OneSignal 已真正訂閱，隱藏提示"
-);
-
-
-debug(
-"結果：已訂閱 → 隱藏訂閱提示"
-);
-
-
-prompt.style.display =
-"none";
-
+if (isIOSDevice() && !isStandalonePWA()) {
+prompt.style.display = "none";
 return;
-
 }
 
-
-/*
-如果有 Subscription ID，
-但 optedIn = false，
-代表有舊 Subscription，
-但目前並沒有真正訂閱。
-
-所以必須重新顯示黃色提示。
-*/
-
-if (
-subscriptionState &&
-subscriptionState.playerId &&
-subscriptionState.optedIn === false
-) {
-
-console.log(
-"存在 Subscription ID，但 optedIn=false"
-);
-
-
-debug(
-"結果：有舊 ID，但未訂閱 → 顯示重新訂閱提示"
-);
-
-}
-
-
-/*
-iOS 尚未加入主畫面：
-不顯示一般訂閱提示。
-*/
-
-if (
-isIOSDevice() &&
-!isStandalonePWA()
-) {
-
-prompt.style.display =
-"none";
-
-return;
-
-}
-
-
-prompt.style.display =
-"block";
-
-
-document.getElementById(
-"subscribeBtn"
-).onclick =
-async function() {
-
-const button =
-document.getElementById(
-"subscribeBtn"
-);
-
-
+prompt.style.display = "block";
+document.getElementById("subscribeBtn").onclick = async function() {
+const button = document.getElementById("subscribeBtn");
 try {
-
-button.disabled =
-true;
-
-button.innerText =
-"正在訂閱...";
-
-
-const OneSignal =
-await window.oneSignalInitPromise;
-
-
-if (!OneSignal) {
-
-throw new Error(
-"OneSignal 尚未準備完成"
-);
-
-}
-
-
-console.log(
-"===== 開始要求通知權限 ====="
-);
-
-
-debug(
-"開始要求通知權限..."
-);
-
-
-await OneSignal.Notifications
-.requestPermission();
-
-
-console.log(
-"Notification Permission:",
-OneSignal.Notifications.permission
-);
-
-
-debug(
-"Notification Permission: " +
-OneSignal.Notifications.permission
-);
-
-
-if (
-OneSignal.Notifications.permission !== true
-) {
-
-throw new Error(
-"通知權限未獲得"
-);
-
-}
-
-
-try {
-
-await OneSignal
-.User
-.PushSubscription
-.optIn();
-
-
-console.log(
-"PushSubscription optIn 完成"
-);
-
-
-debug(
-"PushSubscription optIn 完成"
-);
-
-
-} catch (optInError) {
-
-console.warn(
-"PushSubscription optIn:",
-optInError
-);
-
-
-debug(
-"optIn 發生錯誤: " +
-optInError.message
-);
-
-}
-
-
-/*
-等待：
-Subscription ID
-+
-optedIn === true
-*/
-
-const playerId =
-await waitForOneSignalSubscription(
-OneSignal,
-15
-);
-
-
-console.log(
-"訂閱後 Player ID:",
-playerId
-);
-
-
-if (!playerId) {
-
-throw new Error(
-"訂閱後尚未取得有效的 Subscription ID / optedIn=true"
-);
-
-}
-
-
-debug(
-"OneSignal 訂閱成功"
-);
-
-
-if (navigator.geolocation) {
-
-navigator.geolocation.getCurrentPosition(
-
-async function(pos) {
-
-const lat =
-pos.coords.latitude;
-
-const lon =
-pos.coords.longitude;
-
-
-await registerLocation(
-playerId,
-lat,
-lon
-);
-
-},
-
-function(err) {
-
-console.warn(
-"訂閱後取得定位失敗:",
-err
-);
-
-
-debug(
-"訂閱後定位失敗"
-);
-
-}
-
-);
-
-}
-
-
-prompt.style.display =
-"none";
-
-
-button.disabled =
-false;
-
-
-button.innerText =
-"訂閱通知";
-
-
+button.disabled = true;
+button.innerText = "正在訂閱...";
+const OneSignal = await window.oneSignalInitPromise;
+if (!OneSignal) throw new Error("OneSignal 尚未準備完成");
+
+await OneSignal.Notifications.requestPermission();
+if (OneSignal.Notifications.permission !== true) throw new Error("通知權限未獲得");
+
+await OneSignal.User.PushSubscription.optIn();
+prompt.style.display = "none";
 } catch (err) {
-
-console.error(
-"OneSignal 訂閱失敗:",
-err
-);
-
-
-debug(
-"OneSignal 訂閱失敗: " +
-err.message
-);
-
-
-alert(
-"通知訂閱暫時未完成。\n\n" +
-"請確認已允許通知權限，然後再試一次。"
-);
-
-
-button.disabled =
-false;
-
-
-button.innerText =
-"重新訂閱";
-
+alert("通知訂閱未完成，請確認已開啟權限。");
+} finally {
+button.disabled = false;
+button.innerText = "訂閱通知";
 }
-
 };
 
-
-document.getElementById(
-"closeCustomBtn"
-).onclick =
-function() {
-
-prompt.style.display =
-"none";
-
+document.getElementById("closeCustomBtn").onclick = function() {
+prompt.style.display = "none";
 };
-
 }
 
-
-/* =====================================================
-21. 重新載入按鈕
-===================================================== */
-
-function initReloadButton() {
-
-const reloadBtn =
-document.getElementById(
-"reloadBtn"
-);
-
-
-if (!reloadBtn) {
-
-return;
-
-}
-
-
-reloadBtn.addEventListener(
-"click",
-function() {
-
-window.location.reload();
-
-}
-);
-
-}
-
-
-/* =====================================================
-22. 頁面 Load
-===================================================== */
-
-window.addEventListener(
-"load",
-async function() {
-
-debug("① load");
-
-
-/*
-CounterAPI 背景計數。
-
-即使 CounterAPI 失敗，
-也不會阻止網站繼續運作。
-*/
-
-initCounter();
-
-
+/* 頁面加載主入口 */
+window.addEventListener("DOMContentLoaded", function() {
+debug("① DOMContentLoaded - 初始化地圖");
 initMap();
+});
 
-debug("② map ok");
-
-
+window.addEventListener("load", async function() {
+debug("② Page Loaded - 開始取得定位與預報");
 await initLocation();
 
-debug(
-"③ initLocation 完成"
-);
-
-
-initReloadButton();
-
-
+document.getElementById("reloadBtn")?.addEventListener("click", () => window.location.reload());
 showIosPromptOnce();
-
-
-setTimeout(
-async function() {
-
-await showCustomPrompt();
-
-},
-1500
-);
-
-}
-);
-
+setTimeout(showCustomPrompt, 1500);
+});
 </script>
-
 </body>
-
 </html>
